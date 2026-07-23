@@ -1,0 +1,33 @@
+{
+  "name": "digital-clock",
+  "version": "1.0.0",
+  "description": "Animated desktop digital clock with rich customization - Electron app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable",
+    "dist": "electron-builder --win portable"
+  },
+  "author": "Kun Clock",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "build": {
+    "appId": "com.clock.digital",
+    "productName": "大时钟",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

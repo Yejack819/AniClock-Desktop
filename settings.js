@@ -1,0 +1,197 @@
+// settings.js — 设置窗口
+const LOCALE = {
+  zh: {
+    settingsTitle: '时钟设置', settingsHeader: '时钟设置',
+    secAppearance: '--- 外观 ---', secDate: '--- 日期 ---', secPosition: '--- 位置 ---', secSystem: '--- 系统 ---',
+    textColor: '文本颜色', autoColor: '根据白天/黑夜自动切换黑白',
+    bgColor: '背景颜色', alpha: '透明度',
+    fontFamily: '字体', customFont: '自定义...',
+    fontSize: '字号', animSpeed: '动画速度', showSeconds: '显示秒',
+    showDate: '显示日期', datePosition: '日期位置',
+    dateAbove: '上方', dateBelow: '下方',
+    secTZ: '--- 多时区 ---', tzAdd: '添加', tzRemove: 'X', tzHint: '最多添加 2 个时区',
+    position: '窗口位置', posTL: '左上', posTR: '右上', posCenter: '居中',
+    posBL: '左下', posBR: '右下', posCustom: '自定义', applyPos: '应用位置',
+    layerMode: '图层模式', layerTop: '置顶', layerNormal: '桌面',
+    autoStart: '开机自启动', language: '语言', langZh: '中文', langEn: 'English',
+    autoStartFail: '设置开机自启动失败：', permissionDenied: '权限被拒绝',
+    passthrough: '鼠标穿透（整个窗口）', passthroughWarn: '开启鼠标穿透后无法拖动窗口以更改其位置',
+  },
+  en: {
+    settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
+    secAppearance: '--- Appearance ---', secDate: '--- Date ---', secPosition: '--- Position ---', secSystem: '--- System ---',
+    textColor: 'Text Color', autoColor: 'Auto-switch black/white (day/night)',
+    bgColor: 'Background', alpha: 'Opacity',
+    fontFamily: 'Font', customFont: 'Custom...',
+    fontSize: 'Font Size', animSpeed: 'Animation Speed', showSeconds: 'Show Seconds',
+    showDate: 'Show Date', datePosition: 'Date Position',
+    dateAbove: 'Above', dateBelow: 'Below',
+    secTZ: '--- Time Zones ---', tzAdd: 'Add', tzRemove: 'X', tzHint: 'Max 2 time zones',
+    position: 'Window Position', posTL: 'Top-Left', posTR: 'Top-Right', posCenter: 'Center',
+    posBL: 'Bottom-Left', posBR: 'Bottom-Right', posCustom: 'Custom', applyPos: 'Apply',
+    layerMode: 'Layer Mode', layerTop: 'Always on Top', layerNormal: 'Normal',
+    autoStart: 'Auto Start on Boot', language: 'Language', langZh: 'Chinese', langEn: 'English',
+    autoStartFail: 'Failed to set auto-start: ', permissionDenied: 'Permission denied',
+    passthrough: 'Mouse passthrough (entire window)', passthroughWarn: 'When enabled, you cannot drag the window to move it.',
+  },
+};
+
+const $ = id => document.getElementById(id);
+const els = {
+  text_color: $('text-color'), auto_color: $('auto-color'),
+  bg_color: $('bg-color'), bg_alpha: $('bg-alpha'), bg_alpha_label: $('bg-alpha-label'),
+  font_select: $('font-select'), font_custom: $('font-custom'),
+  font_size: $('font-size'), font_size_label: $('font-size-label'),
+  anim_speed: $('anim-speed'), anim_speed_label: $('anim-speed-label'),
+  show_seconds: $('show-seconds'), show_date: $('show-date'), date_position: $('date-position'),
+  layer_mode: $('layer-mode'), auto_start: $('auto-start'), language_select: $('language-select'),
+  pos_x: $('pos-x'), pos_y: $('pos-y'), apply_pos: $('apply-pos'),
+  pos_buttons: document.querySelectorAll('.position-buttons button'),
+  custom_pos: document.getElementById('custom-pos-controls'),
+  tz_list: document.getElementById('tz-list'), tz_label: document.getElementById('tz-label-input'),
+  tz_offset: document.getElementById('tz-offset-input'), tz_add_btn: document.getElementById('tz-add-btn'),
+  tz_hint: document.getElementById('tz-hint'),
+  passthrough_switch: document.getElementById('passthrough-switch'),
+};
+
+let config = {};
+let currentLang = 'zh';
+
+function rgbToHex(r,g,b) { return '#'+[r,g,b].map(x=>{ const h=x.toString(16); return h.length===1?'0'+h:h; }).join(''); }
+function buildBgColor() {
+  const h = els.bg_color.value;
+  return 'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+parseFloat(els.bg_alpha.value)+')';
+}
+
+function applyLanguage(lang) {
+  currentLang = lang;
+  const dict = LOCALE[lang] || LOCALE.zh;
+  document.querySelectorAll('[data-lang]').forEach(el => {
+    const key = el.dataset.lang;
+    if (dict[key]) el.textContent = dict[key];
+  });
+  document.title = dict.settingsTitle;
+}
+
+function renderTZList() {
+  const tzs = config.extraTimezones || [];
+  els.tz_list.innerHTML = '';
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  tzs.forEach((tz, idx) => {
+    const div = document.createElement('div');
+    div.className = 'tz-item';
+    const sign = tz.offset >= 0 ? '+' : '';
+    div.innerHTML = '<span class="tz-label">'+tz.label+'</span><span class="tz-offset">UTC'+sign+tz.offset+'</span><button class="tz-del-btn" data-idx="'+idx+'">'+dict.tzRemove+'</button>';
+    els.tz_list.appendChild(div);
+  });
+  els.tz_list.querySelectorAll('.tz-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      saveAndApply({ extraTimezones: (config.extraTimezones || []).filter((_, i) => i !== idx) });
+    });
+  });
+  const count = tzs.length;
+  els.tz_hint.style.display = count >= 2 ? '' : 'none';
+  els.tz_add_btn.disabled = count >= 2;
+}
+
+function syncUIFromConfig() {
+  els.text_color.value = config.color || '#ffffff';
+  els.auto_color.checked = !!config.autoColor;
+  els.text_color.disabled = els.auto_color.checked;
+  const m = config.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+  if (m) { els.bg_color.value = rgbToHex(+m[1],+m[2],+m[3]); els.bg_alpha.value = parseFloat(m[4]); }
+  else { els.bg_color.value = '#000000'; els.bg_alpha.value = 0; }
+  els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value * 100) + '%';
+  const opts = Array.from(els.font_select.options).map(o => o.value);
+  if (opts.includes(config.fontFamily)) { els.font_select.value = config.fontFamily; els.font_custom.classList.add('hidden'); }
+  else { els.font_select.value = 'custom'; els.font_custom.classList.remove('hidden'); els.font_custom.value = config.fontFamily; }
+  els.font_size.value = config.fontSize; els.font_size_label.textContent = config.fontSize;
+  els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
+  els.show_seconds.checked = config.showSeconds !== false;
+  els.show_date.checked = config.showDate !== false;
+  els.date_position.value = config.datePosition || 'below';
+  els.layer_mode.value = config.layerMode || 'alwaysOnTop';
+  els.auto_start.checked = !!config.autoStart;
+  els.language_select.value = config.language || 'zh';
+  els.passthrough_switch.checked = !!config.passthrough;
+  applyLanguage(config.language || 'zh');
+  els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
+  if (config.positionPreset === 'custom') {
+    els.custom_pos.classList.remove('hidden'); els.pos_x.value = config.x; els.pos_y.value = config.y;
+  } else { els.custom_pos.classList.add('hidden'); }
+  renderTZList();
+}
+
+async function saveAndApply(nc) {
+  const langChanged = nc.language && nc.language !== config.language;
+  config = { ...config, ...nc };
+  try { await window.electronAPI.saveConfig(config); } catch (e) {}
+  window.electronAPI.notifyClockUpdate(config);
+  if (langChanged) applyLanguage(config.language);
+}
+
+(async function init() {
+  try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
+  syncUIFromConfig();
+
+  // 外观
+  els.auto_color.addEventListener('change', () => { const on = els.auto_color.checked; els.text_color.disabled = on; saveAndApply({ autoColor: on }); });
+  els.text_color.addEventListener('input', () => saveAndApply({ color: els.text_color.value }));
+  els.bg_color.addEventListener('input', () => saveAndApply({ bgColor: buildBgColor() }));
+  els.bg_alpha.addEventListener('input', () => { els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value*100)+'%'; saveAndApply({ bgColor: buildBgColor() }); });
+  els.font_select.addEventListener('change', () => {
+    if (els.font_select.value === 'custom') { els.font_custom.classList.remove('hidden'); els.font_custom.focus(); }
+    else { els.font_custom.classList.add('hidden'); saveAndApply({ fontFamily: els.font_select.value }); }
+  });
+  els.font_custom.addEventListener('change', () => { const v = els.font_custom.value.trim(); if (v) saveAndApply({ fontFamily: v }); });
+  els.font_size.addEventListener('input', () => { const v = parseInt(els.font_size.value,10); els.font_size_label.textContent = v; saveAndApply({ fontSize: v }); });
+  els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); });
+
+  els.show_seconds.addEventListener('change', () => saveAndApply({ showSeconds: els.show_seconds.checked }));
+
+  // 日期
+  els.show_date.addEventListener('change', () => saveAndApply({ showDate: els.show_date.checked }));
+  els.date_position.addEventListener('change', () => saveAndApply({ datePosition: els.date_position.value }));
+
+  // 多时区（修复：添加后立即刷新列表）
+  els.tz_add_btn.addEventListener('click', () => {
+    const cur = config.extraTimezones || [];
+    if (cur.length >= 2) return;
+    const label = els.tz_label.value.trim();
+    if (!label) return;
+    const offset = parseInt(els.tz_offset.value, 10);
+    saveAndApply({ extraTimezones: [...cur, { label, offset }] });
+    renderTZList();
+    els.tz_label.value = '';
+    els.tz_offset.value = '0';
+  });
+
+  // 位置
+  els.pos_buttons.forEach(btn => btn.addEventListener('click', async () => {
+    const p = btn.dataset.pos; els.pos_buttons.forEach(b => b.classList.remove('active')); btn.classList.add('active');
+    if (p === 'custom') { els.custom_pos.classList.remove('hidden'); saveAndApply({ positionPreset: 'custom' }); }
+    else { els.custom_pos.classList.add('hidden'); await window.electronAPI.moveWindow({ preset: p }); saveAndApply({ positionPreset: p }); }
+  }));
+  els.apply_pos.addEventListener('click', async () => {
+    const x = parseInt(els.pos_x.value,10)||0, y = parseInt(els.pos_y.value,10)||0;
+    await window.electronAPI.moveWindow({x,y}); saveAndApply({x,y});
+  });
+
+  // 系统
+  els.layer_mode.addEventListener('change', async () => { await window.electronAPI.setLayerMode(els.layer_mode.value); saveAndApply({ layerMode: els.layer_mode.value }); });
+  els.auto_start.addEventListener('change', async () => {
+    const en = els.auto_start.checked;
+    const r = await window.electronAPI.setAutoStart(en);
+    if (!r.success) { els.auto_start.checked = !en; const d=LOCALE[currentLang]||LOCALE.zh; alert(d.autoStartFail+(r.error||d.permissionDenied)); }
+    saveAndApply({ autoStart: en });
+  });
+  els.language_select.addEventListener('change', () => saveAndApply({ language: els.language_select.value }));
+  els.passthrough_switch.addEventListener('change', () => {
+    const en = els.passthrough_switch.checked;
+    window.electronAPI.setPassthrough(en);
+    saveAndApply({ passthrough: en });
+  });
+
+  window.addEventListener('beforeunload', () => { window.electronAPI.saveConfig(config); });
+})();

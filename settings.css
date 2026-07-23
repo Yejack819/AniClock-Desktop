@@ -1,0 +1,84 @@
+﻿* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  background: #1e1e28;
+  color: #eee;
+  padding: 24px 28px;
+  max-width: 600px;
+  width: 480px;
+  overflow-y: auto;
+}
+
+h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+
+.section-title { margin: 18px 0 10px; font-size: 13px; color: #888; letter-spacing: 1px; }
+
+/* ====== 时锟斤拷锟洁辑锟斤拷 ====== */
+#tz-list { margin-bottom: 6px; }
+.tz-item {
+  display: flex; align-items: center; gap: 6px;
+  background: #2a2a38; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px;
+}
+.tz-item .tz-label { flex: 1; font-size: 13px; color: #ddd; }
+.tz-item .tz-offset { font-size: 12px; color: #999; min-width: 50px; }
+.tz-item .tz-del-btn {
+  background: none; border: none; color: #f66; cursor: pointer; font-size: 16px; padding: 0 4px;
+}
+.tz-item .tz-del-btn:hover { color: #f00; }
+
+.tz-add-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tz-add-row input[type=""text""] {
+  flex: 1; min-width: 80px; padding: 5px 8px; border-radius: 6px;
+  border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 12px; outline: none;
+}
+.tz-add-row input[type=""number""] {
+  width: 56px; padding: 5px 4px; border-radius: 6px;
+  border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 12px; outline: none; text-align: center;
+}
+.tz-add-row span { font-size: 12px; color: #999; }
+#tz-add-btn {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid #6C8CFF;
+  background: #6C8CFF; color: #fff; font-size: 12px; cursor: pointer;
+}
+
+.setting-row { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; } { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+.setting-row label { font-size: 13px; color: #ccc; }
+
+input[type="color"] { width: 48px; height: 32px; padding: 2px; border: 1px solid #555; border-radius: 6px; background: transparent; cursor: pointer; }
+.bg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sub-label { font-size: 12px; color: #999; }
+
+input[type="range"] { width: 100%; height: 6px; -webkit-appearance: none; background: #555; border-radius: 3px; outline: none; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #6C8CFF; cursor: pointer; border: 2px solid #fff; }
+
+select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; cursor: pointer; }
+
+.custom-input { margin-top: 4px; padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; width: 100%; }
+.custom-input.hidden { display: none; }
+
+.position-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.position-buttons button { padding: 6px 12px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #ddd; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+.position-buttons button:hover,
+.position-buttons button.active { background: #6C8CFF; color: #fff; border-color: #6C8CFF; }
+
+.custom-pos { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.custom-pos.hidden { display: none; }
+.custom-pos label { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 4px; }
+.custom-pos input[type="number"] { width: 70px; padding: 4px 8px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; text-align: center; }
+#apply-pos { padding: 5px 14px; border-radius: 6px; border: 1px solid #6C8CFF; background: #6C8CFF; color: #fff; font-size: 12px; cursor: pointer; margin-top: 4px; }
+
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer; }
+.toggle-switch input { display: none; }
+.toggle-slider { position: absolute; inset: 0; background: #555; border-radius: 24px; transition: background 0.2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+.toggle-switch input:checked + .toggle-slider { background: #6C8CFF; }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+
+.tz-hint { font-size: 11px; color: #666; margin: 2px 0 14px; }
+
+
+
+.passthrough-warning { font-size: 11px; color: #f88; margin-top: 4px; line-height: 1.4; }
