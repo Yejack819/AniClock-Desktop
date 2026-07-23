@@ -69,4 +69,4 @@ and language.
 
 ## License
 
-MIT © 2026 Kun Clock
+MIT © 2026 Yejack819

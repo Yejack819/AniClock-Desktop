@@ -8,11 +8,11 @@
     "pack": "electron-builder --win portable",
     "dist": "electron-builder --win portable"
   },
-  "author": "Kun Clock",
+  "author": "Yejack819",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://gitee.com/Yejack819/AniClock-Desktop.git"
   },
   "build": {
     "appId": "com.clock.digital",
