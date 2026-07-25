@@ -39,6 +39,7 @@ function saveConfig(data) {
 let mainWindow = null;
 let settingsWindow = null;
 let tray = null;
+let suppressMoveSave = false;
 
 function createWindow() {
   const config = loadConfig();
@@ -50,8 +51,15 @@ function createWindow() {
   else if (config.positionPreset === 'top-right') { winX = screenW - 800; winY = 0; }
   else if (config.positionPreset === 'bottom-left') { winX = 0; winY = screenH - 400; }
   else if (config.positionPreset === 'bottom-right') { winX = screenW - 800; winY = screenH - 400; }
+  else if (config.positionPreset === 'custom') {
+    winX = config.x || 0; winY = config.y || 0;
+    // 确保窗口至少部分可见（更换显示器等场景）
+    winX = Math.max(0, Math.min(winX, screenW - 100));
+    winY = Math.max(0, Math.min(winY, screenH - 100));
+  }
   else { winX = Math.round((screenW - 800) / 2); winY = Math.round((screenH - 400) / 2); }
 
+  suppressMoveSave = true;
   mainWindow = new BrowserWindow({
     width: 800, height: 400, x: winX, y: winY,
     transparent: true, frame: false,
@@ -65,6 +73,27 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
   mainWindow.on('closed', () => { mainWindow = null; });
+
+  // 500ms 后允许拖拽保存（避免初始定位被记录为 custom）
+  setTimeout(() => { suppressMoveSave = false; }, 500);
+
+  // 用户拖拽窗口时自动保存位置（500ms 防抖）
+  let moveSaveTimer = null;
+  mainWindow.on('move', () => {
+    if (suppressMoveSave) return;
+    if (moveSaveTimer) clearTimeout(moveSaveTimer);
+    moveSaveTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const [x, y] = mainWindow.getPosition();
+      const cfg = loadConfig();
+      cfg.x = x; cfg.y = y; cfg.positionPreset = 'custom';
+      saveConfig(cfg);
+      // 同步通知设置窗口（如果打开）
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('config-updated', cfg);
+      }
+    }, 500);
+  });
 }
 
 // ========== 系统托盘 ==========
@@ -153,7 +182,9 @@ ipcMain.handle('move-window', (_event, args) => {
       default: x = args.x || 0; y = args.y || 0;
     }
   } else { x = args.x; y = args.y; }
+  suppressMoveSave = true;
   mainWindow.setPosition(x, y);
+  setTimeout(() => { suppressMoveSave = false; }, 300);
   return { success: true };
 });
 
@@ -168,13 +199,23 @@ ipcMain.handle('resize-window', (_event, { width, height }) => {
   const padding = 60;
   const nw = Math.max(200, Math.ceil(width + padding));
   const nh = Math.max(100, Math.ceil(height + padding));
+  suppressMoveSave = true;
   mainWindow.setSize(nw, nh);
+  setTimeout(() => { suppressMoveSave = false; }, 300);
   return { success: true };
 });
 
 ipcMain.handle('set-auto-start', (_event, enabled) => {
-  try { app.setLoginItemSettings({ openAtLogin: enabled }); return { success: true }; }
-  catch (err) { return { success: false, error: err.message }; }
+  try {
+    // 显式指定 path：打包后是 .exe，开发模式是 electron.exe
+    // 显式传空 args，避免 electron 启动时无参数而 fallback 到默认欢迎页
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      path: process.execPath,
+      args: [],
+    });
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
 });
 
 // 鼠标穿透
@@ -198,8 +239,17 @@ ipcMain.handle('quit-app', () => app.quit());
 // ========== 启动 ==========
 app.whenReady().then(() => {
   const config = loadConfig();
-  try { app.setLoginItemSettings({ openAtLogin: !!config.autoStart }); }
-  catch (e) { console.error('开机自启动设置失败:', e.message); }
+  // 强制重写一次开机自启动注册项：
+  // 1. 用绝对 path 避免 electron.exe 启动时找不到 app
+  // 2. 清空 args 避免启动参数错误导致出现默认欢迎页
+  // 兼容老版本（可能在开发模式打开过"开机自启动"，注册表残留 electron.exe 路径）
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!config.autoStart,
+      path: process.execPath,
+      args: [],
+    });
+  } catch (e) { console.error('开机自启动设置失败:', e.message); }
 
   createWindow();
   createTray();
@@ -213,7 +263,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// 退出前清理托盘
+// 退出前保存窗口位置并清理托盘
 app.on('before-quit', () => {
+  // 保存当前窗口位置
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const [x, y] = mainWindow.getPosition();
+    const cfg = loadConfig();
+    cfg.x = x; cfg.y = y;
+    saveConfig(cfg);
+  }
   if (tray) { tray.destroy(); tray = null; }
 });

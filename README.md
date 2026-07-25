@@ -17,7 +17,7 @@ A beautiful, customizable desktop clock built with **Electron**. Features smooth
 
 ## Screenshots
 
-*(TODO: add screenshots)*
+![Clock demo](docs/screenshots/clock-demo.png)
 
 ## Quick Start
 

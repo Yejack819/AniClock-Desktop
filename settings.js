@@ -88,6 +88,7 @@ function renderTZList() {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.idx, 10);
       saveAndApply({ extraTimezones: (config.extraTimezones || []).filter((_, i) => i !== idx) });
+      renderTZList();
     });
   });
   const count = tzs.length;
@@ -175,7 +176,9 @@ async function saveAndApply(nc) {
   }));
   els.apply_pos.addEventListener('click', async () => {
     const x = parseInt(els.pos_x.value,10)||0, y = parseInt(els.pos_y.value,10)||0;
-    await window.electronAPI.moveWindow({x,y}); saveAndApply({x,y});
+    await window.electronAPI.moveWindow({x,y});
+    els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === 'custom'));
+    saveAndApply({x, y, positionPreset: 'custom'});
   });
 
   // 系统
@@ -194,4 +197,18 @@ async function saveAndApply(nc) {
   });
 
   window.addEventListener('beforeunload', () => { window.electronAPI.saveConfig(config); });
+
+  // 时钟窗口被拖动时同步更新位置按钮状态 / 时区变化时同步列表
+  window.electronAPI.onConfigUpdated((nc) => {
+    if (nc.positionPreset === undefined && nc.x === undefined && nc.y === undefined && nc.extraTimezones === undefined) return;
+    Object.assign(config, nc);
+    els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
+    if (config.positionPreset === 'custom') {
+      els.custom_pos.classList.remove('hidden');
+      els.pos_x.value = config.x; els.pos_y.value = config.y;
+    } else {
+      els.custom_pos.classList.add('hidden');
+    }
+    if (nc.extraTimezones !== undefined) renderTZList();
+  });
 })();

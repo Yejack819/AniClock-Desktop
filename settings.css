@@ -15,7 +15,7 @@ h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; color: #fff; letter
 
 .section-title { margin: 18px 0 10px; font-size: 13px; color: #888; letter-spacing: 1px; }
 
-/* ====== 时锟斤拷锟洁辑锟斤拷 ====== */
+/* ====== 时区列表 ====== */
 #tz-list { margin-bottom: 6px; }
 .tz-item {
   display: flex; align-items: center; gap: 6px;
@@ -29,11 +29,11 @@ h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; color: #fff; letter
 .tz-item .tz-del-btn:hover { color: #f00; }
 
 .tz-add-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.tz-add-row input[type=""text""] {
+.tz-add-row input[type="text"] {
   flex: 1; min-width: 80px; padding: 5px 8px; border-radius: 6px;
   border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 12px; outline: none;
 }
-.tz-add-row input[type=""number""] {
+.tz-add-row input[type="number"] {
   width: 56px; padding: 5px 4px; border-radius: 6px;
   border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 12px; outline: none; text-align: center;
 }
@@ -43,7 +43,7 @@ h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; color: #fff; letter
   background: #6C8CFF; color: #fff; font-size: 12px; cursor: pointer;
 }
 
-.setting-row { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; } { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+.setting-row { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
 .setting-row label { font-size: 13px; color: #ccc; }
 
 input[type="color"] { width: 48px; height: 32px; padding: 2px; border: 1px solid #555; border-radius: 6px; background: transparent; cursor: pointer; }

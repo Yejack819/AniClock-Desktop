@@ -5,3 +5,12 @@ config.json
 Thumbs.db
 *.log
 *.txt
+
+# AI / 工具相关
+.workbuddy/
+
+# 本地备份
+backup/
+
+# 发布产物（在本地生成，不入库）
+releases/
