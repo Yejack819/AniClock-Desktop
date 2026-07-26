@@ -9,9 +9,9 @@ function getConfigPath() {
 
 const DEFAULT_CONFIG = {
   color: '#000000', bgColor: 'rgba(255,255,255,0.2)', fontFamily: 'Arial',
-  fontSize: 200, positionPreset: 'center', x: 0, y: 0,
+  fontSize: 200, animType: 'slide-up', positionPreset: 'center', x: 0, y: 0,
   showSeconds: true, showDate: true, datePosition: 'below', autoColor: false,
-  extraTimezones: [], animDuration: 350,
+  extraTimezones: [], animDuration: 350, staggerDelay: 0, staggerDirection: 'ltr',
   layerMode: 'alwaysOnTop', autoStart: false, language: 'zh',
 };
 
@@ -130,8 +130,13 @@ function createTray() {
   ]);
   tray.setContextMenu(contextMenu);
 
-  // 左键单击也打开设置
-  tray.on('click', () => openSettingsWindow());
+  // 左键单击切换时钟窗口显示/隐藏
+  tray.on('click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isVisible()) { mainWindow.hide(); }
+      else { mainWindow.show(); mainWindow.focus(); }
+    }
+  });
 }
 
 // ========== 设置窗口 ==========

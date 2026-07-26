@@ -2,11 +2,15 @@
 const LOCALE = {
   zh: {
     settingsTitle: '时钟设置', settingsHeader: '时钟设置',
-    secAppearance: '--- 外观 ---', secDate: '--- 日期 ---', secPosition: '--- 位置 ---', secSystem: '--- 系统 ---',
+    secAppearance: '--- 外观 ---', secDate: '--- 日期 ---', secAnimation: '--- 动画 ---', secTime: '--- 时间 ---', secPosition: '--- 位置 ---', secSystem: '--- 系统 ---',
     textColor: '文本颜色', autoColor: '根据白天/黑夜自动切换黑白',
     bgColor: '背景颜色', alpha: '透明度',
     fontFamily: '字体', customFont: '自定义...',
-    fontSize: '字号', animSpeed: '动画速度', showSeconds: '显示秒',
+    fontSize: '字号', animSpeed: '动画速度', animType: '动画效果',
+    animSlideUp: '上滑翻转', animSlideDown: '下滑翻转', animFade: '淡入淡出',
+    animShrink: '缩（旧变小）', animExpand: '放（旧变大）', animFlip3d: '3D旋转', animNone: '无动画',
+    staggerDelay: '错峰延迟', staggerDir: '错峰方向', staggerLTR: '从左到右', staggerRTL: '从右到左',
+    showSeconds: '显示秒',
     showDate: '显示日期', datePosition: '日期位置',
     dateAbove: '上方', dateBelow: '下方',
     secTZ: '--- 多时区 ---', tzAdd: '添加', tzRemove: 'X', tzHint: '最多添加 2 个时区',
@@ -19,11 +23,15 @@ const LOCALE = {
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
-    secAppearance: '--- Appearance ---', secDate: '--- Date ---', secPosition: '--- Position ---', secSystem: '--- System ---',
+    secAppearance: '--- Appearance ---', secDate: '--- Date ---', secAnimation: '--- Animation ---', secTime: '--- Time ---', secPosition: '--- Position ---', secSystem: '--- System ---',
     textColor: 'Text Color', autoColor: 'Auto-switch black/white (day/night)',
     bgColor: 'Background', alpha: 'Opacity',
     fontFamily: 'Font', customFont: 'Custom...',
-    fontSize: 'Font Size', animSpeed: 'Animation Speed', showSeconds: 'Show Seconds',
+    fontSize: 'Font Size', animSpeed: 'Animation Speed', animType: 'Animation',
+    animSlideUp: 'Slide Up', animSlideDown: 'Slide Down', animFade: 'Fade',
+    animShrink: 'Shrink', animExpand: 'Expand', animFlip3d: '3D Flip', animNone: 'None',
+    staggerDelay: 'Stagger Delay', staggerDir: 'Stagger Direction', staggerLTR: 'Left to Right', staggerRTL: 'Right to Left',
+    showSeconds: 'Show Seconds',
     showDate: 'Show Date', datePosition: 'Date Position',
     dateAbove: 'Above', dateBelow: 'Below',
     secTZ: '--- Time Zones ---', tzAdd: 'Add', tzRemove: 'X', tzHint: 'Max 2 time zones',
@@ -43,6 +51,9 @@ const els = {
   font_select: $('font-select'), font_custom: $('font-custom'),
   font_size: $('font-size'), font_size_label: $('font-size-label'),
   anim_speed: $('anim-speed'), anim_speed_label: $('anim-speed-label'),
+  anim_type: $('anim-type'),
+  stagger_delay: $('stagger-delay'), stagger_delay_label: $('stagger-delay-label'),
+  stagger_dir: $('stagger-dir'),
   show_seconds: $('show-seconds'), show_date: $('show-date'), date_position: $('date-position'),
   layer_mode: $('layer-mode'), auto_start: $('auto-start'), language_select: $('language-select'),
   pos_x: $('pos-x'), pos_y: $('pos-y'), apply_pos: $('apply-pos'),
@@ -57,7 +68,8 @@ const els = {
 let config = {};
 let currentLang = 'zh';
 
-function rgbToHex(r,g,b) { return '#'+[r,g,b].map(x=>{ const h=x.toString(16); return h.length===1?'0'+h:h; }).join(''); }
+function syncAnimUI(){els.anim_speed.disabled=els.anim_type.value==="none";}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>{const h=x.toString(16);return h.length===1?'0'+h:h;}).join('');}
 function buildBgColor() {
   const h = els.bg_color.value;
   return 'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)+','+parseInt(h.slice(5,7),16)+','+parseFloat(els.bg_alpha.value)+')';
@@ -97,18 +109,23 @@ function renderTZList() {
 }
 
 function syncUIFromConfig() {
-  els.text_color.value = config.color || '#ffffff';
   els.auto_color.checked = !!config.autoColor;
-  els.text_color.disabled = els.auto_color.checked;
+  els.text_color.value = config.color || '#ffffff';
   const m = config.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
   if (m) { els.bg_color.value = rgbToHex(+m[1],+m[2],+m[3]); els.bg_alpha.value = parseFloat(m[4]); }
   else { els.bg_color.value = '#000000'; els.bg_alpha.value = 0; }
   els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value * 100) + '%';
+  els.text_color.disabled=els.auto_color.checked;
   const opts = Array.from(els.font_select.options).map(o => o.value);
   if (opts.includes(config.fontFamily)) { els.font_select.value = config.fontFamily; els.font_custom.classList.add('hidden'); }
   else { els.font_select.value = 'custom'; els.font_custom.classList.remove('hidden'); els.font_custom.value = config.fontFamily; }
   els.font_size.value = config.fontSize; els.font_size_label.textContent = config.fontSize;
   els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
+  els.anim_type.value = config.animType || 'slide-up';
+  if (els.anim_type.value === 'scale') { config.animType = 'shrink'; els.anim_type.value = 'shrink'; }
+  els.stagger_delay.value = config.staggerDelay || 0; els.stagger_delay_label.textContent = config.staggerDelay || 0;
+  els.stagger_dir.value = config.staggerDirection || 'ltr';
+  syncAnimUI();
   els.show_seconds.checked = config.showSeconds !== false;
   els.show_date.checked = config.showDate !== false;
   els.date_position.value = config.datePosition || 'below';
@@ -127,6 +144,7 @@ function syncUIFromConfig() {
 async function saveAndApply(nc) {
   const langChanged = nc.language && nc.language !== config.language;
   config = { ...config, ...nc };
+  if (config.animType === 'scale') config.animType = 'shrink';
   try { await window.electronAPI.saveConfig(config); } catch (e) {}
   window.electronAPI.notifyClockUpdate(config);
   if (langChanged) applyLanguage(config.language);
@@ -137,7 +155,8 @@ async function saveAndApply(nc) {
   syncUIFromConfig();
 
   // 外观
-  els.auto_color.addEventListener('change', () => { const on = els.auto_color.checked; els.text_color.disabled = on; saveAndApply({ autoColor: on }); });
+  function syncColorUI(){els.text_color.disabled=els.auto_color.checked;}
+  els.auto_color.addEventListener('change', function(){syncColorUI();saveAndApply({autoColor:els.auto_color.checked});});
   els.text_color.addEventListener('input', () => saveAndApply({ color: els.text_color.value }));
   els.bg_color.addEventListener('input', () => saveAndApply({ bgColor: buildBgColor() }));
   els.bg_alpha.addEventListener('input', () => { els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value*100)+'%'; saveAndApply({ bgColor: buildBgColor() }); });
@@ -148,6 +167,9 @@ async function saveAndApply(nc) {
   els.font_custom.addEventListener('change', () => { const v = els.font_custom.value.trim(); if (v) saveAndApply({ fontFamily: v }); });
   els.font_size.addEventListener('input', () => { const v = parseInt(els.font_size.value,10); els.font_size_label.textContent = v; saveAndApply({ fontSize: v }); });
   els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); });
+  els.anim_type.addEventListener('change', function() { saveAndApply({ animType: els.anim_type.value }); syncAnimUI(); });
+  els.stagger_delay.addEventListener('input', function() { var v = parseInt(els.stagger_delay.value,10); els.stagger_delay_label.textContent = v; saveAndApply({ staggerDelay: v }); });
+  els.stagger_dir.addEventListener('change', function() { saveAndApply({ staggerDirection: els.stagger_dir.value }); });
 
   els.show_seconds.addEventListener('change', () => saveAndApply({ showSeconds: els.show_seconds.checked }));
 

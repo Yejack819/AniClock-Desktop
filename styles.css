@@ -51,6 +51,63 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ====== 动画：下滑 Slide-Down ====== */
+.anim-slide-down .digit-next { transform: translateY(-100%); }
+.anim-slide-down .digit-current.animate-out {
+  transform: translateY(100%); opacity: 0;
+  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.anim-slide-down .digit-next.animate-in {
+  transform: translateY(0); opacity: 1;
+  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ====== 动画：淡入淡出 Fade ====== */
+.anim-fade .digit-next { transform: none; }
+.anim-fade .digit-current.animate-out {
+  transform: none; opacity: 0;
+  transition: opacity var(--anim-duration, 350ms) ease;
+}
+.anim-fade .digit-next.animate-in {
+  transform: none; opacity: 1;
+  transition: opacity var(--anim-duration, 350ms) ease;
+}
+
+/* ====== 动画：缩 Shrink (旧变小) ====== */
+.anim-shrink .digit-current.animate-out {
+  transform: scale(0.3); opacity: 0;
+  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.anim-shrink .digit-next { transform: none; }
+.anim-shrink .digit-next.animate-in {
+  transform: none; opacity: 1;
+  transition: opacity var(--anim-duration, 350ms) ease;
+}
+
+/* ====== 动画：放 Expand (旧变大) ====== */
+.anim-expand .digit-current.animate-out {
+  transform: scale(1.5); opacity: 0;
+  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.anim-expand .digit-next { transform: none; }
+.anim-expand .digit-next.animate-in {
+  transform: none; opacity: 1;
+  transition: opacity var(--anim-duration, 350ms) ease;
+}
+
+/* ====== 动画：3D翻转 Flip 3D ====== */
+.anim-flip-3d .digit-group { perspective: 400px; }
+.anim-flip-3d .digit-current { transform-origin: bottom center; backface-visibility: hidden; }
+.anim-flip-3d .digit-next { transform-origin: top center; backface-visibility: hidden; transform: rotateX(-90deg); opacity: 0; }
+.anim-flip-3d .digit-current.animate-out {
+  transform: rotateX(90deg); opacity: 0;
+  transition: transform var(--anim-duration, 350ms) ease-in, opacity var(--anim-duration, 350ms) ease-in;
+}
+.anim-flip-3d .digit-next.animate-in {
+  transform: rotateX(0deg); opacity: 1;
+  transition: transform var(--anim-duration, 350ms) ease-out, opacity var(--anim-duration, 350ms) ease-out;
+}
+
 /* ====== 冒号 ====== */
 .colon {
   display: inline-flex; align-items: center; justify-content: center;
