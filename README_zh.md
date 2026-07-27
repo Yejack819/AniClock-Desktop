@@ -17,7 +17,7 @@
 
 ## 截图
 
-*(TODO: 添加截图)*
+![时钟演示](docs/screenshots/clock-demo.png)
 
 ## 快速开始
 
