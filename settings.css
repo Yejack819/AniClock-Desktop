@@ -1,19 +1,32 @@
 ﻿* { margin: 0; padding: 0; box-sizing: border-box; }
 
+.hidden { display: none !important; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   background: #1e1e28;
   color: #eee;
-  padding: 24px 28px;
-  max-width: 600px;
-  width: 480px;
+  padding: 20px 24px;
+  min-width: 300px;
+  max-width: 100%;
+  width: auto;
   overflow-y: auto;
 }
 
 h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; color: #fff; letter-spacing: 0.5px; }
 
-.section-title { margin: 18px 0 10px; font-size: 13px; color: #888; letter-spacing: 1px; }
+.section-title { margin: 16px 0 10px; font-size: 13px; color: #888; letter-spacing: 1px; }
+
+/* ====== 响应式：窄屏下自适应 ====== */
+@media (max-width: 400px) {
+  body { padding: 14px 16px; }
+  .position-buttons button { min-width: 44px; font-size: 11px; padding: 5px 8px; }
+  .custom-pos { flex-direction: column; align-items: stretch; }
+  .custom-pos label { justify-content: space-between; }
+  .tz-add-row { flex-direction: column; }
+  .tz-add-row input[type="text"] { width: 100%; }
+}
 
 /* ====== 时区列表 ====== */
 #tz-list { margin-bottom: 6px; }
@@ -55,7 +68,7 @@ input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
 input[type="range"] { width: 100%; height: 6px; -webkit-appearance: none; background: #555; border-radius: 3px; outline: none; cursor: pointer; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #6C8CFF; cursor: pointer; border: 2px solid #fff; }
 
-select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; cursor: pointer; }
+select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; cursor: pointer; max-width: 100%; }
 
 .custom-input { margin-top: 4px; padding: 6px 10px; border-radius: 6px; border: 1px solid #555; background: #3a3a4a; color: #eee; font-size: 13px; outline: none; width: 100%; }
 .custom-input.hidden { display: none; }

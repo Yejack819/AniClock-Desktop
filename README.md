@@ -1,5 +1,7 @@
 # Digital Clock / 桌面大时钟
 
+[**🇨🇳 中文版 README**](README_zh.md)
+
 A beautiful, customizable desktop clock built with **Electron**. Features smooth digit-scrolling animations, multi-timezone support, auto day/night color switching, and a fully customizable display.
 
 ## Features

@@ -108,6 +108,38 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   transition: transform var(--anim-duration, 350ms) ease-out, opacity var(--anim-duration, 350ms) ease-out;
 }
 
+/* ====== 添加模糊（勾选 blurEnabled 时激活）====== */
+.blur-enabled .digit-current.animate-out {
+  filter: blur(var(--blur-strength, 15px));
+  transition:
+    transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter var(--blur-duration, 300ms) ease-out;
+}
+.blur-enabled .anim-slide-down .digit-current.animate-out {
+  filter: blur(var(--blur-strength, 15px));
+  transition:
+    transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter var(--blur-duration, 300ms) ease-out;
+}
+
+/* ====== 由小放大滑入（勾选 scaleInEnabled 时激活）====== */
+.scale-in .digit-next {
+  transform: translateY(100%) scale(var(--scale-factor, 0.3));
+}
+.scale-in .digit-next.animate-in {
+  transform: translateY(0) scale(1);
+}
+.scale-in .anim-slide-down .digit-next {
+  transform: translateY(-100%) scale(var(--scale-factor, 0.3));
+}
+.scale-in .anim-slide-down .digit-next.animate-in {
+  transform: translateY(0) scale(1);
+}
+
+/* ====== 冒号 ====== */
+
 /* ====== 冒号 ====== */
 .colon {
   display: inline-flex; align-items: center; justify-content: center;

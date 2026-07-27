@@ -1,6 +1,6 @@
 {
   "name": "digital-clock",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Animated desktop digital clock with rich customization - Electron app",
   "main": "main.js",
   "scripts": {
@@ -20,10 +20,21 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "**/*",
+      "!backup{,/**}",
+      "!releases{,/**}",
+      "!docs{,/**}",
+      "!.workbuddy{,/**}",
+      "!dist{,/**}",
+      "!node_modules{,/**}",
+      "!.git{,/**}",
+      "!.gitignore",
+      "!*.md",
+      "!release.json"
+    ],
     "win": {
-      "target": [
-        "portable"
-      ]
+      "target": ["dir"]
     }
   },
   "devDependencies": {

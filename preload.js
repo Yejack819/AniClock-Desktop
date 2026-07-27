@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onConfigUpdated: (callback) => {
     ipcRenderer.on('config-updated', (_event, config) => callback(config));
   },
+  openSettings: () => ipcRenderer.invoke('open-settings'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
 });

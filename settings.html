@@ -29,7 +29,12 @@
 
     <div class="setting-row">
       <label><span data-lang="fontSize">字号</span> <span id="font-size-label">200</span>px</label>
-      <input type="range" id="font-size" min="80" max="400" value="200">
+      <input type="range" id="font-size" min="40" max="400" value="200">
+    </div>
+
+    <div class="setting-row">
+      <label><span data-lang="infoScale">日期/时区比例</span> <span id="info-scale-label">0.30</span></label>
+      <input type="range" id="info-scale" min="0.10" max="1.00" step="0.01" value="0.30">
     </div>
 
     <div class="setting-row">
@@ -87,6 +92,42 @@
         <option value="ltr" data-lang="staggerLTR">从左到右</option>
         <option value="rtl" data-lang="staggerRTL">从右到左</option>
       </select>
+    </div>
+
+    <div class="setting-row blur-controls hidden" id="blur-controls">
+      <label><span data-lang="blurEnabled">添加模糊</span>
+        <label class="toggle-switch" style="margin-left:6px">
+          <input type="checkbox" id="blur-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </label>
+    </div>
+
+    <div class="blur-detail hidden" id="blur-detail">
+      <div class="setting-row">
+        <label><span data-lang="blurDuration">模糊持续</span> <span id="blur-duration-label">300</span>ms</label>
+        <input type="range" id="blur-duration" min="10" max="1000" step="10" value="300">
+      </div>
+      <div class="setting-row">
+        <label><span data-lang="blurStrength">模糊强度</span> <span id="blur-strength-label">15</span>px</label>
+        <input type="range" id="blur-strength" min="1" max="40" step="1" value="15">
+      </div>
+    </div>
+
+    <div class="setting-row scale-controls hidden" id="scale-controls">
+      <label><span data-lang="scaleInEnabled">由小放大滑入</span>
+        <label class="toggle-switch" style="margin-left:6px">
+          <input type="checkbox" id="scale-in-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </label>
+    </div>
+
+    <div class="scale-detail hidden" id="scale-detail">
+      <div class="setting-row">
+        <label><span data-lang="scaleInFactor">初始大小</span> <span id="scale-factor-label">30</span>%</label>
+        <input type="range" id="scale-factor" min="5" max="100" step="1" value="30">
+      </div>
     </div>
 
     <!-- ====== 时间 ====== -->

@@ -13,6 +13,8 @@ const DEFAULT_CONFIG = {
   showSeconds: true, showDate: true, datePosition: 'below', autoColor: false,
   extraTimezones: [], animDuration: 350, staggerDelay: 0, staggerDirection: 'ltr',
   layerMode: 'alwaysOnTop', autoStart: false, language: 'zh',
+  infoScale: 0.3, blurEnabled: false, blurDuration: 300, blurStrength: 15,
+  scaleInEnabled: false, scaleInFactor: 0.3,
 };
 
 function loadConfig() {
@@ -97,8 +99,84 @@ function createWindow() {
 }
 
 // ========== 系统托盘 ==========
+let trayMenuWindow = null;
+
+function isDayTime() {
+  const h = new Date().getHours();
+  return h >= 6 && h < 18;
+}
+
+function getTrayMenuColors() {
+  const day = isDayTime();
+  return {
+    bg: day ? '#ffffff' : '#222222',
+    fg: day ? '#222222' : '#eeeeee',
+    hover: day ? '#e8e8e8' : '#3a3a4a',
+    border: day ? '#dddddd' : '#444444',
+  };
+}
+
+function showTrayMenu() {
+  const c = getTrayMenuColors();
+  const config = loadConfig();
+  const lang = config.language || 'zh';
+  const setLabel = lang === 'zh' ? '⚙️ 设置' : '⚙️ Settings';
+  const quitLabel = lang === 'zh' ? '❌ 退出' : '❌ Quit';
+  const tooltip = lang === 'zh' ? '大时钟' : 'Digital Clock';
+
+  if (tray) tray.setToolTip(tooltip);
+
+  if (trayMenuWindow && !trayMenuWindow.isDestroyed()) {
+    trayMenuWindow.close();
+    trayMenuWindow = null;
+  }
+
+  trayMenuWindow = new BrowserWindow({
+    width: 170, height: 88,
+    frame: false, alwaysOnTop: true, skipTaskbar: true,
+    transparent: true, resizable: false, show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+    '*{margin:0;padding:0;box-sizing:border-box;user-select:none;}' +
+    'body{background:'+c.bg+';color:'+c.fg+';font-family:-apple-system,sans-serif;font-size:13px;border-radius:8px;border:1px solid '+c.border+';overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.25);}' +
+    '.mi{padding:10px 16px;cursor:pointer;transition:background 0.1s;}' +
+    '.mi:hover{background:'+c.hover+';}' +
+    '.mi:first-child{border-radius:8px 8px 0 0;}' +
+    '.mi:last-child{border-radius:0 0 8px 8px;}' +
+    '.sep{height:1px;background:'+c.border+';margin:0;}' +
+    '</style></head><body>' +
+    '<div class="mi" id="btn-set">'+setLabel+'</div>' +
+    '<div class="sep"></div>' +
+    '<div class="mi" id="btn-quit">'+quitLabel+'</div>' +
+    '<script>' +
+    'document.getElementById("btn-set").onclick=()=>{window.electronAPI.openSettings();}' +
+    ';document.getElementById("btn-quit").onclick=()=>{window.electronAPI.quitApp();}' +
+    '</script></body></html>';
+
+  trayMenuWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  trayMenuWindow.once('ready-to-show', () => {
+    if (tray && tray.getBounds) {
+      const tb = tray.getBounds();
+      const wb = trayMenuWindow.getBounds();
+      let x = Math.round(tb.x + tb.width / 2 - wb.width / 2 + 8);
+      let y = Math.round(tb.y - wb.height - 4);
+      // 防止超出屏幕
+      const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+      x = Math.max(4, Math.min(x, sw - wb.width - 4));
+      if (y < 4) y = Math.round(tb.y + tb.height + 4);
+      trayMenuWindow.setPosition(x, y);
+    }
+    trayMenuWindow.show();
+  });
+  trayMenuWindow.on('blur', () => { if (trayMenuWindow) { trayMenuWindow.close(); trayMenuWindow = null; } });
+}
+
 function createTray() {
-  // 创建 16x16 托盘图标（BGRA 格式）
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
   const cx = size / 2, cy = size / 2, r = 6.5;
@@ -106,31 +184,20 @@ function createTray() {
     for (let x = 0; x < size; x++) {
       const inside = (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
       const i = (y * size + x) * 4;
-      buf[i]     = inside ? 255 : 0;   // B
-      buf[i + 1] = inside ? 255 : 0;   // G
-      buf[i + 2] = inside ? 255 : 0;   // R
-      buf[i + 3] = inside ? 255 : 0;   // A
+      buf[i]     = inside ? 255 : 0;
+      buf[i + 1] = inside ? 255 : 0;
+      buf[i + 2] = inside ? 255 : 0;
+      buf[i + 3] = inside ? 255 : 0;
     }
   }
   const img = nativeImage.createFromBuffer(buf, { width: size, height: size });
-
   tray = new Tray(img);
-  tray.setToolTip('大时钟');
+  const lang = loadConfig().language || 'zh';
+  tray.setToolTip(lang === 'zh' ? '大时钟' : 'Digital Clock');
+  tray.setContextMenu(null); // 用自定义弹出菜单替代原生菜单
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: '⚙️ 设置',
-      click: () => openSettingsWindow(),
-    },
-    { type: 'separator' },
-    {
-      label: '❌ 退出',
-      click: () => { app.quit(); },
-    },
-  ]);
-  tray.setContextMenu(contextMenu);
-
-  // 左键单击切换时钟窗口显示/隐藏
+  // 右键弹出自定义菜单，左键切换显示
+  tray.on('right-click', () => showTrayMenu());
   tray.on('click', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isVisible()) { mainWindow.hide(); }
@@ -138,6 +205,8 @@ function createTray() {
     }
   });
 }
+
+// ========== 设置窗口 ==========
 
 // ========== 设置窗口 ==========
 function openSettingsWindow() {
@@ -236,10 +305,15 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('config-updated', newConfig);
   }
+  // 语言变化时更新托盘 tooltip
+  if (newConfig && newConfig.language && tray) {
+    tray.setToolTip(newConfig.language === 'zh' ? '大时钟' : 'Digital Clock');
+  }
   return { success: true };
 });
 
 ipcMain.handle('quit-app', () => app.quit());
+ipcMain.handle('open-settings', () => { openSettingsWindow(); return { success: true }; });
 
 // ========== 启动 ==========
 app.whenReady().then(() => {

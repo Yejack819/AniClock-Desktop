@@ -6,10 +6,12 @@ const LOCALE = {
     textColor: '文本颜色', autoColor: '根据白天/黑夜自动切换黑白',
     bgColor: '背景颜色', alpha: '透明度',
     fontFamily: '字体', customFont: '自定义...',
-    fontSize: '字号', animSpeed: '动画速度', animType: '动画效果',
+    fontSize: '字号', infoScale: '日期/时区比例', animSpeed: '动画时间', animType: '动画效果',
     animSlideUp: '上滑翻转', animSlideDown: '下滑翻转', animFade: '淡入淡出',
     animShrink: '缩（旧变小）', animExpand: '放（旧变大）', animFlip3d: '3D旋转', animNone: '无动画',
     staggerDelay: '错峰延迟', staggerDir: '错峰方向', staggerLTR: '从左到右', staggerRTL: '从右到左',
+    blurEnabled: '添加模糊', blurDuration: '模糊持续', blurStrength: '模糊强度',
+    scaleInEnabled: '由小放大滑入', scaleInFactor: '初始大小',
     showSeconds: '显示秒',
     showDate: '显示日期', datePosition: '日期位置',
     dateAbove: '上方', dateBelow: '下方',
@@ -27,10 +29,12 @@ const LOCALE = {
     textColor: 'Text Color', autoColor: 'Auto-switch black/white (day/night)',
     bgColor: 'Background', alpha: 'Opacity',
     fontFamily: 'Font', customFont: 'Custom...',
-    fontSize: 'Font Size', animSpeed: 'Animation Speed', animType: 'Animation',
+    fontSize: 'Font Size', infoScale: 'Date/TZ size ratio', animSpeed: 'Anim Duration', animType: 'Animation',
     animSlideUp: 'Slide Up', animSlideDown: 'Slide Down', animFade: 'Fade',
     animShrink: 'Shrink', animExpand: 'Expand', animFlip3d: '3D Flip', animNone: 'None',
     staggerDelay: 'Stagger Delay', staggerDir: 'Stagger Direction', staggerLTR: 'Left to Right', staggerRTL: 'Right to Left',
+    blurEnabled: 'Add Blur', blurDuration: 'Blur Duration', blurStrength: 'Blur Strength',
+    scaleInEnabled: 'Scale-in', scaleInFactor: 'Start Size',
     showSeconds: 'Show Seconds',
     showDate: 'Show Date', datePosition: 'Date Position',
     dateAbove: 'Above', dateBelow: 'Below',
@@ -50,10 +54,20 @@ const els = {
   bg_color: $('bg-color'), bg_alpha: $('bg-alpha'), bg_alpha_label: $('bg-alpha-label'),
   font_select: $('font-select'), font_custom: $('font-custom'),
   font_size: $('font-size'), font_size_label: $('font-size-label'),
+  info_scale: $('info-scale'), info_scale_label: $('info-scale-label'),
   anim_speed: $('anim-speed'), anim_speed_label: $('anim-speed-label'),
   anim_type: $('anim-type'),
   stagger_delay: $('stagger-delay'), stagger_delay_label: $('stagger-delay-label'),
   stagger_dir: $('stagger-dir'),
+  blur_controls: document.getElementById('blur-controls'),
+  blur_enabled: $('blur-enabled'),
+  blur_detail: document.getElementById('blur-detail'),
+  blur_duration: $('blur-duration'), blur_duration_label: $('blur-duration-label'),
+  blur_strength: $('blur-strength'), blur_strength_label: $('blur-strength-label'),
+  scale_controls: document.getElementById('scale-controls'),
+  scale_in_enabled: $('scale-in-enabled'),
+  scale_detail: document.getElementById('scale-detail'),
+  scale_factor: $('scale-factor'), scale_factor_label: $('scale-factor-label'),
   show_seconds: $('show-seconds'), show_date: $('show-date'), date_position: $('date-position'),
   layer_mode: $('layer-mode'), auto_start: $('auto-start'), language_select: $('language-select'),
   pos_x: $('pos-x'), pos_y: $('pos-y'), apply_pos: $('apply-pos'),
@@ -68,7 +82,29 @@ const els = {
 let config = {};
 let currentLang = 'zh';
 
-function syncAnimUI(){els.anim_speed.disabled=els.anim_type.value==="none";}
+function syncAnimUI(){
+  els.anim_speed.disabled=els.anim_type.value==="none";
+  const canBlur=els.anim_type.value==="slide-up"||els.anim_type.value==="slide-down";
+  els.blur_controls.classList.toggle('hidden',!canBlur);
+  els.scale_controls.classList.toggle('hidden',!canBlur);
+  if(canBlur && els.blur_enabled.checked){
+    els.blur_detail.classList.remove('hidden');
+    const maxV=parseInt(els.anim_speed.value,10);
+    els.blur_duration.max=maxV;
+    if(parseInt(els.blur_duration.value,10)>maxV){
+      els.blur_duration.value=maxV;
+      els.blur_duration_label.textContent=maxV;
+      saveAndApply({blurDuration:maxV});
+    }
+  } else {
+    els.blur_detail.classList.add('hidden');
+  }
+  if(canBlur && els.scale_in_enabled.checked){
+    els.scale_detail.classList.remove('hidden');
+  } else {
+    els.scale_detail.classList.add('hidden');
+  }
+}
 function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>{const h=x.toString(16);return h.length===1?'0'+h:h;}).join('');}
 function buildBgColor() {
   const h = els.bg_color.value;
@@ -115,16 +151,23 @@ function syncUIFromConfig() {
   if (m) { els.bg_color.value = rgbToHex(+m[1],+m[2],+m[3]); els.bg_alpha.value = parseFloat(m[4]); }
   else { els.bg_color.value = '#000000'; els.bg_alpha.value = 0; }
   els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value * 100) + '%';
-  els.text_color.disabled=els.auto_color.checked;
+  els.text_color.disabled=els.auto_color.checked;els.bg_color.disabled=els.auto_color.checked;
   const opts = Array.from(els.font_select.options).map(o => o.value);
   if (opts.includes(config.fontFamily)) { els.font_select.value = config.fontFamily; els.font_custom.classList.add('hidden'); }
   else { els.font_select.value = 'custom'; els.font_custom.classList.remove('hidden'); els.font_custom.value = config.fontFamily; }
   els.font_size.value = config.fontSize; els.font_size_label.textContent = config.fontSize;
+  els.info_scale.value = config.infoScale || 0.3; els.info_scale_label.textContent = (config.infoScale || 0.3).toFixed(2);
   els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
   els.anim_type.value = config.animType || 'slide-up';
   if (els.anim_type.value === 'scale') { config.animType = 'shrink'; els.anim_type.value = 'shrink'; }
   els.stagger_delay.value = config.staggerDelay || 0; els.stagger_delay_label.textContent = config.staggerDelay || 0;
   els.stagger_dir.value = config.staggerDirection || 'ltr';
+  els.blur_enabled.checked = !!config.blurEnabled;
+  els.blur_duration.value = config.blurDuration || 300; els.blur_duration_label.textContent = config.blurDuration || 300;
+  els.blur_strength.value = config.blurStrength || 15; els.blur_strength_label.textContent = config.blurStrength || 15;
+  els.scale_in_enabled.checked = !!config.scaleInEnabled;
+  els.scale_factor.value = Math.round((config.scaleInFactor||0.3)*100);
+  els.scale_factor_label.textContent = Math.round((config.scaleInFactor||0.3)*100);
   syncAnimUI();
   els.show_seconds.checked = config.showSeconds !== false;
   els.show_date.checked = config.showDate !== false;
@@ -155,7 +198,7 @@ async function saveAndApply(nc) {
   syncUIFromConfig();
 
   // 外观
-  function syncColorUI(){els.text_color.disabled=els.auto_color.checked;}
+  function syncColorUI(){els.text_color.disabled=els.auto_color.checked;els.bg_color.disabled=els.auto_color.checked;}
   els.auto_color.addEventListener('change', function(){syncColorUI();saveAndApply({autoColor:els.auto_color.checked});});
   els.text_color.addEventListener('input', () => saveAndApply({ color: els.text_color.value }));
   els.bg_color.addEventListener('input', () => saveAndApply({ bgColor: buildBgColor() }));
@@ -166,10 +209,16 @@ async function saveAndApply(nc) {
   });
   els.font_custom.addEventListener('change', () => { const v = els.font_custom.value.trim(); if (v) saveAndApply({ fontFamily: v }); });
   els.font_size.addEventListener('input', () => { const v = parseInt(els.font_size.value,10); els.font_size_label.textContent = v; saveAndApply({ fontSize: v }); });
-  els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); });
+  els.info_scale.addEventListener('input', () => { const v = parseFloat(els.info_scale.value); els.info_scale_label.textContent = v.toFixed(2); saveAndApply({ infoScale: v }); });
+  els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); syncAnimUI(); });
   els.anim_type.addEventListener('change', function() { saveAndApply({ animType: els.anim_type.value }); syncAnimUI(); });
   els.stagger_delay.addEventListener('input', function() { var v = parseInt(els.stagger_delay.value,10); els.stagger_delay_label.textContent = v; saveAndApply({ staggerDelay: v }); });
   els.stagger_dir.addEventListener('change', function() { saveAndApply({ staggerDirection: els.stagger_dir.value }); });
+  els.blur_enabled.addEventListener('change', function() { saveAndApply({ blurEnabled: els.blur_enabled.checked }); syncAnimUI(); });
+  els.blur_duration.addEventListener('input', function() { var v = parseInt(els.blur_duration.value,10); els.blur_duration_label.textContent = v; saveAndApply({ blurDuration: v }); });
+  els.blur_strength.addEventListener('input', function() { var v = parseInt(els.blur_strength.value,10); els.blur_strength_label.textContent = v; saveAndApply({ blurStrength: v }); });
+  els.scale_in_enabled.addEventListener('change', function() { saveAndApply({ scaleInEnabled: els.scale_in_enabled.checked }); syncAnimUI(); });
+  els.scale_factor.addEventListener('input', function() { var v = parseInt(els.scale_factor.value,10); els.scale_factor_label.textContent = v; saveAndApply({ scaleInFactor: v/100 }); });
 
   els.show_seconds.addEventListener('change', () => saveAndApply({ showSeconds: els.show_seconds.checked }));
 
