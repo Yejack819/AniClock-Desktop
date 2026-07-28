@@ -177,7 +177,12 @@ function startAlarmFlash(autoColorWasOn) {
 
 function stopAlarmFlash() {
   if (alarmFlashTimer) { clearInterval(alarmFlashTimer); alarmFlashTimer = null; }
+  // Clear flash inline colors so elements inherit from acf()
+  td.style.color = "";
+  ib.style.color = "";
   if (ai) ai.style.color = "";
+  // Re-apply proper colors now that alarm is stopped
+  if (typeof acf === "function") acf();
 }
 
 // ====== Alarm Dismiss ======
