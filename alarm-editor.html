@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-lang="windowTitle">闹钟编辑</title>
+  <link rel="stylesheet" href="alarm-editor.css">
+</head>
+<body>
+  <div class="editor-container">
+    <h3 id="editor-title" data-lang="addAlarm">添加闹钟</h3>
+
+    <div class="field-row">
+      <label data-lang="alarmName">闹钟名称</label>
+      <input type="text" id="alarm-name" maxlength="30">
+    </div>
+
+    <div class="field-row">
+      <label data-lang="alarmTime">提醒时间</label>
+      <div class="time-inputs">
+        <input type="number" id="alarm-hour" min="0" max="23" step="1" value="8">
+        <span data-lang="timeSep">:</span>
+        <input type="number" id="alarm-minute" min="0" max="59" step="1" value="0">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <label data-lang="alarmSound">声音</label>
+      <select id="alarm-sound">
+        <option value="beep" data-lang="soundBeep">Beep</option>
+        <option value="chime" data-lang="soundChime">Chime</option>
+        <option value="alarm" data-lang="soundAlarm">Alarm</option>
+        <option value="none" data-lang="soundNone">无声音</option>
+      </select>
+    </div>
+
+    <div class="field-row">
+      <label data-lang="alarmRepeat">是否重复</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="alarm-repeat">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div id="weekday-picker" class="weekday-picker hidden">
+      <label class="weekday-label" data-lang="repeatOn">重复于</label>
+      <div class="weekday-buttons">
+        <button data-day="1" data-lang="dayMon">一</button>
+        <button data-day="2" data-lang="dayTue">二</button>
+        <button data-day="3" data-lang="dayWed">三</button>
+        <button data-day="4" data-lang="dayThu">四</button>
+        <button data-day="5" data-lang="dayFri">五</button>
+        <button data-day="6" data-lang="daySat">六</button>
+        <button data-day="0" data-lang="daySun">日</button>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <label data-lang="alarmSnooze">稍后提醒</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="alarm-snooze-enabled" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div id="snooze-detail">
+      <div class="field-row">
+        <label data-lang="alarmSnoozeTime">提醒间隔</label>
+        <div class="snooze-inputs">
+          <input type="number" id="alarm-snooze-h" min="0" max="23" step="1" value="0">
+          <span data-lang="snoozeH">时</span>
+          <input type="number" id="alarm-snooze-m" min="0" max="59" step="1" value="5">
+          <span data-lang="snoozeM">分</span>
+          <input type="number" id="alarm-snooze-s" min="0" max="59" step="1" value="0">
+          <span data-lang="snoozeS">秒</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <label data-lang="alarmSnoozeCount">重复次数</label>
+        <div class="snooze-count-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="alarm-snooze-unlimited" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <span data-lang="snoozeUnlimited">无限</span>
+          <div id="snooze-count-input-wrap" class="hidden">
+            <input type="number" id="alarm-snooze-count" min="1" max="999" step="1" value="3">
+            <span data-lang="snoozeTimes">次</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-cancel" data-lang="cancelBtn">取消</button>
+      <button id="btn-confirm" data-lang="confirmBtn">确认</button>
+    </div>
+  </div>
+  <script src="alarm-editor.js"></script>
+</body>
+</html>

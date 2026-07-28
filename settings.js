@@ -13,7 +13,7 @@ const LOCALE = {
     blurEnabled: '添加模糊', blurDuration: '模糊持续', blurStrength: '模糊强度',
     scaleInEnabled: '由小放大滑入', scaleInFactor: '初始大小',
     showSeconds: '显示秒',
-    showDate: '显示日期', datePosition: '日期位置',
+    showDate: '显示日期', showWeekday: '显示星期', datePosition: '日期位置',
     dateAbove: '上方', dateBelow: '下方',
     secTZ: '--- 多时区 ---', tzAdd: '添加', tzRemove: 'X', tzHint: '最多添加 2 个时区',
     position: '窗口位置', posTL: '左上', posTR: '右上', posCenter: '居中',
@@ -22,6 +22,17 @@ const LOCALE = {
     autoStart: '开机自启动', language: '语言', langZh: '中文', langEn: 'English',
     autoStartFail: '设置开机自启动失败：', permissionDenied: '权限被拒绝',
     passthrough: '鼠标穿透（整个窗口）', passthroughWarn: '开启鼠标穿透后无法拖动窗口以更改其位置',
+    secAlarm: '--- 闹钟 ---',
+    alarmAdd: '+ 添加闹钟', alarmEdit: '编辑', alarmDelete: '删除',
+    alarmRepeatNone: '仅一次', alarmRepeatDays: '重复', alarmDisabled: '已关闭',
+    dayNames: ['日', '一', '二', '三', '四', '五', '六'],
+    alarmSounds: { beep: 'Beep', chime: 'Chime', alarm: 'Alarm', none: '无声音' },
+    confirmDelete: '确定要删除闹钟"{{name}}"吗？',
+    snoozeLabel: '稍后',
+    alarmAdvanced: '▶ 高级设置', alarmSoundDuration: '声音播放最长时间',
+    alarmFlash: '闹钟响时闪烁',
+    alarmAutoShow: '闹钟响时自动取消隐藏', alarmAutoPassthrough: '闹钟响时自动关闭鼠标穿透',
+    alarmAutoTop: '闹钟响时自动置顶',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -36,7 +47,7 @@ const LOCALE = {
     blurEnabled: 'Add Blur', blurDuration: 'Blur Duration', blurStrength: 'Blur Strength',
     scaleInEnabled: 'Scale-in', scaleInFactor: 'Start Size',
     showSeconds: 'Show Seconds',
-    showDate: 'Show Date', datePosition: 'Date Position',
+    showDate: 'Show Date', showWeekday: 'Show Weekday', datePosition: 'Date Position',
     dateAbove: 'Above', dateBelow: 'Below',
     secTZ: '--- Time Zones ---', tzAdd: 'Add', tzRemove: 'X', tzHint: 'Max 2 time zones',
     position: 'Window Position', posTL: 'Top-Left', posTR: 'Top-Right', posCenter: 'Center',
@@ -45,6 +56,17 @@ const LOCALE = {
     autoStart: 'Auto Start on Boot', language: 'Language', langZh: 'Chinese', langEn: 'English',
     autoStartFail: 'Failed to set auto-start: ', permissionDenied: 'Permission denied',
     passthrough: 'Mouse passthrough (entire window)', passthroughWarn: 'When enabled, you cannot drag the window to move it.',
+    secAlarm: '--- Alarm ---',
+    alarmAdd: '+ Add Alarm', alarmEdit: 'Edit', alarmDelete: 'Delete',
+    alarmRepeatNone: 'Once', alarmRepeatDays: 'Repeat', alarmDisabled: 'Disabled',
+    dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    alarmSounds: { beep: 'Beep', chime: 'Chime', alarm: 'Alarm', none: 'None' },
+    confirmDelete: 'Are you sure you want to delete "{{name}}"?',
+    snoozeLabel: 'Snooze',
+    alarmAdvanced: '▶ Advanced', alarmSoundDuration: 'Max sound duration',
+    alarmFlash: 'Flash on alarm',
+    alarmAutoShow: 'Auto-show window on alarm', alarmAutoPassthrough: 'Auto-disable passthrough on alarm',
+    alarmAutoTop: 'Auto-force always-on-top on alarm',
   },
 };
 
@@ -68,7 +90,7 @@ const els = {
   scale_in_enabled: $('scale-in-enabled'),
   scale_detail: document.getElementById('scale-detail'),
   scale_factor: $('scale-factor'), scale_factor_label: $('scale-factor-label'),
-  show_seconds: $('show-seconds'), show_date: $('show-date'), date_position: $('date-position'),
+  show_seconds: $('show-seconds'), show_date: $('show-date'), show_weekday: $('show-weekday'), date_position: $('date-position'),
   layer_mode: $('layer-mode'), auto_start: $('auto-start'), language_select: $('language-select'),
   pos_x: $('pos-x'), pos_y: $('pos-y'), apply_pos: $('apply-pos'),
   pos_buttons: document.querySelectorAll('.position-buttons button'),
@@ -77,10 +99,22 @@ const els = {
   tz_offset: document.getElementById('tz-offset-input'), tz_add_btn: document.getElementById('tz-add-btn'),
   tz_hint: document.getElementById('tz-hint'),
   passthrough_switch: document.getElementById('passthrough-switch'),
+  alarm_list: document.getElementById('alarm-list'),
+  alarm_add_btn: document.getElementById('alarm-add-btn'),
+  alarm_advanced_toggle: document.getElementById('alarm-advanced-toggle'),
+  alarm_advanced_content: document.getElementById('alarm-advanced-content'),
+  alarm_sound_duration: document.getElementById('alarm-sound-duration'),
+  alarm_sound_duration_label: document.getElementById('alarm-sound-duration-label'),
+  alarm_flash: document.getElementById('alarm-flash'),
+  alarm_auto_show: document.getElementById('alarm-auto-show'),
+  alarm_auto_passthrough: document.getElementById('alarm-auto-passthrough'),
+  alarm_auto_top: document.getElementById('alarm-auto-top'),
 };
 
 let config = {};
 let currentLang = 'zh';
+let alarmList = [];
+let activeAlarmIds = { ringingId: null, retryIds: [] };
 
 function syncAnimUI(){
   els.anim_speed.disabled=els.anim_type.value==="none";
@@ -119,6 +153,7 @@ function applyLanguage(lang) {
     if (dict[key]) el.textContent = dict[key];
   });
   document.title = dict.settingsTitle;
+  renderAlarmList(); // re-render with new locale
 }
 
 function renderTZList() {
@@ -142,6 +177,108 @@ function renderTZList() {
   const count = tzs.length;
   els.tz_hint.style.display = count >= 2 ? '' : 'none';
   els.tz_add_btn.disabled = count >= 2;
+}
+
+function renderAlarmList() {
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  els.alarm_list.innerHTML = '';
+
+  if (alarmList.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'text-align:center;padding:16px;color:#666;font-size:13px;';
+    empty.textContent = currentLang === 'zh' ? '暂无闹钟，点击下方按钮添加' : 'No alarms. Click below to add one.';
+    els.alarm_list.appendChild(empty);
+    return;
+  }
+
+  alarmList.forEach(alarm => {
+    if (!alarm) return;
+    const item = document.createElement('div');
+    item.className = 'alarm-item';
+
+    const time = String(alarm.hour).padStart(2, '0') + ':' + String(alarm.minute).padStart(2, '0');
+
+    let meta = '';
+    if (alarm.enabled === false) {
+      meta = dict.alarmDisabled;
+    } else if (alarm.repeat && alarm.weekdays && alarm.weekdays.length > 0) {
+      const days = alarm.weekdays.map(d => dict.dayNames[d] || '').join(' ');
+      const soundName = dict.alarmSounds[alarm.sound] || alarm.sound;
+      const snoozeStr = buildSnoozeStr(alarm, dict);
+      meta = dict.alarmRepeatDays + ': ' + days + ' · ' + soundName + (snoozeStr ? ' · ' + snoozeStr : '');
+    } else {
+      const soundName = dict.alarmSounds[alarm.sound] || alarm.sound;
+      const snoozeStr = buildSnoozeStr(alarm, dict);
+      meta = dict.alarmRepeatNone + ' · ' + soundName + (snoozeStr ? ' · ' + snoozeStr : '');
+    }
+
+    const nameStr = alarm.name || '';
+
+    const isActive = alarm.id === activeAlarmIds.ringingId || activeAlarmIds.retryIds.includes(alarm.id);
+    const isEnabled = alarm.enabled !== false;
+
+    item.innerHTML =
+      '<div class="alarm-toggle-col">' +
+        '<label class="toggle-switch">' +
+          '<input type="checkbox" class="alarm-toggle-input" data-id="' + alarm.id + '"' + (isEnabled ? ' checked' : '') + '>' +
+          '<span class="toggle-slider"></span>' +
+        '</label>' +
+      '</div>' +
+      '<div class="alarm-time' + (isEnabled ? '' : ' disabled') + '">' + time + '</div>' +
+      '<div class="alarm-info">' +
+        '<div class="alarm-name">' + escapeHtml(nameStr) + '</div>' +
+        '<div class="alarm-meta">' + escapeHtml(meta) + '</div>' +
+      '</div>' +
+      '<div class="alarm-actions">' +
+        '<button class="alarm-edit-btn" data-id="' + alarm.id + '"' + (isActive ? ' disabled' : '') + '>' + dict.alarmEdit + '</button>' +
+        '<button class="alarm-del-btn" data-id="' + alarm.id + '">' + dict.alarmDelete + '</button>' +
+      '</div>';
+
+    els.alarm_list.appendChild(item);
+  });
+
+  // Bind events
+  els.alarm_list.querySelectorAll('.alarm-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      window.electronAPI.openAlarmEditor(btn.dataset.id);
+    });
+  });
+  els.alarm_list.querySelectorAll('.alarm-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const alarm = alarmList.find(a => a.id === btn.dataset.id);
+      if (!alarm) return;
+      const confirmMsg = (dict.confirmDelete || '确定要删除吗？').replace('{{name}}', alarm.name || '');
+      if (!confirm(confirmMsg)) return;
+      await window.electronAPI.deleteAlarm(btn.dataset.id);
+      // List will be refreshed via onAlarmsUpdated
+    });
+  });
+  els.alarm_list.querySelectorAll('.alarm-toggle-input').forEach(input => {
+    input.addEventListener('change', () => {
+      window.electronAPI.toggleAlarm(input.dataset.id);
+    });
+  });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function buildSnoozeStr(alarm, dict) {
+  if (alarm.snoozeEnabled === false) return '';
+  const h = alarm.snoozeHours || 0;
+  const m = alarm.snoozeMinutes !== undefined ? alarm.snoozeMinutes : 5;
+  const s = alarm.snoozeSeconds || 0;
+  const isDefault = h === 0 && m === 5 && s === 0;
+  let parts = [];
+  if (h > 0) parts.push(h + 'h');
+  if (m > 0) parts.push(m + 'm');
+  if (s > 0) parts.push(s + 's');
+  const timeStr = isDefault ? '' : parts.join(' ');
+  const countStr = alarm.snoozeCount > 0 ? (dict.snoozeLabel || 'Snooze') + ' x' + alarm.snoozeCount : (dict.snoozeLabel || 'Snooze');
+  if (timeStr) return countStr + ' ' + timeStr;
+  return countStr;
 }
 
 function syncUIFromConfig() {
@@ -171,6 +308,7 @@ function syncUIFromConfig() {
   syncAnimUI();
   els.show_seconds.checked = config.showSeconds !== false;
   els.show_date.checked = config.showDate !== false;
+  els.show_weekday.checked = config.showWeekday !== false;
   els.date_position.value = config.datePosition || 'below';
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
@@ -182,6 +320,15 @@ function syncUIFromConfig() {
     els.custom_pos.classList.remove('hidden'); els.pos_x.value = config.x; els.pos_y.value = config.y;
   } else { els.custom_pos.classList.add('hidden'); }
   renderTZList();
+
+  // Alarm advanced settings
+  const sd = config.alarmSoundDuration !== undefined ? config.alarmSoundDuration : 120;
+  els.alarm_sound_duration.value = sd;
+  els.alarm_sound_duration_label.textContent = sd;
+  els.alarm_flash.checked = config.alarmFlash !== false;
+  els.alarm_auto_show.checked = config.alarmAutoShow !== false;
+  els.alarm_auto_passthrough.checked = config.alarmAutoPassthrough !== false;
+  els.alarm_auto_top.checked = config.alarmAutoTop !== false;
 }
 
 async function saveAndApply(nc) {
@@ -196,6 +343,26 @@ async function saveAndApply(nc) {
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
+
+  // Load alarms
+  try { alarmList = await window.electronAPI.getAllAlarms() || []; } catch (e) { alarmList = []; }
+  renderAlarmList();
+
+  // Get active alarm IDs (for disabling edit buttons)
+  try { activeAlarmIds = await window.electronAPI.getActiveAlarmIds() || { ringingId: null, retryIds: [] }; } catch (e) {}
+  renderAlarmList();
+
+  // Listen for alarm updates
+  window.electronAPI.onAlarmsUpdated && window.electronAPI.onAlarmsUpdated((alarms) => {
+    alarmList = alarms || [];
+    renderAlarmList();
+  });
+
+  // Listen for active alarm IDs changes
+  window.electronAPI.onActiveAlarmIdsChanged && window.electronAPI.onActiveAlarmIdsChanged((ids) => {
+    activeAlarmIds = ids || { ringingId: null, retryIds: [] };
+    renderAlarmList();
+  });
 
   // 外观
   function syncColorUI(){els.text_color.disabled=els.auto_color.checked;els.bg_color.disabled=els.auto_color.checked;}
@@ -224,9 +391,10 @@ async function saveAndApply(nc) {
 
   // 日期
   els.show_date.addEventListener('change', () => saveAndApply({ showDate: els.show_date.checked }));
+  els.show_weekday.addEventListener('change', () => saveAndApply({ showWeekday: els.show_weekday.checked }));
   els.date_position.addEventListener('change', () => saveAndApply({ datePosition: els.date_position.value }));
 
-  // 多时区（修复：添加后立即刷新列表）
+  // 多时区
   els.tz_add_btn.addEventListener('click', () => {
     const cur = config.extraTimezones || [];
     if (cur.length >= 2) return;
@@ -267,11 +435,48 @@ async function saveAndApply(nc) {
     saveAndApply({ passthrough: en });
   });
 
+  // ====== 闹钟 ======
+  els.alarm_add_btn.addEventListener('click', () => {
+    window.electronAPI.openAlarmEditor(null);
+  });
+
+  // ====== 闹钟高级设置 ======
+  // Collapse toggle
+  els.alarm_advanced_toggle.addEventListener('click', () => {
+    const isOpen = !els.alarm_advanced_content.classList.contains('hidden');
+    els.alarm_advanced_content.classList.toggle('hidden');
+    const label = (LOCALE[currentLang] || LOCALE.zh).alarmAdvanced || '▶ Advanced';
+    const text = label.replace(/^[▶▼]\s*/, '');
+    els.alarm_advanced_toggle.textContent = (isOpen ? '▶' : '▼') + ' ' + text;
+  });
+
+  els.alarm_sound_duration.addEventListener('input', () => {
+    const v = parseInt(els.alarm_sound_duration.value, 10);
+    els.alarm_sound_duration_label.textContent = v;
+    saveAndApply({ alarmSoundDuration: v });
+  });
+  els.alarm_flash.addEventListener('change', () => {
+    saveAndApply({ alarmFlash: els.alarm_flash.checked });
+  });
+  els.alarm_auto_show.addEventListener('change', () => {
+    saveAndApply({ alarmAutoShow: els.alarm_auto_show.checked });
+  });
+  els.alarm_auto_passthrough.addEventListener('change', () => {
+    saveAndApply({ alarmAutoPassthrough: els.alarm_auto_passthrough.checked });
+  });
+  els.alarm_auto_top.addEventListener('change', () => {
+    saveAndApply({ alarmAutoTop: els.alarm_auto_top.checked });
+  });
+
   window.addEventListener('beforeunload', () => { window.electronAPI.saveConfig(config); });
 
   // 时钟窗口被拖动时同步更新位置按钮状态 / 时区变化时同步列表
   window.electronAPI.onConfigUpdated((nc) => {
-    if (nc.positionPreset === undefined && nc.x === undefined && nc.y === undefined && nc.extraTimezones === undefined) return;
+    if (nc.positionPreset === undefined && nc.x === undefined && nc.y === undefined && nc.extraTimezones === undefined) {
+      // Check if any alarm advanced setting changed
+      const alarmKeys = ['alarmSoundDuration','alarmFlash','alarmAutoShow','alarmAutoPassthrough','alarmAutoTop'];
+      if (!alarmKeys.some(k => nc[k] !== undefined)) return;
+    }
     Object.assign(config, nc);
     els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
     if (config.positionPreset === 'custom') {
@@ -281,5 +486,14 @@ async function saveAndApply(nc) {
       els.custom_pos.classList.add('hidden');
     }
     if (nc.extraTimezones !== undefined) renderTZList();
+    // Sync alarm advanced settings
+    if (nc.alarmSoundDuration !== undefined) {
+      els.alarm_sound_duration.value = nc.alarmSoundDuration;
+      els.alarm_sound_duration_label.textContent = nc.alarmSoundDuration;
+    }
+    if (nc.alarmFlash !== undefined) els.alarm_flash.checked = nc.alarmFlash;
+    if (nc.alarmAutoShow !== undefined) els.alarm_auto_show.checked = nc.alarmAutoShow;
+    if (nc.alarmAutoPassthrough !== undefined) els.alarm_auto_passthrough.checked = nc.alarmAutoPassthrough;
+    if (nc.alarmAutoTop !== undefined) els.alarm_auto_top.checked = nc.alarmAutoTop;
   });
 })();

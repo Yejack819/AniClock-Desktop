@@ -14,4 +14,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openSettings: () => ipcRenderer.invoke('open-settings'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
+
+  // ====== Alarm IPC ======
+  getAllAlarms: () => ipcRenderer.invoke('get-all-alarms'),
+  getAlarm: (id) => ipcRenderer.invoke('get-alarm', id),
+  saveAlarm: (data) => ipcRenderer.invoke('save-alarm', data),
+  deleteAlarm: (id) => ipcRenderer.invoke('delete-alarm', id),
+  openAlarmEditor: (id) => ipcRenderer.invoke('open-alarm-editor', id),
+  toggleAlarm: (id) => ipcRenderer.invoke('toggle-alarm', id),
+  onAlarmStateUpdate: (callback) => {
+    ipcRenderer.on('alarm-state-update', (_event, state) => callback(state));
+  },
+  onAlarmRinging: (callback) => {
+    ipcRenderer.on('alarm-ringing', (_event, data) => callback(data));
+  },
+  onAlarmStop: (callback) => {
+    ipcRenderer.on('alarm-stop', (_event, data) => callback(data));
+  },
+  onAlarmsUpdated: (callback) => {
+    ipcRenderer.on('alarms-updated', (_event, alarms) => callback(alarms));
+  },
+  dismissAlarm: (id) => ipcRenderer.invoke('dismiss-alarm', id),
+  getActiveAlarmIds: () => ipcRenderer.invoke('get-active-alarm-ids'),
+  onActiveAlarmIdsChanged: (callback) => {
+    ipcRenderer.on('active-alarm-ids-changed', (_event, ids) => callback(ids));
+  },
 });

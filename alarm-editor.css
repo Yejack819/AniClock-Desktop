@@ -1,0 +1,232 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  background: #1e1e28;
+  color: #eee;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+h3 {
+  margin-bottom: 18px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.field-row {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-row > label {
+  font-size: 13px;
+  color: #ccc;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #3a3a4a;
+  color: #eee;
+  font-size: 13px;
+  outline: none;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  border-color: #6C8CFF;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-inputs input[type="number"] {
+  width: 72px;
+  text-align: center;
+  font-size: 18px;
+  padding: 8px 4px;
+}
+
+.time-inputs span {
+  font-size: 18px;
+  color: #999;
+}
+
+/* ====== Snooze Inputs ====== */
+.snooze-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snooze-inputs input[type="number"] {
+  width: 56px;
+  text-align: center;
+  font-size: 15px;
+  padding: 6px 4px;
+}
+
+.snooze-inputs span {
+  font-size: 13px;
+  color: #888;
+  margin-right: 4px;
+}
+
+/* ====== Snooze Count ====== */
+.snooze-count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snooze-count-row > span {
+  font-size: 13px;
+  color: #ccc;
+}
+
+#snooze-count-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#snooze-count-input-wrap.hidden { display: none; }
+
+#alarm-snooze-count {
+  width: 64px;
+  text-align: center;
+  font-size: 14px;
+  padding: 5px 4px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #3a3a4a;
+  color: #eee;
+  outline: none;
+}
+
+#snooze-count-input-wrap span {
+  font-size: 13px;
+  color: #888;
+}
+
+/* ====== Toggle Switch (same as settings) ====== */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+.toggle-switch input { display: none; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: #555;
+  border-radius: 24px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: #6C8CFF; }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* ====== Weekday Picker ====== */
+.weekday-picker {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #2a2a38;
+  border-radius: 8px;
+}
+
+.weekday-label {
+  display: block;
+  font-size: 13px;
+  color: #ccc;
+  margin-bottom: 8px;
+}
+
+.weekday-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.weekday-buttons button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #555;
+  background: transparent;
+  color: #999;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.weekday-buttons button:hover {
+  border-color: #6C8CFF;
+  color: #6C8CFF;
+}
+
+.weekday-buttons button.active {
+  background: #6C8CFF;
+  border-color: #6C8CFF;
+  color: #fff;
+}
+
+/* ====== Buttons ====== */
+.btn-row {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+#btn-cancel, #btn-confirm {
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 0.15s;
+}
+
+#btn-cancel {
+  border-color: #555;
+  background: #3a3a4a;
+  color: #ccc;
+}
+#btn-cancel:hover {
+  background: #4a4a5a;
+}
+
+#btn-confirm {
+  border-color: #6C8CFF;
+  background: #6C8CFF;
+  color: #fff;
+}
+#btn-confirm:hover {
+  background: #5a7ce8;
+}
+
+.hidden { display: none !important; }

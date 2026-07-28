@@ -1,6 +1,6 @@
 {
   "name": "digital-clock",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Animated desktop digital clock with rich customization - Electron app",
   "main": "main.js",
   "scripts": {
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.clock.digital",
-    "productName": "大时钟",
+    "productName": "Digital Clock",
     "directories": {
       "output": "dist"
     },
@@ -31,7 +31,8 @@
       "!.git{,/**}",
       "!.gitignore",
       "!*.md",
-      "!release.json"
+      "!release.json",
+      "!alarms.json"
     ],
     "win": {
       "target": ["dir"]
