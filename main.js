@@ -918,20 +918,32 @@ ipcMain.handle('dismiss-alarm', (_event, id) => {
 
 // [v1.0.5] 删除所有保存的数据（config.json + alarms.json）
 ipcMain.handle('delete-all-data', async () => {
-  const deleted = [];
   try {
     if (fs.existsSync(getConfigPath())) {
       fs.unlinkSync(getConfigPath());
-      deleted.push('config.json');
     }
   } catch (e) { console.error('删除 config.json 失败:', e.message); }
   try {
     if (fs.existsSync(getAlarmsPath())) {
       fs.unlinkSync(getAlarmsPath());
-      deleted.push('alarms.json');
     }
   } catch (e) { console.error('删除 alarms.json 失败:', e.message); }
-  return { success: true, deleted };
+  // 重置内存状态
+  alarms = [];
+  if (ringingAlarm) {
+    if (ringingTimer) { clearTimeout(ringingTimer); ringingTimer = null; }
+    ringingAlarm = null;
+  }
+  retryTimers.forEach(t => clearTimeout(t));
+  retryTimers.clear();
+  retryRemaining.clear();
+  triggerWindows.clear();
+  // 用默认配置覆盖，防止 beforeunload 回写旧数据
+  saveConfig({ ...DEFAULT_CONFIG, welcomeShown: false });
+  // 强制重启：exit() 跳过 before-quit / beforeunload，relaunch() 启动新进程
+  app.relaunch();
+  app.exit(0);
+  return { success: true };
 });
 
 // [v1.0.5] 欢迎界面完成

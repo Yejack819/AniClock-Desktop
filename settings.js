@@ -561,9 +561,8 @@ function applySettingsFontSize(size) {
     if (!confirm(dict.confirmDeleteData)) return;
     els.delete_data_btn.disabled = true;
     els.delete_data_btn.textContent = dict.deleteDataSuccess;
+    // deleteAllData 内部会强制重启，这之后代码不会执行
     await window.electronAPI.deleteAllData();
-    // 重启应用
-    window.electronAPI.quitApp();
   });
 
   window.addEventListener('beforeunload', () => {
