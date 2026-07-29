@@ -1,12 +1,12 @@
 {
   "name": "digital-clock",
-  "version": "1.0.4",
-  "description": "Animated desktop digital clock with rich customization - Electron app",
+  "version": "1.0.5",
+  "description": "Animated desktop digital clock with rich customization",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --win portable",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win dir --win portable"
   },
   "author": "Yejack819",
   "license": "MIT",
@@ -22,24 +22,36 @@
     },
     "files": [
       "**/*",
-      "!backup{,/**}",
-      "!releases{,/**}",
-      "!docs{,/**}",
-      "!.workbuddy{,/**}",
-      "!dist{,/**}",
-      "!node_modules{,/**}",
-      "!.git{,/**}",
+      "!backup",
+      "!backup/**",
+      "!docs",
+      "!docs/**",
+      "!.workbuddy",
+      "!.workbuddy/**",
+      "!dist",
+      "!dist/**",
+      "!node_modules",
+      "!node_modules/**",
+      "!.git",
+      "!.git/**",
       "!.gitignore",
       "!*.md",
       "!release.json",
       "!alarms.json"
     ],
     "win": {
-      "target": ["dir"]
+      "icon": "assets/icon.ico",
+      "target": [
+        "dir",
+        "portable"
+      ]
     }
   },
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "asar": "^3.2.0"
   }
 }

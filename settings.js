@@ -33,6 +33,22 @@ const LOCALE = {
     alarmFlash: '闹钟响时闪烁',
     alarmAutoShow: '闹钟响时自动取消隐藏', alarmAutoPassthrough: '闹钟响时自动关闭鼠标穿透',
     alarmAutoTop: '闹钟响时自动置顶',
+    secData: '--- 数据管理 ---',
+    deleteDataDesc: '删除所有保存的数据（config.json 和 alarms.json），应用将恢复出厂状态。此操作不可撤销！',
+    deleteDataBtn: '🗑️ 删除所有保存的数据',
+    confirmDeleteData: '确定要删除所有保存的数据吗？\n\n此操作将删除所有配置和闹钟数据，且不可撤销！\n\n应用将自动重启以完成重置。',
+    deleteDataSuccess: '数据已删除，应用即将重启...',
+    // [v1.0.5] 倒计时 / 状态
+    alarmRinging: '🔔 正在响铃',
+    alarmRetrying: '⏰ 稍后提醒中',
+    alarmAboutToRing: '即将响铃',
+    countdownDays: '距提醒还有{d}天{h}小时{m}分钟',
+    countdownHours: '距提醒还有{h}小时{m}分钟',
+    countdownMins: '距提醒还有{m}分钟',
+    // [v1.0.5] 设置界面
+    secSettingsUI: '--- 设置界面 ---',
+    settingsFontSize: '设置窗口字体大小',
+    fontXs: '极小', fontSm: '小', fontMd: '中', fontLg: '大', fontXl: '极大',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -67,6 +83,22 @@ const LOCALE = {
     alarmFlash: 'Flash on alarm',
     alarmAutoShow: 'Auto-show window on alarm', alarmAutoPassthrough: 'Auto-disable passthrough on alarm',
     alarmAutoTop: 'Auto-force always-on-top on alarm',
+    secData: '--- Data Management ---',
+    deleteDataDesc: 'Delete all saved data (config.json and alarms.json). The app will reset to factory state. This action is IRREVERSIBLE!',
+    deleteDataBtn: '🗑️ Delete All Saved Data',
+    confirmDeleteData: 'Delete all saved data?\n\nThis will delete ALL configuration and alarm data. This action is IRREVERSIBLE!\n\nThe app will restart to complete the reset.',
+    deleteDataSuccess: 'Data deleted. App is restarting...',
+    // [v1.0.5] Countdown / status
+    alarmRinging: '🔔 Ringing',
+    alarmRetrying: '⏰ Snoozing',
+    alarmAboutToRing: 'About to ring',
+    countdownDays: 'Reminder in {d}d {h}h {m}m',
+    countdownHours: 'Reminder in {h}h {m}m',
+    countdownMins: 'Reminder in {m}m',
+    // [v1.0.5] Settings UI
+    secSettingsUI: '--- Settings UI ---',
+    settingsFontSize: 'Settings Font Size',
+    fontXs: 'XS', fontSm: 'S', fontMd: 'M', fontLg: 'L', fontXl: 'XL',
   },
 };
 
@@ -99,6 +131,7 @@ const els = {
   tz_offset: document.getElementById('tz-offset-input'), tz_add_btn: document.getElementById('tz-add-btn'),
   tz_hint: document.getElementById('tz-hint'),
   passthrough_switch: document.getElementById('passthrough-switch'),
+  settings_font_size: document.getElementById('settings-font-size'),
   alarm_list: document.getElementById('alarm-list'),
   alarm_add_btn: document.getElementById('alarm-add-btn'),
   alarm_advanced_toggle: document.getElementById('alarm-advanced-toggle'),
@@ -109,6 +142,7 @@ const els = {
   alarm_auto_show: document.getElementById('alarm-auto-show'),
   alarm_auto_passthrough: document.getElementById('alarm-auto-passthrough'),
   alarm_auto_top: document.getElementById('alarm-auto-top'),
+  delete_data_btn: document.getElementById('delete-data-btn'),
 };
 
 let config = {};
@@ -211,6 +245,8 @@ function renderAlarmList() {
       const snoozeStr = buildSnoozeStr(alarm, dict);
       meta = dict.alarmRepeatNone + ' · ' + soundName + (snoozeStr ? ' · ' + snoozeStr : '');
     }
+    // [v1.0.5] 追加倒计时 / 状态
+    meta += getAlarmStatusSuffix(alarm, new Date(), dict);
 
     const nameStr = alarm.name || '';
 
@@ -281,6 +317,43 @@ function buildSnoozeStr(alarm, dict) {
   return countStr;
 }
 
+// [v1.0.5] 计算闹钟倒计时/状态字符串（含前导 " · "）
+function getAlarmStatusSuffix(alarm, now, dict) {
+  // 正在响铃
+  if (alarm.id === activeAlarmIds.ringingId) {
+    return ' · ' + dict.alarmRinging;
+  }
+  // 稍后提醒中
+  if (activeAlarmIds.retryIds.includes(alarm.id)) {
+    return ' · ' + dict.alarmRetrying;
+  }
+  // 未启用 → 不附加
+  if (alarm.enabled === false) return '';
+  // 没有 nextTrigger → 不附加
+  if (!alarm.nextTrigger) return '';
+  const t = new Date(alarm.nextTrigger);
+  if (isNaN(t.getTime())) return '';
+  const diffMs = t.getTime() - now.getTime();
+  // 已过期（正常情况不会发生，防御性处理）
+  if (diffMs <= 0) return ' · ' + dict.alarmAboutToRing;
+  const diffMin = Math.floor(diffMs / 60000);
+  // 不到 1 分钟
+  if (diffMin < 1) return ' · ' + dict.alarmAboutToRing;
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffDays > 0) {
+    const remainingHours = Math.floor((diffMs % 86400000) / 3600000);
+    const remainingMins = Math.floor((diffMs % 3600000) / 60000);
+    return ' · ' + dict.countdownDays.replace('{d}', diffDays).replace('{h}', remainingHours).replace('{m}', remainingMins);
+  } else if (diffHours > 0) {
+    const remainingMins = Math.floor((diffMs % 3600000) / 60000);
+    return ' · ' + dict.countdownHours.replace('{h}', diffHours).replace('{m}', remainingMins);
+  } else {
+    return ' · ' + dict.countdownMins.replace('{m}', diffMin);
+  }
+}
+
 function syncUIFromConfig() {
   els.auto_color.checked = !!config.autoColor;
   els.text_color.value = config.color || '#ffffff';
@@ -313,6 +386,8 @@ function syncUIFromConfig() {
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
   els.language_select.value = config.language || 'zh';
+  els.settings_font_size.value = config.settingsFontSize || 'md';
+  applySettingsFontSize(config.settingsFontSize || 'md');
   els.passthrough_switch.checked = !!config.passthrough;
   applyLanguage(config.language || 'zh');
   els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
@@ -338,6 +413,12 @@ async function saveAndApply(nc) {
   try { await window.electronAPI.saveConfig(config); } catch (e) {}
   window.electronAPI.notifyClockUpdate(config);
   if (langChanged) applyLanguage(config.language);
+}
+
+// [v1.0.5] 设置界面字体大小
+function applySettingsFontSize(size) {
+  document.body.classList.remove('settings-xs', 'settings-sm', 'settings-md', 'settings-lg', 'settings-xl');
+  document.body.classList.add('settings-' + (size || 'md'));
 }
 
 (async function init() {
@@ -429,6 +510,12 @@ async function saveAndApply(nc) {
     saveAndApply({ autoStart: en });
   });
   els.language_select.addEventListener('change', () => saveAndApply({ language: els.language_select.value }));
+  // [v1.0.5] 设置字体大小
+  els.settings_font_size.addEventListener('change', () => {
+    const v = els.settings_font_size.value;
+    applySettingsFontSize(v);
+    saveAndApply({ settingsFontSize: v });
+  });
   els.passthrough_switch.addEventListener('change', () => {
     const en = els.passthrough_switch.checked;
     window.electronAPI.setPassthrough(en);
@@ -468,7 +555,21 @@ async function saveAndApply(nc) {
     saveAndApply({ alarmAutoTop: els.alarm_auto_top.checked });
   });
 
-  window.addEventListener('beforeunload', () => { window.electronAPI.saveConfig(config); });
+  // ====== [v1.0.5] 删除所有保存的数据 ======
+  els.delete_data_btn.addEventListener('click', async () => {
+    const dict = LOCALE[currentLang] || LOCALE.zh;
+    if (!confirm(dict.confirmDeleteData)) return;
+    els.delete_data_btn.disabled = true;
+    els.delete_data_btn.textContent = dict.deleteDataSuccess;
+    await window.electronAPI.deleteAllData();
+    // 重启应用
+    window.electronAPI.quitApp();
+  });
+
+  window.addEventListener('beforeunload', () => {
+    window.electronAPI.saveConfig(config);
+    if (typeof alarmRefreshTimer !== 'undefined') { clearInterval(alarmRefreshTimer); alarmRefreshTimer = null; }
+  });
 
   // 时钟窗口被拖动时同步更新位置按钮状态 / 时区变化时同步列表
   window.electronAPI.onConfigUpdated((nc) => {
@@ -496,4 +597,9 @@ async function saveAndApply(nc) {
     if (nc.alarmAutoPassthrough !== undefined) els.alarm_auto_passthrough.checked = nc.alarmAutoPassthrough;
     if (nc.alarmAutoTop !== undefined) els.alarm_auto_top.checked = nc.alarmAutoTop;
   });
+
+  // [v1.0.5] 每 30 秒刷新闹钟列表以更新倒计时
+  let alarmRefreshTimer = setInterval(() => {
+    if (alarmList.length > 0) renderAlarmList();
+  }, 30000);
 })();

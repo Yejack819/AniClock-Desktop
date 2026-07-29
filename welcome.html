@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome</title>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <div id="wizard">
+    <!-- Page 1: Welcome + Language -->
+    <div class="page" id="page-1">
+      <div class="page-icon">🕐</div>
+      <h1 data-lang="welcomeTitle">欢迎使用桌面大时钟</h1>
+      <p class="subtitle" data-lang="welcomeSubtitle">选择你的语言 / Choose your language</p>
+      <div class="lang-row">
+        <select id="lang-select">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="nav-row">
+        <button class="btn-primary" id="btn-next-1" disabled data-lang="btnNext">下一步</button>
+      </div>
+    </div>
+
+    <!-- Page 2: Tray Instructions -->
+    <div class="page hidden" id="page-2">
+      <div class="page-icon">🖥️</div>
+      <h2 data-lang="trayTitle">系统托盘操作说明</h2>
+      <div class="tray-info">
+        <div class="tray-icon-visual">
+          <img src="assets/icon.png" alt="tray icon" style="width:48px;height:48px;border-radius:8px;">
+        </div>
+        <p data-lang="trayDesc1">关闭此窗口后，你可以在系统托盘中找到</p>
+        <p><strong data-lang="trayIconLabel">大时钟图标</strong></p>
+        <div class="tray-ops">
+          <div class="tray-op">
+            <span class="op-badge left-click" data-lang="leftClick">左键单击</span>
+            <span data-lang="trayLeft">显示 / 隐藏时钟窗口</span>
+          </div>
+          <div class="tray-op">
+            <span class="op-badge right-click" data-lang="rightClick">右键单击</span>
+            <span data-lang="trayRight">打开设置 或 退出程序</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-row">
+        <button class="btn-secondary" id="btn-back-2" data-lang="btnBack">上一步</button>
+        <button class="btn-primary" id="btn-next-2" data-lang="btnNext">下一步</button>
+      </div>
+    </div>
+
+    <!-- Page 3: Thank you -->
+    <div class="page hidden" id="page-3">
+      <div class="page-icon">🎉</div>
+      <h1 data-lang="thanksTitle">感谢使用！</h1>
+      <p class="subtitle" data-lang="thanksSubtitle">大时钟已准备就绪，点击"完成"开始使用</p>
+      <div class="nav-row">
+        <button class="btn-secondary" id="btn-back-3" data-lang="btnBack">上一步</button>
+        <button class="btn-primary" id="btn-finish" data-lang="btnFinish">完成</button>
+      </div>
+    </div>
+
+    <!-- Progress dots -->
+    <div class="progress-dots">
+      <span class="dot active" data-page="1"></span>
+      <span class="dot" data-page="2"></span>
+      <span class="dot" data-page="3"></span>
+    </div>
+  </div>
+  <script src="welcome.js"></script>
+</body>
+</html>

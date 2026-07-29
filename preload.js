@@ -39,4 +39,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onActiveAlarmIdsChanged: (callback) => {
     ipcRenderer.on('active-alarm-ids-changed', (_event, ids) => callback(ids));
   },
+  // [v1.0.5] 删除所有保存的数据
+  deleteAllData: () => ipcRenderer.invoke('delete-all-data'),
+  // [v1.0.5] 欢迎界面完成
+  finishWelcome: () => ipcRenderer.invoke('finish-welcome'),
 });

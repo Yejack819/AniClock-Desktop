@@ -275,6 +275,28 @@
       <div class="passthrough-warning" data-lang="passthroughWarn">开启鼠标穿透后无法拖动窗口以更改其位置</div>
     </div>
 
+    <!-- ====== [v1.0.5] 设置界面尺寸 ====== -->
+    <div class="section-title" data-lang="secSettingsUI">--- 设置界面 ---</div>
+
+    <div class="setting-row">
+      <label data-lang="settingsFontSize">设置窗口字体大小</label>
+      <select id="settings-font-size">
+        <option value="xs" data-lang="fontXs">极小</option>
+        <option value="sm" data-lang="fontSm">小</option>
+        <option value="md" data-lang="fontMd">中</option>
+        <option value="lg" data-lang="fontLg">大</option>
+        <option value="xl" data-lang="fontXl">极大</option>
+      </select>
+    </div>
+
+    <!-- ====== [v1.0.5] 数据管理 ====== -->
+    <div class="section-title" data-lang="secData">--- 数据管理 ---</div>
+
+    <div class="setting-row">
+      <label data-lang="deleteDataDesc" style="color:#f88;font-size:12px;line-height:1.5;">删除所有保存的数据（config.json 和 alarms.json），应用将恢复出厂状态。此操作不可撤销！</label>
+    </div>
+    <button id="delete-data-btn" class="danger-btn" data-lang="deleteDataBtn">🗑️ 删除所有保存的数据</button>
+
   </div>
   <script src="settings.js"></script>
 </body>

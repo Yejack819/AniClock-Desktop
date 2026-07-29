@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -20,6 +20,8 @@ const DEFAULT_CONFIG = {
   infoScale: 0.3, blurEnabled: false, blurDuration: 300, blurStrength: 15,
   scaleInEnabled: false, scaleInFactor: 0.3,
   alarmSoundDuration: 120, alarmFlash: true, alarmAutoShow: true, alarmAutoPassthrough: true, alarmAutoTop: true,
+  welcomeShown: false,
+  settingsFontSize: 'md',
 };
 
 function loadConfig() {
@@ -135,7 +137,6 @@ function recalcAlarmNextTrigger(alarm) {
 // Initialize alarms: ensure nextTrigger is set and handle missed alarms
 function initAlarms() {
   const now = new Date();
-  let missedCount = 0;
   alarms.forEach(a => {
     if (!a.nextTrigger || new Date(a.nextTrigger) <= now) {
       if (a.repeat && a.weekdays && a.weekdays.length > 0) {
@@ -147,21 +148,9 @@ function initAlarms() {
         if (t <= now) t.setDate(t.getDate() + 1);
         a.nextTrigger = t.toISOString();
       }
-      missedCount++;
     }
   });
   saveAlarmsData({ alarms });
-  if (missedCount > 0) {
-    try {
-      const config = loadConfig();
-      const lang = config.language || 'zh';
-      const title = lang === 'zh' ? '闹钟提醒' : 'Alarm Reminder';
-      const body = lang === 'zh'
-        ? missedCount + ' 个闹钟已自动顺延到下一周期'
-        : missedCount + ' alarm(s) rescheduled to next time';
-      new Notification({ title, body }).show();
-    } catch(e) { /* notification may fail silently */ }
-  }
 }
 
 // Send alarm state update to the clock renderer
@@ -461,6 +450,7 @@ function checkAlarms() {
 // ========== Window Management ==========
 let mainWindow = null;
 let settingsWindow = null;
+let welcomeWindow = null;
 let tray = null;
 let suppressMoveSave = false;
 
@@ -593,20 +583,28 @@ function showTrayMenu() {
 }
 
 function createTray() {
-  const size = 16;
-  const buf = Buffer.alloc(size * size * 4);
-  const cx = size / 2, cy = size / 2, r = 6.5;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const inside = (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
-      const i = (y * size + x) * 4;
-      buf[i]     = inside ? 255 : 0;
-      buf[i + 1] = inside ? 255 : 0;
-      buf[i + 2] = inside ? 255 : 0;
-      buf[i + 3] = inside ? 255 : 0;
+  // [v1.0.5] 加载 assets/tray.png (从 assets/icon.png 转换而来)
+  const trayIconPath = path.join(__dirname, 'assets', 'tray.png');
+  let img;
+  if (fs.existsSync(trayIconPath)) {
+    img = nativeImage.createFromPath(trayIconPath);
+  } else {
+    // 兜底：若文件不存在，回退到原白色圆圈
+    const size = 16;
+    const buf = Buffer.alloc(size * size * 4);
+    const cx = size / 2, cy = size / 2, r = 6.5;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const inside = (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
+        const i = (y * size + x) * 4;
+        buf[i]     = inside ? 255 : 0;
+        buf[i + 1] = inside ? 255 : 0;
+        buf[i + 2] = inside ? 255 : 0;
+        buf[i + 3] = inside ? 255 : 0;
+      }
     }
+    img = nativeImage.createFromBuffer(buf, { width: size, height: size });
   }
-  const img = nativeImage.createFromBuffer(buf, { width: size, height: size });
   tray = new Tray(img);
   const lang = loadConfig().language || 'zh';
   tray.setToolTip(lang === 'zh' ? '大时钟' : 'Digital Clock');
@@ -631,6 +629,7 @@ function openSettingsWindow() {
     width: 560, height: 680,
     resizable: true,
     frame: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     alwaysOnTop: true,
     autoHideMenuBar: true,
     title: '大时钟设置',
@@ -653,6 +652,7 @@ function openAlarmEditorWindow(alarmId) {
     width: 440, height: 520,
     resizable: false,
     frame: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     alwaysOnTop: true,
     autoHideMenuBar: true,
     title: '闹钟编辑',
@@ -664,6 +664,37 @@ function openAlarmEditorWindow(alarmId) {
   const options = alarmId ? { search: '?id=' + encodeURIComponent(alarmId) } : undefined;
   alarmEditorWindow.loadFile('alarm-editor.html', options);
   alarmEditorWindow.on('closed', () => { alarmEditorWindow = null; });
+}
+
+// ========== 欢迎窗口 ==========
+function openWelcomeWindow() {
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) {
+    welcomeWindow.focus();
+    return;
+  }
+  welcomeWindow = new BrowserWindow({
+    width: 500,
+    height: 480,
+    resizable: false,
+    frame: false,
+    alwaysOnTop: true,
+    transparent: false,
+    title: '',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  welcomeWindow.loadFile('welcome.html');
+  welcomeWindow.center();
+  welcomeWindow.on('closed', () => {
+    welcomeWindow = null;
+    // 如果用户关闭欢迎窗口但未完成，仍然创建主窗口
+    if (!mainWindow) {
+      createWindow();
+      createTray();
+    }
+  });
 }
 
 // ========== IPC 处理 ==========
@@ -885,6 +916,39 @@ ipcMain.handle('dismiss-alarm', (_event, id) => {
   return { success: true };
 });
 
+// [v1.0.5] 删除所有保存的数据（config.json + alarms.json）
+ipcMain.handle('delete-all-data', async () => {
+  const deleted = [];
+  try {
+    if (fs.existsSync(getConfigPath())) {
+      fs.unlinkSync(getConfigPath());
+      deleted.push('config.json');
+    }
+  } catch (e) { console.error('删除 config.json 失败:', e.message); }
+  try {
+    if (fs.existsSync(getAlarmsPath())) {
+      fs.unlinkSync(getAlarmsPath());
+      deleted.push('alarms.json');
+    }
+  } catch (e) { console.error('删除 alarms.json 失败:', e.message); }
+  return { success: true, deleted };
+});
+
+// [v1.0.5] 欢迎界面完成
+ipcMain.handle('finish-welcome', () => {
+  const cfg = loadConfig();
+  cfg.welcomeShown = true;
+  saveConfig(cfg);
+  if (welcomeWindow && !welcomeWindow.isDestroyed()) {
+    welcomeWindow.close();
+  }
+  if (!mainWindow) {
+    createWindow();
+    createTray();
+  }
+  return { success: true };
+});
+
 ipcMain.handle('get-active-alarm-ids', () => {
   const ringingId = ringingAlarm ? ringingAlarm.id : null;
   const retryIds = [];
@@ -924,8 +988,13 @@ app.whenReady().then(() => {
   alarms = loadAlarms().alarms;
   initAlarms();
 
-  createWindow();
-  createTray();
+  // [v1.0.5] 首次使用 → 欢迎界面；否则正常启动
+  if (!config.welcomeShown) {
+    openWelcomeWindow();
+  } else {
+    createWindow();
+    createTray();
+  }
 
   // Start alarm checking interval (every 1 second)
   alarmCheckInterval = setInterval(checkAlarms, 1000);
@@ -953,6 +1022,13 @@ app.on('before-quit', () => {
   retryTimers.forEach(t => clearTimeout(t));
   retryTimers.clear();
   retryRemaining.clear();
+  // [v1.0.5 Fix] 退出前重新计算所有过期 nextTrigger，防止重启后误报"错过闹钟"
+  const _now = new Date();
+  alarms.forEach(a => {
+    if (a.enabled && a.nextTrigger && new Date(a.nextTrigger) <= _now) {
+      recalcAlarmNextTrigger(a);
+    }
+  });
   // Save alarms
   saveAlarmsData({ alarms });
   if (tray) { tray.destroy(); tray = null; }
