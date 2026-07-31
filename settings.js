@@ -49,6 +49,13 @@ const LOCALE = {
     secSettingsUI: '--- 设置界面 ---',
     settingsFontSize: '设置窗口字体大小',
     fontXs: '极小', fontSm: '小', fontMd: '中', fontLg: '大', fontXl: '极大',
+    // [v1.0.5] 模式切换 + 关灯
+    secMode: '--- 模式 ---',
+    modeLabel: '模式',
+    modeNormal: '正常模式', modeEducation: '教育模式',
+    lightsOff: '关灯（全屏纯色背景）',
+    lightsOffOn: '已开启关灯',
+    lightsOffFail: '开启关灯失败：',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -99,6 +106,13 @@ const LOCALE = {
     secSettingsUI: '--- Settings UI ---',
     settingsFontSize: 'Settings Font Size',
     fontXs: 'XS', fontSm: 'S', fontMd: 'M', fontLg: 'L', fontXl: 'XL',
+    // [v1.0.5] Mode switch + Lights Off
+    secMode: '--- Mode ---',
+    modeLabel: 'Mode',
+    modeNormal: 'Normal', modeEducation: 'Education',
+    lightsOff: 'Lights Off (fullscreen solid background)',
+    lightsOffOn: 'Lights Off is ON',
+    lightsOffFail: 'Failed to enable Lights Off: ',
   },
 };
 
@@ -143,6 +157,8 @@ const els = {
   alarm_auto_passthrough: document.getElementById('alarm-auto-passthrough'),
   alarm_auto_top: document.getElementById('alarm-auto-top'),
   delete_data_btn: document.getElementById('delete-data-btn'),
+  mode_select: document.getElementById('mode-select'),
+  lights_off_switch: document.getElementById('lights-off-switch'),
 };
 
 let config = {};
@@ -389,6 +405,10 @@ function syncUIFromConfig() {
   els.settings_font_size.value = config.settingsFontSize || 'md';
   applySettingsFontSize(config.settingsFontSize || 'md');
   els.passthrough_switch.checked = !!config.passthrough;
+  // [v1.0.5] 模式 + 关灯
+  els.mode_select.value = config.mode || 'normal';
+  els.lights_off_switch.checked = !!config.lightsOff;
+  applyMode(config.mode || 'normal');
   applyLanguage(config.language || 'zh');
   els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
   if (config.positionPreset === 'custom') {
@@ -421,6 +441,19 @@ function applySettingsFontSize(size) {
   document.body.classList.add('settings-' + (size || 'md'));
 }
 
+// [v1.0.5] 模式切换（正常/教育）
+const EDU_ANIM_DURATION = 500; // 教育模式固定动画时长
+function applyMode(mode) {
+  const isEdu = mode === 'education';
+  document.body.classList.toggle('mode-education', isEdu);
+  if (isEdu && els.anim_type) {
+    // 教育模式强制淡入淡出，隐藏动画设置
+    els.anim_type.value = 'fade';
+    els.anim_speed.value = EDU_ANIM_DURATION;
+    if (els.anim_speed_label) els.anim_speed_label.textContent = EDU_ANIM_DURATION;
+  }
+}
+
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
@@ -432,6 +465,14 @@ function applySettingsFontSize(size) {
   // Get active alarm IDs (for disabling edit buttons)
   try { activeAlarmIds = await window.electronAPI.getActiveAlarmIds() || { ringingId: null, retryIds: [] }; } catch (e) {}
   renderAlarmList();
+
+  // [v1.0.5] 关灯状态变化（如从关灯窗口点退出）→ 同步开关
+  window.electronAPI.onLightsOffStateChanged && window.electronAPI.onLightsOffStateChanged((enabled) => {
+    els.lights_off_switch.checked = !!enabled;
+    if (config.lightsOff !== !!enabled) {
+      config.lightsOff = !!enabled;
+    }
+  });
 
   // Listen for alarm updates
   window.electronAPI.onAlarmsUpdated && window.electronAPI.onAlarmsUpdated((alarms) => {
@@ -503,6 +544,34 @@ function applySettingsFontSize(size) {
 
   // 系统
   els.layer_mode.addEventListener('change', async () => { await window.electronAPI.setLayerMode(els.layer_mode.value); saveAndApply({ layerMode: els.layer_mode.value }); });
+
+  // [v1.0.5] 模式切换
+  els.mode_select.addEventListener('change', () => {
+    const m = els.mode_select.value;
+    if (m === 'education') {
+      // 教育模式：强制淡入淡出 + 固定时长
+      els.anim_type.value = 'fade';
+      els.anim_speed.value = EDU_ANIM_DURATION;
+      els.anim_speed_label.textContent = EDU_ANIM_DURATION;
+      saveAndApply({ mode: m, animType: 'fade', animDuration: EDU_ANIM_DURATION });
+    } else {
+      saveAndApply({ mode: m });
+    }
+    applyMode(m);
+  });
+
+  // [v1.0.5] 关灯
+  els.lights_off_switch.addEventListener('change', async () => {
+    const en = els.lights_off_switch.checked;
+    const r = await window.electronAPI.setLightsOff(en);
+    if (!r.success) {
+      els.lights_off_switch.checked = !en;
+      const d = LOCALE[currentLang] || LOCALE.zh;
+      alert(d.lightsOffFail + (r.error || ''));
+    }
+    saveAndApply({ lightsOff: en });
+  });
+
   els.auto_start.addEventListener('change', async () => {
     const en = els.auto_start.checked;
     const r = await window.electronAPI.setAutoStart(en);

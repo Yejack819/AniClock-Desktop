@@ -22,6 +22,8 @@ const DEFAULT_CONFIG = {
   alarmSoundDuration: 120, alarmFlash: true, alarmAutoShow: true, alarmAutoPassthrough: true, alarmAutoTop: true,
   welcomeShown: false,
   settingsFontSize: 'md',
+  mode: 'normal',
+  lightsOff: false,
 };
 
 function loadConfig() {
@@ -451,6 +453,7 @@ function checkAlarms() {
 let mainWindow = null;
 let settingsWindow = null;
 let welcomeWindow = null;
+let lightsOffWindow = null;
 let tray = null;
 let suppressMoveSave = false;
 
@@ -697,6 +700,90 @@ function openWelcomeWindow() {
   });
 }
 
+// ========== 关灯窗口 ==========
+// 把 rgba/hex 背景色转为纯色（供关灯窗口使用）
+function solidifyBgColor(bgColor) {
+  if (!bgColor) return '#000000';
+  const m = String(bgColor).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (m) {
+    return 'rgb(' + m[1] + ',' + m[2] + ',' + m[3] + ')';
+  }
+  if (String(bgColor).startsWith('#')) return bgColor;
+  return '#000000';
+}
+
+function getSolidClockBgColor() {
+  const cfg = loadConfig();
+  if (cfg.autoColor) {
+    const h = new Date().getHours();
+    return h >= 6 && h < 18 ? '#ffffff' : '#000000';
+  }
+  return solidifyBgColor(cfg.bgColor);
+}
+
+function openLightsOffWindow() {
+  if (lightsOffWindow && !lightsOffWindow.isDestroyed()) {
+    return;
+  }
+  const bg = getSolidClockBgColor();
+  lightsOffWindow = new BrowserWindow({
+    fullscreen: true,
+    frame: false,
+    transparent: false,
+    skipTaskbar: true,
+    resizable: false,
+    alwaysOnTop: false,
+    backgroundColor: bg,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  lightsOffWindow.loadFile('lights-off.html');
+  lightsOffWindow.on('closed', () => {
+    lightsOffWindow = null;
+    // 若窗口被意外关闭，同步配置
+    const cfg = loadConfig();
+    if (cfg.lightsOff) {
+      cfg.lightsOff = false;
+      saveConfig(cfg);
+      restoreClockLayer();
+      broadcastLightsOffState(false);
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('config-updated', cfg);
+      }
+    }
+  });
+  // 时钟窗口始终在关灯背景之上，且自动居中
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(true);
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.center();
+    mainWindow.focus();
+  }
+}
+
+function closeLightsOffWindow() {
+  if (lightsOffWindow && !lightsOffWindow.isDestroyed()) {
+    lightsOffWindow.close();
+    lightsOffWindow = null;
+  }
+}
+
+// 恢复时钟窗口的图层模式（依据配置）
+function restoreClockLayer() {
+  const cfg = loadConfig();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(cfg.layerMode === 'alwaysOnTop');
+  }
+}
+
+function broadcastLightsOffState(enabled) {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send('lights-off-state-changed', !!enabled);
+  }
+}
+
 // ========== IPC 处理 ==========
 
 ipcMain.handle('get-config', () => loadConfig());
@@ -770,6 +857,11 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
   }
   if (newConfig && newConfig.language && tray) {
     tray.setToolTip(newConfig.language === 'zh' ? '大时钟' : 'Digital Clock');
+  }
+  // [v1.0.5] 背景色变化 → 同步关灯窗口
+  if (newConfig && (newConfig.bgColor !== undefined || newConfig.autoColor !== undefined)
+      && lightsOffWindow && !lightsOffWindow.isDestroyed()) {
+    lightsOffWindow.webContents.send('lights-off-bg-update', getSolidClockBgColor());
   }
   return { success: true };
 });
@@ -961,6 +1053,21 @@ ipcMain.handle('finish-welcome', () => {
   return { success: true };
 });
 
+// [v1.0.5] 关灯开关
+ipcMain.handle('set-lights-off', (_event, enabled) => {
+  const cfg = loadConfig();
+  cfg.lightsOff = !!enabled;
+  saveConfig(cfg);
+  if (enabled) {
+    openLightsOffWindow();
+  } else {
+    closeLightsOffWindow();
+    restoreClockLayer();
+  }
+  broadcastLightsOffState(!!enabled);
+  return { success: true };
+});
+
 ipcMain.handle('get-active-alarm-ids', () => {
   const ringingId = ringingAlarm ? ringingAlarm.id : null;
   const retryIds = [];
@@ -1006,6 +1113,10 @@ app.whenReady().then(() => {
   } else {
     createWindow();
     createTray();
+    // [v1.0.5] 若上次退出时关灯开启，恢复关灯窗口
+    if (config.lightsOff) {
+      openLightsOffWindow();
+    }
   }
 
   // Start alarm checking interval (every 1 second)

@@ -43,4 +43,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteAllData: () => ipcRenderer.invoke('delete-all-data'),
   // [v1.0.5] 欢迎界面完成
   finishWelcome: () => ipcRenderer.invoke('finish-welcome'),
+  // [v1.0.5] 关灯
+  setLightsOff: (enabled) => ipcRenderer.invoke('set-lights-off', enabled),
+  onLightsOffStateChanged: (callback) => {
+    ipcRenderer.on('lights-off-state-changed', (_event, enabled) => callback(enabled));
+  },
+  onLightsOffBgUpdate: (callback) => {
+    ipcRenderer.on('lights-off-bg-update', (_event, color) => callback(color));
+  },
 });

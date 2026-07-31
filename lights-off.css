@@ -1,0 +1,67 @@
+/* lights-off.css — 关灯全屏窗口 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000; /* 初始值，主进程加载后会按配置覆盖 */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body {
+  position: relative;
+}
+
+#controls {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+/* [v1.0.5] 无操作 5 秒后隐藏 */
+#controls.controls-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* [v1.0.5] 无操作 5 秒后隐藏鼠标光标 */
+body.no-cursor {
+  cursor: none;
+}
+
+#controls button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.5);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  backdrop-filter: blur(2px);
+}
+
+#controls button:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.05);
+}
+
+#controls button:active {
+  transform: scale(0.96);
+}
+
+#btn-exit {
+  border-color: rgba(255,102,102,0.6) !important;
+  color: #ff8a8a !important;
+}
+
+#btn-exit:hover {
+  background: rgba(255,102,102,0.25) !important;
+}

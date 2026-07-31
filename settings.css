@@ -10,6 +10,9 @@ body.settings-xl { --sfz: 18px; }
 
 .hidden { display: none !important; }
 
+/* [v1.0.5] 教育模式：隐藏标记的元素 */
+body.mode-education .edu-hide { display: none !important; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: var(--sfz);
