@@ -7,10 +7,13 @@
   <link rel="stylesheet" href="lights-off.css">
 </head>
 <body>
+  <div id="hint" data-lang="hint">移动鼠标显示按钮 · 双击背景或按 ESC 退出</div>
   <div id="controls">
-    <button id="btn-settings">⚙️ 设置</button>
-    <button id="btn-exit">✖️ 退出</button>
+    <button id="btn-settings" data-lang="settings">⚙️ 设置</button>
+    <button id="btn-exit" data-lang="exit">✖️ 退出</button>
   </div>
+  <!-- [v1.0.6] 右下角锁定按钮：锁定时仅退出按钮可退出 -->
+  <button id="btn-lock" title="">🔓 未锁定</button>
   <script src="lights-off.js"></script>
 </body>
 </html>

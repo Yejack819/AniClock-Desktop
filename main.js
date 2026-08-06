@@ -24,6 +24,7 @@ const DEFAULT_CONFIG = {
   settingsFontSize: 'md',
   mode: 'normal',
   lightsOff: false,
+  lightsOffDisplay: 'clock',
 };
 
 function loadConfig() {
@@ -453,7 +454,10 @@ function checkAlarms() {
 let mainWindow = null;
 let settingsWindow = null;
 let welcomeWindow = null;
-let lightsOffWindow = null;
+let lightsOffWindows = []; // 关灯全屏窗口（多显示器时每个屏幕一个）
+let lightsOffRestarting = false; // 显示器切换等场景：等待旧窗口关闭后重建
+let clockBoundsBeforeLightsOff = null; // 关灯前的时钟位置，退出时还原
+let lightsOffLocked = false; // [v1.0.6] 关灯锁定：锁定时仅退出按钮可退出
 let tray = null;
 let suppressMoveSave = false;
 
@@ -533,6 +537,9 @@ function showTrayMenu() {
   const lang = config.language || 'zh';
   const setLabel = lang === 'zh' ? '⚙️ 设置' : '⚙️ Settings';
   const quitLabel = lang === 'zh' ? '❌ 退出' : '❌ Quit';
+  const lightsLabel = config.lightsOff
+    ? (lang === 'zh' ? '☀️ 退出关灯' : '☀️ Exit Lights Off')
+    : (lang === 'zh' ? '🌙 关灯' : '🌙 Lights Off');
 
   if (tray) tray.setToolTip(lang === 'zh' ? '大时钟' : 'Digital Clock');
 
@@ -542,7 +549,7 @@ function showTrayMenu() {
   }
 
   trayMenuWindow = new BrowserWindow({
-    width: 170, height: 88,
+    width: 170, height: 126,
     frame: false, alwaysOnTop: true, skipTaskbar: true,
     transparent: true, resizable: false, show: false,
     webPreferences: {
@@ -560,11 +567,14 @@ function showTrayMenu() {
     '.mi:last-child{border-radius:0 0 8px 8px;}' +
     '.sep{height:1px;background:'+c.border+';margin:0;}' +
     '</style></head><body>' +
+    '<div class="mi" id="btn-lights">'+lightsLabel+'</div>' +
+    '<div class="sep"></div>' +
     '<div class="mi" id="btn-set">'+setLabel+'</div>' +
     '<div class="sep"></div>' +
     '<div class="mi" id="btn-quit">'+quitLabel+'</div>' +
     '<script>' +
-    'document.getElementById("btn-set").onclick=()=>{window.electronAPI.openSettings();}' +
+    'document.getElementById("btn-lights").onclick=()=>{window.electronAPI.setLightsOff(' + (config.lightsOff ? 'false' : 'true') + ');}' +
+    ';document.getElementById("btn-set").onclick=()=>{window.electronAPI.openSettings();}' +
     ';document.getElementById("btn-quit").onclick=()=>{window.electronAPI.quitApp();}' +
     '</script></body></html>';
 
@@ -625,6 +635,12 @@ function createTray() {
 // ========== 设置窗口 ==========
 function openSettingsWindow() {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    // 修复：设置窗口最小化到任务栏后，仅调用 show() 不会恢复显示（Electron/Windows 行为），
+    // 需先 restore() 取消最小化；同时避免恢复成最大化状态
+    if (settingsWindow.isMinimized()) settingsWindow.restore();
+    if (settingsWindow.isMaximized()) settingsWindow.unmaximize();
+    settingsWindow.setAlwaysOnTop(true);
+    settingsWindow.show();
     settingsWindow.focus();
     return;
   }
@@ -642,12 +658,18 @@ function openSettingsWindow() {
     },
   });
   settingsWindow.loadFile('settings.html');
+  settingsWindow.on('show', () => settingsWindow.setAlwaysOnTop(true));
   settingsWindow.on('closed', () => { settingsWindow = null; });
 }
 
 // ========== 闹钟编辑器窗口 ==========
 function openAlarmEditorWindow(alarmId) {
   if (alarmEditorWindow && !alarmEditorWindow.isDestroyed()) {
+    // 与设置窗口同样处理：最小化到任务栏后需 restore() 才能重新显示
+    if (alarmEditorWindow.isMinimized()) alarmEditorWindow.restore();
+    if (alarmEditorWindow.isMaximized()) alarmEditorWindow.unmaximize();
+    alarmEditorWindow.setAlwaysOnTop(true);
+    alarmEditorWindow.show();
     alarmEditorWindow.focus();
     return;
   }
@@ -666,6 +688,7 @@ function openAlarmEditorWindow(alarmId) {
   });
   const options = alarmId ? { search: '?id=' + encodeURIComponent(alarmId) } : undefined;
   alarmEditorWindow.loadFile('alarm-editor.html', options);
+  alarmEditorWindow.on('show', () => alarmEditorWindow.setAlwaysOnTop(true));
   alarmEditorWindow.on('closed', () => { alarmEditorWindow = null; });
 }
 
@@ -721,52 +744,173 @@ function getSolidClockBgColor() {
   return solidifyBgColor(cfg.bgColor);
 }
 
-function openLightsOffWindow() {
-  if (lightsOffWindow && !lightsOffWindow.isDestroyed()) {
+function getLightsOffDisplays() {
+  const cfg = loadConfig();
+  const displays = screen.getAllDisplays();
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const target = cfg.lightsOffDisplay || 'clock';
+  // “所有显示器”：全部屏幕一起关灯
+  if (target === 'all') return displays.length > 0 ? displays : [primaryDisplay];
+  if (target === 'primary') return [primaryDisplay];
+  if (target !== 'clock') {
+    const displayId = Number(String(target).replace(/^display:/, ''));
+    const selected = displays.find(display => display.id === displayId);
+    if (selected) return [selected];
+  }
+  // 默认：时钟所在的显示器
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const bounds = mainWindow.getBounds();
+    return [screen.getDisplayNearestPoint({
+      x: Math.round(bounds.x + bounds.width / 2),
+      y: Math.round(bounds.y + bounds.height / 2),
+    })];
+  }
+  return [primaryDisplay];
+}
+
+function centerClockOnDisplay(display) {
+  if (!mainWindow || mainWindow.isDestroyed() || !display) return;
+  const { width, height } = mainWindow.getBounds();
+  // 按整块显示器计算中心，关灯全屏时连任务栏区域也保持对称
+  const area = display.bounds;
+  const x = Math.round(area.x + (area.width - width) / 2);
+  const y = Math.round(area.y + (area.height - height) / 2);
+  suppressMoveSave = true;
+  mainWindow.setPosition(x, y);
+  setTimeout(() => { suppressMoveSave = false; }, 300);
+}
+
+// 退出关灯后还原时钟窗口的原始位置
+function restoreClockAfterLightsOff() {
+  if (clockBoundsBeforeLightsOff && mainWindow && !mainWindow.isDestroyed()) {
+    suppressMoveSave = true;
+    mainWindow.setPosition(clockBoundsBeforeLightsOff.x, clockBoundsBeforeLightsOff.y);
+    setTimeout(() => { suppressMoveSave = false; }, 300);
+  }
+  clockBoundsBeforeLightsOff = null;
+}
+
+function openLightsOffWindows() {
+  lightsOffRestarting = false;
+  if (lightsOffWindows.some(win => win && !win.isDestroyed())) {
     return;
   }
   const bg = getSolidClockBgColor();
-  lightsOffWindow = new BrowserWindow({
-    fullscreen: true,
-    frame: false,
-    transparent: false,
-    skipTaskbar: true,
-    resizable: false,
-    alwaysOnTop: false,
-    backgroundColor: bg,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false,
-    },
-  });
-  lightsOffWindow.loadFile('lights-off.html');
-  lightsOffWindow.on('closed', () => {
-    lightsOffWindow = null;
-    // 若窗口被意外关闭，同步配置
-    const cfg = loadConfig();
-    if (cfg.lightsOff) {
-      cfg.lightsOff = false;
-      saveConfig(cfg);
-      restoreClockLayer();
-      broadcastLightsOffState(false);
-      if (settingsWindow && !settingsWindow.isDestroyed()) {
-        settingsWindow.webContents.send('config-updated', cfg);
+  const displays = getLightsOffDisplays();
+  // 记录关灯前的时钟位置，退出时还原
+  if (!clockBoundsBeforeLightsOff && mainWindow && !mainWindow.isDestroyed()) {
+    clockBoundsBeforeLightsOff = mainWindow.getBounds();
+  }
+  displays.forEach(display => {
+    const { x, y } = display.bounds;
+    // 关灯背景使用原来的真正全屏窗口；不使用 screen-saver 层级，避免挡住时钟和设置窗口
+    // 注意：不要在构造时同时传 fullscreen:true + 宽高，多分辨率/不同 DPI 缩放下会只铺满部分屏幕；
+    // 正确做法是先定位到目标显示器，再在显示前 setFullScreen，由系统按物理像素铺满整块屏幕
+    const win = new BrowserWindow({
+      x, y,
+      frame: false,
+      transparent: false,
+      skipTaskbar: true,
+      resizable: true,
+      alwaysOnTop: false,
+      show: false,
+      backgroundColor: bg,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true, nodeIntegration: false,
+      },
+    });
+    win.__lightsOffDisplayId = display.id; // 记录目标显示器，供显示器变化时重新铺满
+    win.loadFile('lights-off.html');
+    win.once('ready-to-show', () => {
+      if (!win || win.isDestroyed()) return;
+      // 顺序很重要（electron#7722）：Windows 上必须先 show 再 setFullScreen；
+      // 先 setBounds 确保窗口落在目标显示器（DIP 坐标），随后全屏铺满整块屏幕
+      win.setBounds(display.bounds);
+      win.show();
+      win.setFullScreen(true);
+      // 验证全屏是否真正生效（任务栏隐藏、铺满整屏）。多屏/DPI 场景偶发请求被忽略，300ms 后复查重试
+      setTimeout(() => {
+        if (!win || win.isDestroyed()) return;
+        if (!win.isFullScreen()) {
+          win.setBounds(display.bounds);
+          win.setFullScreen(true);
+        }
+      }, 300);
+    });
+    win.on('closed', () => {
+      const idx = lightsOffWindows.indexOf(win);
+      if (idx >= 0) lightsOffWindows.splice(idx, 1);
+      if (lightsOffWindows.length > 0) return;
+      // 显示器切换等场景：旧窗口全部关闭后按新目标重建
+      if (lightsOffRestarting) {
+        lightsOffRestarting = false;
+        openLightsOffWindows();
+        return;
       }
-    }
+      // 若窗口被意外关闭，同步配置
+      const cfg = loadConfig();
+      if (cfg.lightsOff) {
+        lightsOffLocked = false; // 关灯窗口意外全部关闭时重置锁定
+        cfg.lightsOff = false;
+        saveConfig(cfg);
+        restoreClockAfterLightsOff();
+        restoreClockLayer();
+        broadcastLightsOffState(false);
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send('config-updated', cfg);
+        }
+      }
+    });
+    lightsOffWindows.push(win);
   });
-  // 时钟窗口始终在关灯背景之上，且自动居中
+  // 时钟窗口始终在目标显示器的关灯背景之上，并居中显示
   if (mainWindow && !mainWindow.isDestroyed()) {
+    // 单显示器直接居中到目标屏；多显示器（全部关灯）时保持时钟在它自己的屏幕上居中
+    const bounds = mainWindow.getBounds();
+    const clockDisplay = displays.length === 1
+      ? displays[0]
+      : screen.getDisplayNearestPoint({
+          x: Math.round(bounds.x + bounds.width / 2),
+          y: Math.round(bounds.y + bounds.height / 2),
+        });
+    centerClockOnDisplay(clockDisplay);
     mainWindow.setAlwaysOnTop(true);
     if (!mainWindow.isVisible()) mainWindow.show();
-    mainWindow.center();
-    mainWindow.focus();
+  }
+  // 恢复原有层级关系：背景在底层，设置/闹钟窗口保持在上层
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setAlwaysOnTop(true);
+  }
+  if (alarmEditorWindow && !alarmEditorWindow.isDestroyed()) {
+    alarmEditorWindow.setAlwaysOnTop(true);
   }
 }
 
-function closeLightsOffWindow() {
-  if (lightsOffWindow && !lightsOffWindow.isDestroyed()) {
-    lightsOffWindow.close();
-    lightsOffWindow = null;
+function closeLightsOffWindows() {
+  lightsOffRestarting = false;
+  lightsOffLocked = false; // 关闭关灯时重置锁定状态，下次进入默认未锁定
+  const closing = lightsOffWindows.filter(win => win && !win.isDestroyed());
+  lightsOffWindows = [];
+  closing.forEach(win => win.close());
+  restoreClockAfterLightsOff();
+  restoreClockLayer();
+}
+
+// 关闭并重建关灯窗口（用于切换显示器等场景）
+function restartLightsOffWindows() {
+  const cfg = loadConfig();
+  if (!cfg.lightsOff) {
+    cfg.lightsOff = true;
+    saveConfig(cfg);
+  }
+  const closing = lightsOffWindows.filter(win => win && !win.isDestroyed());
+  lightsOffWindows = [];
+  closing.forEach(win => win.close());
+  if (closing.length === 0) {
+    openLightsOffWindows();
+  } else {
+    lightsOffRestarting = true;
   }
 }
 
@@ -779,14 +923,41 @@ function restoreClockLayer() {
 }
 
 function broadcastLightsOffState(enabled) {
+  const on = !!enabled;
   if (settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.webContents.send('lights-off-state-changed', !!enabled);
+    settingsWindow.webContents.send('lights-off-state-changed', on);
+  }
+  // 时钟窗口也同步状态，便于 ESC 等联动
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('lights-off-state-changed', on);
+  }
+}
+
+// [v1.0.6] 向所有关灯窗口 + 时钟窗口广播锁定状态
+function broadcastLightsOffLock(locked) {
+  const on = !!locked;
+  lightsOffWindows.forEach(win => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('lights-off-lock-changed', on);
+    }
+  });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('lights-off-lock-changed', on);
   }
 }
 
 // ========== IPC 处理 ==========
 
 ipcMain.handle('get-config', () => loadConfig());
+
+ipcMain.handle('get-displays', () => {
+  return screen.getAllDisplays().map((display, index) => ({
+    id: display.id,
+    index,
+    bounds: display.bounds,
+    primary: display.id === screen.getPrimaryDisplay().id,
+  }));
+});
 
 ipcMain.handle('save-config', (_event, data) => {
   saveConfig(data);
@@ -855,13 +1026,25 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('config-updated', newConfig);
   }
+  if (lightsOffWindows.length > 0) {
+    lightsOffWindows.forEach(win => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('config-updated', newConfig);
+      }
+    });
+  }
   if (newConfig && newConfig.language && tray) {
     tray.setToolTip(newConfig.language === 'zh' ? '大时钟' : 'Digital Clock');
   }
   // [v1.0.5] 背景色变化 → 同步关灯窗口
   if (newConfig && (newConfig.bgColor !== undefined || newConfig.autoColor !== undefined)
-      && lightsOffWindow && !lightsOffWindow.isDestroyed()) {
-    lightsOffWindow.webContents.send('lights-off-bg-update', getSolidClockBgColor());
+      && lightsOffWindows.length > 0) {
+    const bg = getSolidClockBgColor();
+    lightsOffWindows.forEach(win => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('lights-off-bg-update', bg);
+      }
+    });
   }
   return { success: true };
 });
@@ -1059,12 +1242,26 @@ ipcMain.handle('set-lights-off', (_event, enabled) => {
   cfg.lightsOff = !!enabled;
   saveConfig(cfg);
   if (enabled) {
-    openLightsOffWindow();
+    openLightsOffWindows();
   } else {
-    closeLightsOffWindow();
-    restoreClockLayer();
+    closeLightsOffWindows();
   }
   broadcastLightsOffState(!!enabled);
+  return { success: true };
+});
+
+// [v1.0.6] 关灯锁定状态（不持久化，退出关灯即重置）
+ipcMain.handle('get-lights-off-lock', () => !!lightsOffLocked);
+
+ipcMain.handle('set-lights-off-lock', (_event, locked) => {
+  lightsOffLocked = !!locked;
+  broadcastLightsOffLock(lightsOffLocked);
+  return { success: true };
+});
+
+// [v1.0.6] 切换关灯显示器/范围：安全地关闭后重建
+ipcMain.handle('restart-lights-off', () => {
+  restartLightsOffWindows();
   return { success: true };
 });
 
@@ -1094,6 +1291,19 @@ function broadcastActiveAlarmIds() {
 // ========== 启动 ==========
 app.whenReady().then(() => {
   const config = loadConfig();
+
+  // [v1.0.6] 显示器分辨率/缩放变化时，自动把关灯窗口重新铺满对应屏幕
+  screen.on('display-metrics-changed', () => {
+    lightsOffWindows.forEach(win => {
+      if (!win || win.isDestroyed()) return;
+      const display = screen.getAllDisplays().find(d => d.id === win.__lightsOffDisplayId);
+      if (display) {
+        win.setBounds(display.bounds);
+        win.setFullScreen(true);
+      }
+    });
+  });
+
   // 强制重写一次开机自启动
   try {
     app.setLoginItemSettings({
@@ -1115,7 +1325,7 @@ app.whenReady().then(() => {
     createTray();
     // [v1.0.5] 若上次退出时关灯开启，恢复关灯窗口
     if (config.lightsOff) {
-      openLightsOffWindow();
+      openLightsOffWindows();
     }
   }
 

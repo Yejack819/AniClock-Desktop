@@ -54,6 +54,7 @@ const LOCALE = {
     modeLabel: '模式',
     modeNormal: '正常模式', modeEducation: '教育模式',
     lightsOff: '关灯（全屏纯色背景）',
+    lightsOffDisplay: '关灯显示器', displayClock: '时钟所在显示器', displayPrimary: '主显示器', displayAll: '所有显示器',
     lightsOffOn: '已开启关灯',
     lightsOffFail: '开启关灯失败：',
   },
@@ -111,6 +112,7 @@ const LOCALE = {
     modeLabel: 'Mode',
     modeNormal: 'Normal', modeEducation: 'Education',
     lightsOff: 'Lights Off (fullscreen solid background)',
+    lightsOffDisplay: 'Lights Off Display', displayClock: 'Display with Clock', displayPrimary: 'Primary Display', displayAll: 'All Displays',
     lightsOffOn: 'Lights Off is ON',
     lightsOffFail: 'Failed to enable Lights Off: ',
   },
@@ -159,6 +161,7 @@ const els = {
   delete_data_btn: document.getElementById('delete-data-btn'),
   mode_select: document.getElementById('mode-select'),
   lights_off_switch: document.getElementById('lights-off-switch'),
+  lights_off_display: document.getElementById('lights-off-display-select'),
 };
 
 let config = {};
@@ -408,6 +411,7 @@ function syncUIFromConfig() {
   // [v1.0.5] 模式 + 关灯
   els.mode_select.value = config.mode || 'normal';
   els.lights_off_switch.checked = !!config.lightsOff;
+  els.lights_off_display.value = config.lightsOffDisplay || 'clock';
   applyMode(config.mode || 'normal');
   applyLanguage(config.language || 'zh');
   els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
@@ -457,6 +461,7 @@ function applyMode(mode) {
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
+  await refreshLightsOffDisplays();
 
   // Load alarms
   try { alarmList = await window.electronAPI.getAllAlarms() || []; } catch (e) { alarmList = []; }
@@ -560,7 +565,34 @@ function applyMode(mode) {
     applyMode(m);
   });
 
+  // [v1.0.5] 关灯显示器
+  async function refreshLightsOffDisplays() {
+    try {
+      const displays = await window.electronAPI.getDisplays();
+      const current = els.lights_off_display.value || config.lightsOffDisplay || 'clock';
+      const dict = LOCALE[currentLang] || LOCALE.zh;
+      const options = [
+        { value: 'clock', label: dict.displayClock },
+        { value: 'primary', label: dict.displayPrimary },
+        { value: 'all', label: dict.displayAll },
+      ];
+      (displays || []).forEach((display, index) => {
+        const displayLabel = (currentLang === 'zh' ? '显示器 ' : 'Display ') + (index + 1) + (display.primary ? (currentLang === 'zh' ? '（主）' : ' (Primary)') : '');
+        options.push({ value: 'display:' + display.id, label: displayLabel });
+      });
+      els.lights_off_display.innerHTML = options.map(option => '<option value="' + option.value + '">' + option.label + '</option>').join('');
+      els.lights_off_display.value = options.some(option => option.value === current) ? current : 'clock';
+    } catch (e) {}
+  }
+
   // [v1.0.5] 关灯
+  els.lights_off_display.addEventListener('change', async () => {
+    await saveAndApply({ lightsOffDisplay: els.lights_off_display.value });
+    if (config.lightsOff) {
+      // 主进程负责安全地关闭旧窗口后再按新范围重建，避免关闭/重建竞态
+      await window.electronAPI.restartLightsOff();
+    }
+  });
   els.lights_off_switch.addEventListener('change', async () => {
     const en = els.lights_off_switch.checked;
     const r = await window.electronAPI.setLightsOff(en);
@@ -578,7 +610,10 @@ function applyMode(mode) {
     if (!r.success) { els.auto_start.checked = !en; const d=LOCALE[currentLang]||LOCALE.zh; alert(d.autoStartFail+(r.error||d.permissionDenied)); }
     saveAndApply({ autoStart: en });
   });
-  els.language_select.addEventListener('change', () => saveAndApply({ language: els.language_select.value }));
+  els.language_select.addEventListener('change', async () => {
+    await saveAndApply({ language: els.language_select.value });
+    await refreshLightsOffDisplays();
+  });
   // [v1.0.5] 设置字体大小
   els.settings_font_size.addEventListener('change', () => {
     const v = els.settings_font_size.value;
@@ -647,6 +682,13 @@ function applyMode(mode) {
       if (!alarmKeys.some(k => nc[k] !== undefined)) return;
     }
     Object.assign(config, nc);
+    if (nc.language && nc.language !== currentLang) {
+      applyLanguage(nc.language);
+      refreshLightsOffDisplays();
+    }
+    if (nc.lightsOffDisplay !== undefined) {
+      els.lights_off_display.value = nc.lightsOffDisplay;
+    }
     els.pos_buttons.forEach(b => b.classList.toggle('active', b.dataset.pos === config.positionPreset));
     if (config.positionPreset === 'custom') {
       els.custom_pos.classList.remove('hidden');

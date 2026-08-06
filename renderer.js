@@ -309,3 +309,22 @@ cl.addEventListener('click', () => {
 });
 
 window.electronAPI.onConfigUpdated(nc=>{const lc=nc.language&&nc.language!==cfg.language;Object.assign(cfg,nc);if(cfg.animType==="scale")cfg.animType="shrink";if(lc){df=gdf(cfg.language);wf=gwf(cfg.language);cds="";cws="";}if(nc.passthrough!==undefined)sp(!!nc.passthrough);acf();cds="";ltk="";if(nc.showSeconds!==undefined||lc||nc.extraTimezones!==undefined)cts="";uc();if(nc.fontSize!==undefined||nc.showSeconds!==undefined||nc.fontFamily!==undefined||nc.showDate!==undefined||nc.showWeekday!==undefined||nc.datePosition!==undefined||lc||nc.autoColor!==undefined||nc.color!==undefined||nc.bgColor!==undefined||nc.extraTimezones!==undefined||nc.language!==undefined){if(rdt)clearTimeout(rdt);rdt=setTimeout(()=>{rdt=null;requestAnimationFrame(()=>requestAnimationFrame(fw));},300);}});window.addEventListener("beforeunload",()=>{stc();stopAlarmSound();stopAlarmFlash();if(alarmInlineTimer)clearInterval(alarmInlineTimer);if(rdt)clearTimeout(rdt);});}init();
+
+// [v1.0.6] 关灯联动：时钟窗口获得焦点时按 ESC 也能退出关灯模式
+(function () {
+  let lightsOffActive = false;
+  let lightsOffLocked = false; // [v1.0.6] 锁定后时钟窗口的 ESC 也不能退出关灯
+  window.electronAPI.getConfig().then(cfg => { lightsOffActive = !!(cfg && cfg.lightsOff); }).catch(() => {});
+  window.electronAPI.onLightsOffStateChanged && window.electronAPI.onLightsOffStateChanged(enabled => {
+    lightsOffActive = !!enabled;
+  });
+  window.electronAPI.onLightsOffLockChanged && window.electronAPI.onLightsOffLockChanged(locked => {
+    lightsOffLocked = !!locked;
+  });
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && lightsOffActive && !lightsOffLocked && window.electronAPI.setLightsOff) {
+      event.preventDefault();
+      window.electronAPI.setLightsOff(false);
+    }
+  });
+})();

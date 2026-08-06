@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getConfig: () => ipcRenderer.invoke('get-config'),
+  getDisplays: () => ipcRenderer.invoke('get-displays'),
   saveConfig: (data) => ipcRenderer.invoke('save-config', data),
   moveWindow: (pos) => ipcRenderer.invoke('move-window', pos),
   setLayerMode: (mode) => ipcRenderer.invoke('set-layer-mode', mode),
@@ -45,8 +46,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   finishWelcome: () => ipcRenderer.invoke('finish-welcome'),
   // [v1.0.5] 关灯
   setLightsOff: (enabled) => ipcRenderer.invoke('set-lights-off', enabled),
+  restartLightsOff: () => ipcRenderer.invoke('restart-lights-off'),
+  // [v1.0.6] 关灯锁定
+  getLightsOffLock: () => ipcRenderer.invoke('get-lights-off-lock'),
+  setLightsOffLock: (locked) => ipcRenderer.invoke('set-lights-off-lock', locked),
   onLightsOffStateChanged: (callback) => {
     ipcRenderer.on('lights-off-state-changed', (_event, enabled) => callback(enabled));
+  },
+  onLightsOffLockChanged: (callback) => {
+    ipcRenderer.on('lights-off-lock-changed', (_event, locked) => callback(locked));
   },
   onLightsOffBgUpdate: (callback) => {
     ipcRenderer.on('lights-off-bg-update', (_event, color) => callback(color));
