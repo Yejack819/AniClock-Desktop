@@ -75,6 +75,16 @@ const LOCALE = {
     hourFormat: '时间制式', hourFormatAuto: '跟随系统', hourFormat24: '24 小时制', hourFormat12: '12 小时制',
     ampmCorner: 'AM/PM 位置',
     cornerTopRight: '右上角', cornerTopLeft: '左上角', cornerBottomRight: '右下角', cornerBottomLeft: '左下角',
+    // [v1.0.5.4] 时间校准 + 关于
+    timeCalib: '时间校准',
+    calibAhead: '调快（显示比系统时间快）', calibBehind: '调慢（显示比系统时间慢）',
+    calibAmount: '校准量', calibSec: '秒', calibMs: '毫秒', calibReset: '归零',
+    calibOff: '当前未校准（跟随系统时间）',
+    calibSummaryFast: '当前：显示比系统时间快 {v}',
+    calibSummarySlow: '当前：显示比系统时间慢 {v}',
+    navAbout: '关于',
+    aboutTagline: '可深度定制的桌面翻页时钟',
+    aboutAuthors: '作者', aboutFoot: '基于 Electron 构建 · 感谢使用',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -151,6 +161,16 @@ const LOCALE = {
     hourFormat: 'Hour Format', hourFormatAuto: 'Follow system', hourFormat24: '24-hour', hourFormat12: '12-hour',
     ampmCorner: 'AM/PM Position',
     cornerTopRight: 'Top right', cornerTopLeft: 'Top left', cornerBottomRight: 'Bottom right', cornerBottomLeft: 'Bottom left',
+    // [v1.0.5.4] Time calibration + About
+    timeCalib: 'Time Calibration',
+    calibAhead: 'Ahead (faster than system)', calibBehind: 'Behind (slower than system)',
+    calibAmount: 'Offset', calibSec: 's', calibMs: 'ms', calibReset: 'Reset',
+    calibOff: 'Not calibrated (follows system time)',
+    calibSummaryFast: 'Current: {v} ahead of system time',
+    calibSummarySlow: 'Current: {v} behind system time',
+    navAbout: 'About',
+    aboutTagline: 'A deeply customizable desktop flip clock',
+    aboutAuthors: 'Authors', aboutFoot: 'Built with Electron · Thanks for using',
   },
 };
 
@@ -187,6 +207,16 @@ const els = {
   hour_format_select: document.getElementById('hour-format-select'),
   ampm_corner_select: document.getElementById('ampm-corner-select'),
   ampm_corner_row: document.getElementById('ampm-corner-row'),
+  // [v1.0.5.4] 时间校准 + 关于
+  calib_dir: document.getElementById('calib-dir-select'),
+  calib_sec: document.getElementById('calib-sec'),
+  calib_ms: document.getElementById('calib-ms'),
+  calib_reset_btn: document.getElementById('calib-reset-btn'),
+  calib_summary: document.getElementById('calib-summary'),
+  about_version: document.getElementById('about-version'),
+  about_authors: document.getElementById('about-authors'),
+  about_gitee: document.getElementById('about-gitee'),
+  about_github: document.getElementById('about-github'),
   alarm_list: document.getElementById('alarm-list'),
   alarm_add_btn: document.getElementById('alarm-add-btn'),
   alarm_advanced_toggle: document.getElementById('alarm-advanced-toggle'),
@@ -248,6 +278,7 @@ function applyLanguage(lang) {
     if (dict[key]) el.textContent = dict[key];
   });
   document.title = dict.settingsTitle;
+  syncCalibUI(); // [v1.0.5.4] 校准摘要文案随语言切换
   renderAlarmList(); // re-render with new locale
 }
 
@@ -448,6 +479,12 @@ function syncUIFromConfig() {
   els.hour_format_select.value = config.hourFormat || 'auto';
   els.ampm_corner_select.value = config.ampmCorner || 'top-right';
   syncHourFormatUI();
+  // [v1.0.5.4] 时间校准回填（拆成 方向 + 秒 + 毫秒）
+  const offMs = Number(config.timeOffsetMs) || 0;
+  els.calib_dir.value = offMs < 0 ? 'behind' : 'ahead';
+  els.calib_sec.value = Math.floor(Math.abs(offMs) / 1000);
+  els.calib_ms.value = Math.abs(offMs) % 1000;
+  syncCalibUI();
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
   els.language_select.value = config.language || 'zh';
@@ -511,6 +548,31 @@ function syncHourFormatUI() {
   els.ampm_corner_row.classList.toggle('hidden', !hourFormatIs12(els.hour_format_select.value));
 }
 
+// [v1.0.5.4] 时间校准：正=调快，负=调慢；秒与毫秒合成毫秒数
+function calibOffsetMs() {
+  const sec = Math.max(0, Math.min(59, parseInt(els.calib_sec.value, 10) || 0));
+  const ms = Math.max(0, Math.min(999, parseInt(els.calib_ms.value, 10) || 0));
+  const total = sec * 1000 + ms;
+  return els.calib_dir.value === 'behind' ? -total : total;
+}
+
+// 校准量实时摘要
+function syncCalibUI() {
+  if (!els.calib_summary) return;
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  const value = calibOffsetMs();
+  const abs = Math.abs(value);
+  if (abs === 0) {
+    els.calib_summary.textContent = dict.calibOff;
+    els.calib_summary.classList.remove('active');
+    return;
+  }
+  const unit = currentLang === 'zh' ? ' 秒' : ' s';
+  const template = value > 0 ? dict.calibSummaryFast : dict.calibSummarySlow;
+  els.calib_summary.textContent = (template || '').replace('{v}', (abs / 1000).toFixed(3) + unit);
+  els.calib_summary.classList.add('active');
+}
+
 // [v1.0.5] 模式切换（正常/教育）
 const EDU_ANIM_DURATION = 500; // 教育模式固定动画时长
 function applyMode(mode) {
@@ -561,6 +623,23 @@ function ensureActivePanel() {
   navItems.forEach(btn => {
     btn.addEventListener('click', () => activatePanel(btn.dataset.panel, true));
   });
+
+  // [v1.0.5.4] 关于界面：版本（四位）/ 作者 / 仓库地址
+  try {
+    const info = window.electronAPI.getAppInfo ? await window.electronAPI.getAppInfo() : null;
+    if (info) {
+      if (els.about_version) els.about_version.textContent = info.version || '—';
+      if (els.about_authors) els.about_authors.textContent = info.authors || '—';
+      if (els.about_gitee) {
+        els.about_gitee.textContent = info.gitee || '—';
+        els.about_gitee.addEventListener('click', () => window.electronAPI.openExternal(info.gitee));
+      }
+      if (els.about_github) {
+        els.about_github.textContent = info.github || '—';
+        els.about_github.addEventListener('click', () => window.electronAPI.openExternal(info.github));
+      }
+    }
+  } catch (e) {}
 
   // Load alarms
   try { alarmList = await window.electronAPI.getAllAlarms() || []; } catch (e) { alarmList = []; }
@@ -622,6 +701,21 @@ function ensureActivePanel() {
   });
   els.ampm_corner_select.addEventListener('change', () => {
     saveAndApply({ ampmCorner: els.ampm_corner_select.value });
+  });
+
+  // [v1.0.5.4] 时间校准（改完即时生效，时钟的秒边界会跟着重排）
+  function applyCalib() {
+    saveAndApply({ timeOffsetMs: calibOffsetMs() });
+    syncCalibUI();
+  }
+  els.calib_sec.addEventListener('input', applyCalib);
+  els.calib_ms.addEventListener('input', applyCalib);
+  els.calib_dir.addEventListener('change', applyCalib);
+  els.calib_reset_btn.addEventListener('click', () => {
+    els.calib_dir.value = 'ahead';
+    els.calib_sec.value = 0;
+    els.calib_ms.value = 0;
+    applyCalib();
   });
 
   // 日期

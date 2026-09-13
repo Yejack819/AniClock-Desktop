@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -26,6 +26,8 @@ const DEFAULT_CONFIG = {
   // [v1.0.5.3] 时间制式：auto(跟随系统) / 24 / 12；12 小时制下 AM·PM 角标位置
   hourFormat: 'auto',
   ampmCorner: 'top-right',
+  // [v1.0.5.4] 时间校准（毫秒，正=显示比系统快，负=慢）
+  timeOffsetMs: 0,
   mode: 'normal',
   lightsOff: false,
   lightsOffDisplay: 'clock',
@@ -490,6 +492,8 @@ let welcomeWindow = null;
 let lightsOffWindows = []; // 关灯全屏窗口（多显示器时每个屏幕一个）
 let lightsOffRestarting = false; // 显示器切换等场景：等待旧窗口关闭后重建
 let clockBoundsBeforeLightsOff = null; // 关灯前的时钟位置，退出时还原
+// [v1.0.5.4] 关灯前时钟是否可见（托盘可隐藏时钟），退出关灯时还原，null 表示未记录
+let clockVisibleBeforeLightsOff = null;
 let lightsOffLocked = false; // [v1.0.6] 关灯锁定：锁定时仅退出按钮可退出
 let tray = null;
 let suppressMoveSave = false;
@@ -856,7 +860,7 @@ function centerClockOnDisplay(display) {
   setTimeout(() => { suppressMoveSave = false; }, 300);
 }
 
-// 退出关灯后还原时钟窗口的原始位置
+// 退出关灯后还原时钟窗口的原始位置与显隐状态
 function restoreClockAfterLightsOff() {
   if (clockBoundsBeforeLightsOff && mainWindow && !mainWindow.isDestroyed()) {
     suppressMoveSave = true;
@@ -864,6 +868,12 @@ function restoreClockAfterLightsOff() {
     setTimeout(() => { suppressMoveSave = false; }, 300);
   }
   clockBoundsBeforeLightsOff = null;
+  // [v1.0.5.4] 关灯前是隐藏的，退出后重新隐藏（关灯时为了显示时钟曾强制 show）
+  if (clockVisibleBeforeLightsOff !== null && mainWindow && !mainWindow.isDestroyed()) {
+    if (clockVisibleBeforeLightsOff) mainWindow.show();
+    else mainWindow.hide();
+  }
+  clockVisibleBeforeLightsOff = null;
 }
 
 function openLightsOffWindows() {
@@ -877,6 +887,10 @@ function openLightsOffWindows() {
   // 记录关灯前的时钟位置，退出时还原
   if (!clockBoundsBeforeLightsOff && mainWindow && !mainWindow.isDestroyed()) {
     clockBoundsBeforeLightsOff = mainWindow.getBounds();
+  }
+  // [v1.0.5.4] 记录关灯前时钟是否可见（用户可能用托盘把它隐藏了），退出时还原
+  if (clockVisibleBeforeLightsOff === null && mainWindow && !mainWindow.isDestroyed()) {
+    clockVisibleBeforeLightsOff = mainWindow.isVisible();
   }
   displays.forEach(display => {
     const { x, y } = display.bounds;
@@ -1123,6 +1137,41 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
 
 ipcMain.handle('quit-app', () => app.quit());
 ipcMain.handle('open-settings', () => { openSettingsWindow(); return { success: true }; });
+
+// [v1.0.5.4] ====== 关于界面：应用信息 + 安全打开外部链接 ======
+// 版本号用四位（1.0.5.4）：package.json 的 version 必须是合法 semver 三段式（electron-builder 校验），
+// 所以四位号放在自定义字段 appVersion 里，取不到时回退到 app.getVersion()
+let appMetaCache = null;
+function getAppMeta() {
+  if (appMetaCache) return appMetaCache;
+  let version = app.getVersion();
+  try {
+    const pkg = require('./package.json');
+    if (pkg && pkg.appVersion) version = pkg.appVersion;
+  } catch (e) {}
+  appMetaCache = {
+    name: 'Digital Clock',
+    version,
+    authors: 'DeepSeek · Yejack819',
+    gitee: 'https://gitee.com/Yejack819/AniClock-Desktop',
+    github: 'https://github.com/Yejack819/AniClock-Desktop',
+  };
+  return appMetaCache;
+}
+
+ipcMain.handle('get-app-info', () => getAppMeta());
+
+ipcMain.handle('open-external', async (_event, url) => {
+  const target = String(url || '');
+  // 只允许 https，避免渲染进程被注入后调用任意协议/本地程序
+  if (!/^https:\/\//i.test(target)) return { success: false, error: 'blocked' };
+  try {
+    await shell.openExternal(target);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 // ====== Alarm IPC ======
 

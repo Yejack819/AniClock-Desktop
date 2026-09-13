@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportData: () => ipcRenderer.invoke('export-data'),
   importData: () => ipcRenderer.invoke('import-data'),
   relaunchApp: () => ipcRenderer.invoke('relaunch-app'),
+  // [v1.0.5.4] 关于界面
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   // [v1.0.5] 欢迎界面完成
   finishWelcome: () => ipcRenderer.invoke('finish-welcome'),
   // [v1.0.5] 关灯

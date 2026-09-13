@@ -1,6 +1,7 @@
 {
   "name": "digital-clock",
   "version": "1.0.5",
+  "appVersion": "1.0.5.4",
   "description": "Animated desktop digital clock with rich customization",
   "main": "main.js",
   "scripts": {

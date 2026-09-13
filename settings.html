@@ -37,6 +37,9 @@
         <button class="nav-item edu-hide" data-panel="data">
           <span class="nav-icon">🗑️</span><span class="nav-text" data-lang="navData">数据管理</span>
         </button>
+        <button class="nav-item" data-panel="about">
+          <span class="nav-icon">ℹ️</span><span class="nav-text" data-lang="navAbout">关于</span>
+        </button>
       </nav>
     </aside>
 
@@ -218,6 +221,30 @@
             <option value="bottom-right" data-lang="cornerBottomRight">右下角</option>
             <option value="bottom-left" data-lang="cornerBottomLeft">左下角</option>
           </select>
+        </div>
+
+        <!-- [v1.0.5.4] 时间校准 -->
+        <div class="setting-row edu-hide">
+          <label data-lang="timeCalib">时间校准</label>
+          <select id="calib-dir-select">
+            <option value="ahead" data-lang="calibAhead">调快（显示比系统时间快）</option>
+            <option value="behind" data-lang="calibBehind">调慢（显示比系统时间慢）</option>
+          </select>
+        </div>
+
+        <div class="setting-row edu-hide">
+          <label data-lang="calibAmount">校准量</label>
+          <div class="calib-row">
+            <input type="number" id="calib-sec" min="0" max="59" step="1" value="0">
+            <span class="sub-label" data-lang="calibSec">秒</span>
+            <input type="number" id="calib-ms" min="0" max="999" step="1" value="0">
+            <span class="sub-label" data-lang="calibMs">毫秒</span>
+            <button id="calib-reset-btn" class="mini-btn" data-lang="calibReset">归零</button>
+          </div>
+        </div>
+
+        <div class="setting-row edu-hide">
+          <div class="calib-summary" id="calib-summary">当前未校准</div>
         </div>
 
         <div class="setting-row edu-hide">
@@ -403,6 +430,37 @@
           <label data-lang="deleteDataDesc" style="color:#f88;font-size:12px;line-height:1.5;">删除所有保存的数据（config.json 和 alarms.json），应用将恢复出厂状态。此操作不可撤销！</label>
         </div>
         <button id="delete-data-btn" class="danger-btn edu-hide" data-lang="deleteDataBtn">🗑️ 删除所有保存的数据</button>
+      </section>
+
+      <!-- ====== [v1.0.5.4] 关于 ====== -->
+      <section class="panel" data-panel="about">
+        <h2 class="panel-title" data-lang="navAbout">关于</h2>
+
+        <div class="about-head">
+          <img class="about-icon" src="assets/icon.png" alt="Digital Clock">
+          <div class="about-head-text">
+            <div class="about-name">Digital Clock</div>
+            <div class="about-tagline" data-lang="aboutTagline">可深度定制的桌面翻页时钟</div>
+            <div class="about-ver">v<span id="about-version">—</span></div>
+          </div>
+        </div>
+
+        <div class="about-block">
+          <div class="about-row">
+            <span class="about-key" data-lang="aboutAuthors">作者</span>
+            <span class="about-val" id="about-authors">—</span>
+          </div>
+          <div class="about-row">
+            <span class="about-key">Gitee</span>
+            <button type="button" class="about-link" id="about-gitee">—</button>
+          </div>
+          <div class="about-row">
+            <span class="about-key">GitHub</span>
+            <button type="button" class="about-link" id="about-github">—</button>
+          </div>
+        </div>
+
+        <div class="about-foot" data-lang="aboutFoot">基于 Electron 构建 · 感谢使用</div>
       </section>
 
     </main>

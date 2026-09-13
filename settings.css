@@ -352,6 +352,48 @@ select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; backgrou
   margin: 22px 0 18px;
 }
 
+/* ====== [v1.0.5.4] 时间校准 ====== */
+.calib-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.calib-row input[type="number"] {
+  width: 80px; padding: 6px 8px; border-radius: 6px; border: 1px solid #555;
+  background: #3a3a4a; color: #eee; font-family: inherit; font-size: var(--sfz);
+  outline: none; text-align: center;
+}
+.calib-row input[type="number"]:focus { border-color: #6C8CFF; }
+.mini-btn {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid #444; background: #2a2a38;
+  color: #aaa; font-family: inherit; font-size: calc(var(--sfz) - 1px); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mini-btn:hover { border-color: #6C8CFF; color: #ddd; background: #3a3a4a; }
+.calib-summary {
+  padding: 9px 12px; border-radius: 6px; font-size: calc(var(--sfz) - 1px); line-height: 1.5;
+  background: rgba(108, 140, 255, 0.12); color: #b9c8ff;
+  font-variant-numeric: tabular-nums;
+}
+.calib-summary.active { background: rgba(29, 158, 117, 0.16); color: #7fd8b4; }
+
+/* ====== [v1.0.5.4] 关于 ====== */
+.about-head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.about-icon { width: 64px; height: 64px; border-radius: 14px; background: #2a2a38; padding: 6px; object-fit: contain; }
+.about-head-text { display: flex; flex-direction: column; gap: 3px; }
+.about-name { font-size: calc(var(--sfz) + 5px); font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+.about-tagline { font-size: calc(var(--sfz) - 1px); color: #9a9aa8; }
+.about-ver { font-size: calc(var(--sfz) - 1px); color: #6C8CFF; font-variant-numeric: tabular-nums; }
+
+.about-block { background: #1f1f28; border: 1px solid #2a2a35; border-radius: 10px; overflow: hidden; }
+.about-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #26262f; }
+.about-row:last-child { border-bottom: none; }
+.about-key { width: 76px; flex-shrink: 0; font-size: calc(var(--sfz) - 1px); color: #888; }
+.about-val { font-size: var(--sfz); color: #ddd; }
+.about-link {
+  background: none; border: none; padding: 0; margin: 0; cursor: pointer; text-align: left;
+  font-family: inherit; font-size: var(--sfz); color: #6C8CFF; word-break: break-all;
+  transition: color 0.15s;
+}
+.about-link:hover { color: #9db4ff; text-decoration: underline; }
+.about-foot { margin-top: 18px; font-size: calc(var(--sfz) - 2px); color: #666; }
+
 /* ====== [v1.0.5] 危险按钮 ====== */
 .danger-btn {
   width: 100%;
