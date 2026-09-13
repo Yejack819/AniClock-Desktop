@@ -38,6 +38,17 @@ const LOCALE = {
     deleteDataBtn: '🗑️ 删除所有保存的数据',
     confirmDeleteData: '确定要删除所有保存的数据吗？\n\n此操作将删除所有配置和闹钟数据，且不可撤销！\n\n应用将自动重启以完成重置。',
     deleteDataSuccess: '数据已删除，应用即将重启...',
+    // [v1.0.5.3] 偏好设置导入 / 导出
+    dataTransferDesc: '导出/导入偏好设置：导出的文件包含全部偏好与闹钟，可保存到任意位置（U 盘、网盘目录均可），重装或换机后导入即可恢复。',
+    exportDataBtn: '📤 导出偏好设置…',
+    importDataBtn: '📥 导入偏好设置…',
+    exportSuccess: '已导出到：',
+    exportFailed: '导出失败：',
+    importConfirm: '导入将覆盖当前全部偏好设置与闹钟数据，并重启应用。确定继续吗？',
+    importSuccess: '导入成功，正在重启应用…',
+    importFailed: '导入失败：',
+    importInvalidJson: '文件不是合法的 JSON，请确认选择的是导出的备份文件。',
+    importInvalidFormat: '文件格式不正确，请选择由本应用导出的备份文件。',
     // [v1.0.5] 倒计时 / 状态
     alarmRinging: '🔔 正在响铃',
     alarmRetrying: '⏰ 稍后提醒中',
@@ -99,6 +110,17 @@ const LOCALE = {
     deleteDataBtn: '🗑️ Delete All Saved Data',
     confirmDeleteData: 'Delete all saved data?\n\nThis will delete ALL configuration and alarm data. This action is IRREVERSIBLE!\n\nThe app will restart to complete the reset.',
     deleteDataSuccess: 'Data deleted. App is restarting...',
+    // [v1.0.5.3] Preferences export / import
+    dataTransferDesc: 'Export/import preferences: the exported file contains all settings and alarms. Save it anywhere (USB drive, cloud folder) and import it to restore after a reinstall or on a new machine.',
+    exportDataBtn: '📤 Export Preferences…',
+    importDataBtn: '📥 Import Preferences…',
+    exportSuccess: 'Exported to: ',
+    exportFailed: 'Export failed: ',
+    importConfirm: 'Importing will overwrite ALL current preferences and alarms, then restart the app. Continue?',
+    importSuccess: 'Imported. Restarting...',
+    importFailed: 'Import failed: ',
+    importInvalidJson: 'Not a valid JSON file. Please pick a backup exported by this app.',
+    importInvalidFormat: 'Invalid file format. Please pick a backup exported by this app.',
     // [v1.0.5] Countdown / status
     alarmRinging: '🔔 Ringing',
     alarmRetrying: '⏰ Snoozing',
@@ -165,6 +187,9 @@ const els = {
   alarm_auto_passthrough: document.getElementById('alarm-auto-passthrough'),
   alarm_auto_top: document.getElementById('alarm-auto-top'),
   delete_data_btn: document.getElementById('delete-data-btn'),
+  export_data_btn: document.getElementById('export-data-btn'),
+  import_data_btn: document.getElementById('import-data-btn'),
+  data_transfer_status: document.getElementById('data-transfer-status'),
   mode_select: document.getElementById('mode-select'),
   lights_off_switch: document.getElementById('lights-off-switch'),
   lights_off_display: document.getElementById('lights-off-display-select'),
@@ -699,6 +724,52 @@ function ensureActivePanel() {
   });
   els.alarm_auto_top.addEventListener('change', () => {
     saveAndApply({ alarmAutoTop: els.alarm_auto_top.checked });
+  });
+
+  // ====== [v1.0.5.3] 偏好设置导出 / 导入 ======
+  function showDataStatus(text, isError) {
+    if (!els.data_transfer_status) return;
+    els.data_transfer_status.textContent = text;
+    els.data_transfer_status.classList.remove('hidden');
+    els.data_transfer_status.classList.toggle('error', !!isError);
+  }
+
+  els.export_data_btn.addEventListener('click', async () => {
+    const dict = LOCALE[currentLang] || LOCALE.zh;
+    els.export_data_btn.disabled = true;
+    try {
+      const r = await window.electronAPI.exportData();
+      if (r.canceled) return;
+      showDataStatus(r.success ? dict.exportSuccess + r.path : dict.exportFailed + (r.error || ''), !r.success);
+    } finally {
+      els.export_data_btn.disabled = false;
+    }
+  });
+
+  els.import_data_btn.addEventListener('click', async () => {
+    const dict = LOCALE[currentLang] || LOCALE.zh;
+    if (!confirm(dict.importConfirm)) return;
+    els.import_data_btn.disabled = true;
+    let r;
+    try {
+      r = await window.electronAPI.importData();
+    } finally {
+      els.import_data_btn.disabled = false;
+    }
+    if (!r || r.canceled) return;
+    if (!r.success) {
+      let msg;
+      if (r.error === 'invalid-json') msg = dict.importInvalidJson;
+      else if (r.error === 'invalid-format') msg = dict.importInvalidFormat;
+      else msg = dict.importFailed + (r.error || '');
+      showDataStatus(msg, true);
+      return;
+    }
+    // 导入成功后锁定按钮并整进程重启，让主进程/时钟窗口全部按新配置重载
+    els.import_data_btn.disabled = true;
+    els.export_data_btn.disabled = true;
+    showDataStatus(dict.importSuccess, false);
+    setTimeout(() => { window.electronAPI.relaunchApp(); }, 900);
   });
 
   // ====== [v1.0.5] 删除所有保存的数据 ======

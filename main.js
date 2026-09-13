@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -1228,6 +1228,139 @@ ipcMain.handle('dismiss-alarm', (_event, id) => {
   if (ringingAlarm && ringingAlarm.id === id) {
     stopRinging(true);
   }
+  return { success: true };
+});
+
+// [v1.0.5.3] ====== 偏好设置导入 / 导出 ======
+// 导出为单个 JSON：config + alarms，可存到任意选定位置
+const DATA_BUNDLE_TYPE = 'digital-clock-backup';
+
+function buildDataBundle() {
+  return {
+    app: 'Digital Clock',
+    type: DATA_BUNDLE_TYPE,
+    appVersion: app.getVersion(),
+    exportedAt: new Date().toISOString(),
+    config: loadConfig(),
+    alarms: loadAlarms().alarms,
+  };
+}
+
+// 只接受 DEFAULT_CONFIG 里已知的字段，避免导入文件注入垃圾键
+// （passthrough / lightsOff 等会影响可操作性的状态不在白名单内，导入后不恢复）
+function sanitizeImportedConfig(input) {
+  const out = {};
+  Object.keys(DEFAULT_CONFIG).forEach(key => {
+    if (Object.prototype.hasOwnProperty.call(input, key)) out[key] = input[key];
+  });
+  return out;
+}
+
+// 逐条校验闹钟，丢弃非法项；返回 null 表示文件里没有 alarms 字段（保持现有闹钟不动）
+function sanitizeImportedAlarms(list) {
+  if (!Array.isArray(list)) return null;
+  const cleaned = [];
+  list.forEach(raw => {
+    if (!raw || typeof raw !== 'object') return;
+    const hour = parseInt(raw.hour, 10);
+    const minute = parseInt(raw.minute, 10);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return;
+    const alarm = { ...raw };
+    alarm.hour = hour;
+    alarm.minute = minute;
+    alarm.sound = alarm.sound || 'beep';
+    if (!alarm.id) alarm.id = 'alarm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    if (!Array.isArray(alarm.weekdays)) alarm.weekdays = [];
+    cleaned.push(alarm);
+  });
+  return cleaned;
+}
+
+// 从导入文件里取出 config（兼容：完整备份 / 只含 config / 直接是 config.json 本体）
+function pickImportedConfig(parsed) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const candidate = isObj(parsed.config) ? parsed.config : parsed;
+  return isObj(candidate) ? candidate : null;
+}
+
+// 生成最终落盘的配置：白名单过滤 + 安全兜底
+function buildImportedConfig(cfgIn) {
+  const merged = { ...DEFAULT_CONFIG, ...sanitizeImportedConfig(cfgIn) };
+  merged.welcomeShown = true; // 导入后不要再走欢迎页
+  merged.lightsOff = false;   // 导入后不要一启动就全屏关灯
+  return merged;
+}
+
+function getDialogParent() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) return settingsWindow;
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  return undefined;
+}
+
+ipcMain.handle('export-data', async () => {
+  try {
+    const now = new Date();
+    const stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+    const result = await dialog.showSaveDialog(getDialogParent(), {
+      title: '导出偏好设置',
+      defaultPath: path.join(app.getPath('documents'), 'Digital Clock 备份 ' + stamp + '.json'),
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePath) return { success: false, canceled: true };
+    fs.writeFileSync(result.filePath, JSON.stringify(buildDataBundle(), null, 2), 'utf-8');
+    return { success: true, path: result.filePath };
+  } catch (err) {
+    console.error('导出偏好设置失败:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('import-data', async () => {
+  try {
+    const result = await dialog.showOpenDialog(getDialogParent(), {
+      title: '导入偏好设置',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    const raw = fs.readFileSync(result.filePaths[0], 'utf-8');
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      return { success: false, error: 'invalid-json', detail: err.message };
+    }
+    // 兼容三种写法：完整备份 { config, alarms } / { config } / 直接就是 config.json 本体
+    const cfgIn = pickImportedConfig(parsed);
+    if (!cfgIn) {
+      return { success: false, error: 'invalid-format' };
+    }
+    saveConfig(buildImportedConfig(cfgIn));
+
+    const alarmsIn = sanitizeImportedAlarms(parsed && parsed.alarms);
+    if (alarmsIn) {
+      saveAlarmsData({ alarms: alarmsIn });
+      alarms = alarmsIn;
+    }
+    return {
+      success: true,
+      path: result.filePaths[0],
+      alarmCount: alarmsIn ? alarmsIn.length : null,
+    };
+  } catch (err) {
+    console.error('导入偏好设置失败:', err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+// 导入生效需要整进程重启（与「删除所有数据」同一套机制：exit() 跳过 beforeunload 回写）
+ipcMain.handle('relaunch-app', () => {
+  app.relaunch();
+  app.exit(0);
   return { success: true };
 });
 

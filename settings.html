@@ -365,6 +365,20 @@
       <section class="panel" data-panel="data">
         <h2 class="panel-title" data-lang="navData">数据管理</h2>
 
+        <!-- [v1.0.5.3] 偏好设置备份 / 迁移 -->
+        <div class="setting-row edu-hide">
+          <label data-lang="dataTransferDesc">导出/导入偏好设置：导出的文件包含全部偏好与闹钟，可保存到任意位置（U 盘、网盘目录均可），重装或换机后导入即可恢复。</label>
+        </div>
+
+        <div class="data-transfer edu-hide">
+          <button id="export-data-btn" data-lang="exportDataBtn">📤 导出偏好设置…</button>
+          <button id="import-data-btn" data-lang="importDataBtn">📥 导入偏好设置…</button>
+        </div>
+
+        <div id="data-transfer-status" class="data-transfer-status edu-hide hidden"></div>
+
+        <div class="data-divider edu-hide"></div>
+
         <div class="setting-row edu-hide">
           <label data-lang="deleteDataDesc" style="color:#f88;font-size:12px;line-height:1.5;">删除所有保存的数据（config.json 和 alarms.json），应用将恢复出厂状态。此操作不可撤销！</label>
         </div>

@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // [v1.0.5] 删除所有保存的数据
   deleteAllData: () => ipcRenderer.invoke('delete-all-data'),
+  // [v1.0.5.3] 偏好设置导入 / 导出
+  exportData: () => ipcRenderer.invoke('export-data'),
+  importData: () => ipcRenderer.invoke('import-data'),
+  relaunchApp: () => ipcRenderer.invoke('relaunch-app'),
   // [v1.0.5] 欢迎界面完成
   finishWelcome: () => ipcRenderer.invoke('finish-welcome'),
   // [v1.0.5] 关灯
