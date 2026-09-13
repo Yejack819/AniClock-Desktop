@@ -71,6 +71,10 @@ const LOCALE = {
     // [v1.0.5.1] 左侧导航
     navMode: '模式', navAppearance: '外观', navAnimation: '动画', navTime: '时间',
     navAlarm: '闹钟', navPosition: '位置', navSystem: '系统', navData: '数据管理',
+    // [v1.0.5.3] 12 小时制
+    hourFormat: '时间制式', hourFormatAuto: '跟随系统', hourFormat24: '24 小时制', hourFormat12: '12 小时制',
+    ampmCorner: 'AM/PM 位置',
+    cornerTopRight: '右上角', cornerTopLeft: '左上角', cornerBottomRight: '右下角', cornerBottomLeft: '左下角',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -143,6 +147,10 @@ const LOCALE = {
     // [v1.0.5.1] Sidebar navigation
     navMode: 'Mode', navAppearance: 'Appearance', navAnimation: 'Animation', navTime: 'Time',
     navAlarm: 'Alarm', navPosition: 'Position', navSystem: 'System', navData: 'Data',
+    // [v1.0.5.3] 12-hour clock
+    hourFormat: 'Hour Format', hourFormatAuto: 'Follow system', hourFormat24: '24-hour', hourFormat12: '12-hour',
+    ampmCorner: 'AM/PM Position',
+    cornerTopRight: 'Top right', cornerTopLeft: 'Top left', cornerBottomRight: 'Bottom right', cornerBottomLeft: 'Bottom left',
   },
 };
 
@@ -176,6 +184,9 @@ const els = {
   tz_hint: document.getElementById('tz-hint'),
   passthrough_switch: document.getElementById('passthrough-switch'),
   settings_font_size: document.getElementById('settings-font-size'),
+  hour_format_select: document.getElementById('hour-format-select'),
+  ampm_corner_select: document.getElementById('ampm-corner-select'),
+  ampm_corner_row: document.getElementById('ampm-corner-row'),
   alarm_list: document.getElementById('alarm-list'),
   alarm_add_btn: document.getElementById('alarm-add-btn'),
   alarm_advanced_toggle: document.getElementById('alarm-advanced-toggle'),
@@ -433,6 +444,10 @@ function syncUIFromConfig() {
   els.show_date.checked = config.showDate !== false;
   els.show_weekday.checked = config.showWeekday !== false;
   els.date_position.value = config.datePosition || 'below';
+  // [v1.0.5.3] 时间制式 + AM/PM 角标
+  els.hour_format_select.value = config.hourFormat || 'auto';
+  els.ampm_corner_select.value = config.ampmCorner || 'top-right';
+  syncHourFormatUI();
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
   els.language_select.value = config.language || 'zh';
@@ -477,6 +492,23 @@ async function saveAndApply(nc) {
 function applySettingsFontSize(size) {
   document.body.classList.remove('settings-xs', 'settings-sm', 'settings-md', 'settings-lg', 'settings-xl');
   document.body.classList.add('settings-' + (size || 'md'));
+}
+
+// [v1.0.5.3] 12 小时制：auto 档按系统区域设置判断（hourCycle h11/h12 即 12 小时制）
+function hourFormatIs12(fmt) {
+  if (fmt === '12') return true;
+  if (fmt === '24') return false;
+  try {
+    const o = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions();
+    if (o.hourCycle) return o.hourCycle === 'h11' || o.hourCycle === 'h12';
+  } catch (e) {}
+  return false;
+}
+
+// 只有 12 小时制真正生效时，才显示「AM/PM 位置」这一项
+function syncHourFormatUI() {
+  if (!els.ampm_corner_row) return;
+  els.ampm_corner_row.classList.toggle('hidden', !hourFormatIs12(els.hour_format_select.value));
 }
 
 // [v1.0.5] 模式切换（正常/教育）
@@ -582,6 +614,15 @@ function ensureActivePanel() {
   els.scale_factor.addEventListener('input', function() { var v = parseInt(els.scale_factor.value,10); els.scale_factor_label.textContent = v; saveAndApply({ scaleInFactor: v/100 }); });
 
   els.show_seconds.addEventListener('change', () => saveAndApply({ showSeconds: els.show_seconds.checked }));
+
+  // [v1.0.5.3] 时间制式 / AM/PM 位置
+  els.hour_format_select.addEventListener('change', () => {
+    saveAndApply({ hourFormat: els.hour_format_select.value });
+    syncHourFormatUI();
+  });
+  els.ampm_corner_select.addEventListener('change', () => {
+    saveAndApply({ ampmCorner: els.ampm_corner_select.value });
+  });
 
   // 日期
   els.show_date.addEventListener('change', () => saveAndApply({ showDate: els.show_date.checked }));
@@ -790,9 +831,9 @@ function ensureActivePanel() {
   // 时钟窗口被拖动时同步更新位置按钮状态 / 时区变化时同步列表
   window.electronAPI.onConfigUpdated((nc) => {
     if (nc.positionPreset === undefined && nc.x === undefined && nc.y === undefined && nc.extraTimezones === undefined) {
-      // Check if any alarm advanced setting changed
-      const alarmKeys = ['alarmSoundDuration','alarmFlash','alarmAutoShow','alarmAutoPassthrough','alarmAutoTop'];
-      if (!alarmKeys.some(k => nc[k] !== undefined)) return;
+      // Check if any alarm advanced setting / 时间制式 changed
+      const syncKeys = ['alarmSoundDuration','alarmFlash','alarmAutoShow','alarmAutoPassthrough','alarmAutoTop','hourFormat','ampmCorner'];
+      if (!syncKeys.some(k => nc[k] !== undefined)) return;
     }
     Object.assign(config, nc);
     if (nc.language && nc.language !== currentLang) {
@@ -819,6 +860,9 @@ function ensureActivePanel() {
     if (nc.alarmAutoShow !== undefined) els.alarm_auto_show.checked = nc.alarmAutoShow;
     if (nc.alarmAutoPassthrough !== undefined) els.alarm_auto_passthrough.checked = nc.alarmAutoPassthrough;
     if (nc.alarmAutoTop !== undefined) els.alarm_auto_top.checked = nc.alarmAutoTop;
+    // [v1.0.5.3] 时间制式 / AM/PM 角标
+    if (nc.hourFormat !== undefined) { els.hour_format_select.value = nc.hourFormat; syncHourFormatUI(); }
+    if (nc.ampmCorner !== undefined) els.ampm_corner_select.value = nc.ampmCorner;
   });
 
   // [v1.0.5] 每 30 秒刷新闹钟列表以更新倒计时

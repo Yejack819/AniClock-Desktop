@@ -200,6 +200,26 @@
       <section class="panel" data-panel="time">
         <h2 class="panel-title" data-lang="navTime">时间</h2>
 
+        <!-- [v1.0.5.3] 12 小时制 -->
+        <div class="setting-row edu-hide">
+          <label data-lang="hourFormat">时间制式</label>
+          <select id="hour-format-select">
+            <option value="auto" data-lang="hourFormatAuto">跟随系统</option>
+            <option value="24" data-lang="hourFormat24">24 小时制</option>
+            <option value="12" data-lang="hourFormat12">12 小时制</option>
+          </select>
+        </div>
+
+        <div class="setting-row edu-hide hidden" id="ampm-corner-row">
+          <label data-lang="ampmCorner">AM/PM 位置</label>
+          <select id="ampm-corner-select">
+            <option value="top-right" data-lang="cornerTopRight">右上角</option>
+            <option value="top-left" data-lang="cornerTopLeft">左上角</option>
+            <option value="bottom-right" data-lang="cornerBottomRight">右下角</option>
+            <option value="bottom-left" data-lang="cornerBottomLeft">左下角</option>
+          </select>
+        </div>
+
         <div class="setting-row edu-hide">
           <label data-lang="showSeconds">显示秒</label>
           <label class="toggle-switch">

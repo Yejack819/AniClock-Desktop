@@ -23,6 +23,9 @@ const DEFAULT_CONFIG = {
   welcomeShown: false,
   settingsFontSize: 'md',
   settingsTab: 'mode',
+  // [v1.0.5.3] 时间制式：auto(跟随系统) / 24 / 12；12 小时制下 AM·PM 角标位置
+  hourFormat: 'auto',
+  ampmCorner: 'top-right',
   mode: 'normal',
   lightsOff: false,
   lightsOffDisplay: 'clock',
@@ -73,9 +76,36 @@ function saveAlarmsData(data) {
   catch (err) { console.error('保存闹钟失败:', err.message); }
 }
 
+// [v1.0.5.3] ====== 时间制式（闹钟文案用）======
+// 内部一律按 24 小时存储/排序，12 小时制只影响“显示”
+function hourFormatIs12(cfg) {
+  const fmt = (cfg && cfg.hourFormat) || '24';
+  if (fmt === '12') return true;
+  if (fmt === '24') return false;
+  // auto：跟随系统区域设置（hourCycle h11/h12 即 12 小时制）
+  try {
+    const opt = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions();
+    if (opt.hourCycle) return opt.hourCycle === 'h11' || opt.hourCycle === 'h12';
+  } catch (e) {}
+  return false;
+}
+
+function ampmText(hour24, cfg) {
+  const pm = hour24 >= 12;
+  return ((cfg && cfg.language) === 'zh') ? (pm ? '下午' : '上午') : (pm ? 'PM' : 'AM');
+}
+
+// 用于显示：12 小时制保留两位（07:30 而非 7:30），避免位数变化导致整行重建
+function formatClockTime(hour24, minute, cfg) {
+  const mm = String(minute).padStart(2, '0');
+  if (!hourFormatIs12(cfg)) {
+    return String(hour24).padStart(2, '0') + ':' + mm;
+  }
+  return String(hour24 % 12 || 12).padStart(2, '0') + ':' + mm + ' ' + ampmText(hour24, cfg);
+}
+
 // ========== Alarm Engine ==========
-let alarms = []; // in-memory alarm array
-let alarmCheckInterval = null;
+let alarms = []; // in-memory alarm arraylet alarmCheckInterval = null;
 let alarmEditorWindow = null;
 
 // Ringing state
@@ -162,6 +192,7 @@ function broadcastAlarmState() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   const now = new Date();
+  const cfgNow = loadConfig(); // [v1.0.5.3] 时间制式/语言一次性读取，避免循环里反复读文件
   let inlineType = 'none';
   let inlineText = '';
   let inlineText2 = '';
@@ -171,7 +202,7 @@ function broadcastAlarmState() {
     inlineType = 'ringing';
     const alarm = alarms.find(a => a.id === ringingAlarm.id);
     inlineText = alarm ? alarm.name : '';
-    const dict = loadConfig().language === 'zh' ? '单击关闭闹钟' : 'Click to dismiss';
+    const dict = cfgNow.language === 'zh' ? '单击关闭闹钟' : 'Click to dismiss';
     inlineText2 = dict;
   }
   // 2. Check retry-waiting alarms → "? hh:mm ?" ↔ alarm name
@@ -181,6 +212,7 @@ function broadcastAlarmState() {
     retryTimers.forEach((timer, id) => {
       const alarm = alarms.find(a => a.id === id);
       if (alarm && alarm.enabled) {
+        // 排序键固定用 24 小时串（12 小时串的字典序是错的）
         const t = String(alarm.hour).padStart(2, '0') + ':' + String(alarm.minute).padStart(2, '0');
         if (!earliest || earliestTime > t) {
           earliest = alarm;
@@ -190,7 +222,7 @@ function broadcastAlarmState() {
     });
     if (earliest) {
       inlineType = 'retry';
-      inlineTime = String(earliest.hour).padStart(2, '0') + ':' + String(earliest.minute).padStart(2, '0');
+      inlineTime = formatClockTime(earliest.hour, earliest.minute, cfgNow);
       inlineText = '? ' + inlineTime + ' ?';
       inlineText2 = earliest.name;
     }
@@ -205,7 +237,7 @@ function broadcastAlarmState() {
         const t = new Date(a.nextTrigger);
         if (t > now && (!nearest || t < nearest)) {
           nearest = t;
-          nearestTime = String(a.hour).padStart(2, '0') + ':' + String(a.minute).padStart(2, '0');
+          nearestTime = formatClockTime(a.hour, a.minute, cfgNow);
         }
       });
       if (nearest) {

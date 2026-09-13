@@ -16,10 +16,29 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 
 /* ====== 时间显示 ====== */
 #time-display {
+  position: relative;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 20px;
   border-radius: 8px;
 }
+
+/* ====== [v1.0.5.3] AM / PM 角标（12 小时制）====== */
+/* 绝对定位在时间显示区四角；td 的内边距由 renderer.js 按角标实际尺寸动态撑开，
+   因此角标始终落在留白内：不压数字，也不会超出窗口被裁掉 */
+.ampm-inline {
+  position: absolute;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.ampm-inline.hidden { display: none; }
+.ampm-inline.top-left { top: 0; left: 0; }
+.ampm-inline.top-right { top: 0; right: 0; }
+.ampm-inline.bottom-left { bottom: 0; left: 0; }
+.ampm-inline.bottom-right { bottom: 0; right: 0; }
 
 /* ====== 信息栏 ====== */
 .info-bar {
