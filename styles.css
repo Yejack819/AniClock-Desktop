@@ -116,25 +116,25 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
     opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
     filter var(--blur-duration, 300ms) ease-out;
 }
-.blur-enabled .anim-slide-down .digit-current.animate-out {
-  filter: blur(var(--blur-strength, 15px));
-  transition:
-    transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
-    filter var(--blur-duration, 300ms) ease-out;
-}
 
 /* ====== 由小放大滑入（勾选 scaleInEnabled 时激活）====== */
-.scale-in .digit-next {
+/* [v1.0.5.2] 修正：scale-in 与 anim-* 两个 class 都挂在同一个 #clock 元素上，
+   这里必须用复合选择器（中间没有空格）。原先后代写法
+   `.scale-in .anim-slide-down ...` 要求 .anim-slide-down 是 .scale-in 的子元素，
+   永远匹配不上，导致「下滑翻转 + 由小放大滑入」时新数字被
+   `.scale-in .digit-next`（translateY(100%)）接管，从下方滑入、方向错乱。
+   同时把规则限定在 slide-up / slide-down 两种翻转动画上，
+   避免 fade / shrink / expand / flip-3d 误叠加位移。 */
+.scale-in.anim-slide-up .digit-next {
   transform: translateY(100%) scale(var(--scale-factor, 0.3));
 }
-.scale-in .digit-next.animate-in {
+.scale-in.anim-slide-up .digit-next.animate-in {
   transform: translateY(0) scale(1);
 }
-.scale-in .anim-slide-down .digit-next {
+.scale-in.anim-slide-down .digit-next {
   transform: translateY(-100%) scale(var(--scale-factor, 0.3));
 }
-.scale-in .anim-slide-down .digit-next.animate-in {
+.scale-in.anim-slide-down .digit-next.animate-in {
   transform: translateY(0) scale(1);
 }
 

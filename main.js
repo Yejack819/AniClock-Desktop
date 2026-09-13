@@ -747,6 +747,47 @@ function getSolidClockBgColor() {
   return solidifyBgColor(cfg.bgColor);
 }
 
+// [v1.0.5.2] ====== 关灯背景同步（含昼夜自动配色）======
+// 关灯前一次下发的纯色背景，避免重复广播
+let lastLightsOffBg = null;
+// 昼夜自动切换的定时器（精确对齐 6:00 / 18:00，不轮询）
+let autoColorSyncTimer = null;
+
+// 把当前应显示的纯色背景推给所有关灯窗口（force=true 时忽略去重）
+function pushLightsOffBg(force) {
+  if (!lightsOffWindows.length) return;
+  const bg = getSolidClockBgColor();
+  if (!force && bg === lastLightsOffBg) return;
+  lastLightsOffBg = bg;
+  lightsOffWindows.forEach(win => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('lights-off-bg-update', bg);
+    }
+  });
+}
+
+// 距下一次昼夜切换（6:00 / 18:00）的毫秒数
+function msUntilNextAutoColorSwitch() {
+  const now = new Date();
+  const next = new Date(now);
+  const h = now.getHours();
+  if (h < 6) next.setHours(6, 0, 0, 0);
+  else if (h < 18) next.setHours(18, 0, 0, 0);
+  else { next.setDate(next.getDate() + 1); next.setHours(6, 0, 0, 0); }
+  return Math.max(1000, next.getTime() - now.getTime() + 800);
+}
+
+// 精确排到下一个切换点：到点后强制刷新关灯背景，并继续排下一次
+function scheduleAutoColorSync() {
+  if (autoColorSyncTimer) clearTimeout(autoColorSyncTimer);
+  autoColorSyncTimer = setTimeout(() => {
+    autoColorSyncTimer = null;
+    // 系统休眠后定时器可能晚触发，这里按当前时间重新计算颜色，天然自愈
+    pushLightsOffBg(true);
+    scheduleAutoColorSync();
+  }, msUntilNextAutoColorSwitch());
+}
+
 function getLightsOffDisplays() {
   const cfg = loadConfig();
   const displays = screen.getAllDisplays();
@@ -799,6 +840,7 @@ function openLightsOffWindows() {
     return;
   }
   const bg = getSolidClockBgColor();
+  lastLightsOffBg = bg; // [v1.0.5.2] 记录开灯时的初始颜色，避免随即重复广播
   const displays = getLightsOffDisplays();
   // 记录关灯前的时钟位置，退出时还原
   if (!clockBoundsBeforeLightsOff && mainWindow && !mainWindow.isDestroyed()) {
@@ -893,6 +935,7 @@ function openLightsOffWindows() {
 function closeLightsOffWindows() {
   lightsOffRestarting = false;
   lightsOffLocked = false; // 关闭关灯时重置锁定状态，下次进入默认未锁定
+  lastLightsOffBg = null;  // [v1.0.5.2] 复位背景去重缓存，下次开灯重新下发
   const closing = lightsOffWindows.filter(win => win && !win.isDestroyed());
   lightsOffWindows = [];
   closing.forEach(win => win.close());
@@ -1039,15 +1082,9 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
   if (newConfig && newConfig.language && tray) {
     tray.setToolTip(newConfig.language === 'zh' ? '大时钟' : 'Digital Clock');
   }
-  // [v1.0.5] 背景色变化 → 同步关灯窗口
-  if (newConfig && (newConfig.bgColor !== undefined || newConfig.autoColor !== undefined)
-      && lightsOffWindows.length > 0) {
-    const bg = getSolidClockBgColor();
-    lightsOffWindows.forEach(win => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('lights-off-bg-update', bg);
-      }
-    });
+  // [v1.0.5] 背景色变化 → 同步关灯窗口（[v1.0.5.2] 统一走 pushLightsOffBg 强制刷新）
+  if (newConfig && (newConfig.bgColor !== undefined || newConfig.autoColor !== undefined)) {
+    pushLightsOffBg(true);
   }
   return { success: true };
 });
@@ -1334,6 +1371,9 @@ app.whenReady().then(() => {
 
   // Start alarm checking interval (every 1 second)
   alarmCheckInterval = setInterval(checkAlarms, 1000);
+
+  // [v1.0.5.2] 昼夜自动配色会在 6:00 / 18:00 切换，到点把新背景同步给关灯窗口
+  scheduleAutoColorSync();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
