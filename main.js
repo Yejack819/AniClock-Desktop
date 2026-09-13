@@ -22,6 +22,7 @@ const DEFAULT_CONFIG = {
   alarmSoundDuration: 120, alarmFlash: true, alarmAutoShow: true, alarmAutoPassthrough: true, alarmAutoTop: true,
   welcomeShown: false,
   settingsFontSize: 'md',
+  settingsTab: 'mode',
   mode: 'normal',
   lightsOff: false,
   lightsOffDisplay: 'clock',
@@ -644,8 +645,10 @@ function openSettingsWindow() {
     settingsWindow.focus();
     return;
   }
+  // [v1.0.5.1] 横版布局：左侧导航栏 + 右侧内容区
   settingsWindow = new BrowserWindow({
-    width: 560, height: 680,
+    width: 900, height: 620,
+    minWidth: 700, minHeight: 460,
     resizable: true,
     frame: true,
     icon: path.join(__dirname, 'assets', 'icon.png'),

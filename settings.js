@@ -57,6 +57,9 @@ const LOCALE = {
     lightsOffDisplay: '关灯显示器', displayClock: '时钟所在显示器', displayPrimary: '主显示器', displayAll: '所有显示器',
     lightsOffOn: '已开启关灯',
     lightsOffFail: '开启关灯失败：',
+    // [v1.0.5.1] 左侧导航
+    navMode: '模式', navAppearance: '外观', navAnimation: '动画', navTime: '时间',
+    navAlarm: '闹钟', navPosition: '位置', navSystem: '系统', navData: '数据管理',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -115,6 +118,9 @@ const LOCALE = {
     lightsOffDisplay: 'Lights Off Display', displayClock: 'Display with Clock', displayPrimary: 'Primary Display', displayAll: 'All Displays',
     lightsOffOn: 'Lights Off is ON',
     lightsOffFail: 'Failed to enable Lights Off: ',
+    // [v1.0.5.1] Sidebar navigation
+    navMode: 'Mode', navAppearance: 'Appearance', navAnimation: 'Animation', navTime: 'Time',
+    navAlarm: 'Alarm', navPosition: 'Position', navSystem: 'System', navData: 'Data',
   },
 };
 
@@ -428,6 +434,9 @@ function syncUIFromConfig() {
   els.alarm_auto_show.checked = config.alarmAutoShow !== false;
   els.alarm_auto_passthrough.checked = config.alarmAutoPassthrough !== false;
   els.alarm_auto_top.checked = config.alarmAutoTop !== false;
+
+  // [v1.0.5.1] 恢复上次停留的面板（需在 applyMode 之后，以避开教育模式隐藏项）
+  activatePanel(config.settingsTab || 'mode', false);
 }
 
 async function saveAndApply(nc) {
@@ -456,12 +465,45 @@ function applyMode(mode) {
     els.anim_speed.value = EDU_ANIM_DURATION;
     if (els.anim_speed_label) els.anim_speed_label.textContent = EDU_ANIM_DURATION;
   }
+  ensureActivePanel();
+}
+
+// ====== [v1.0.5.1] 左侧导航 ======
+const navItems = Array.from(document.querySelectorAll('.nav-item'));
+const panels = Array.from(document.querySelectorAll('.panel'));
+
+// 教育模式下被整块隐藏的导航项不可进入
+function isNavAvailable(btn) {
+  return !(document.body.classList.contains('mode-education') && btn.classList.contains('edu-hide'));
+}
+
+// 切换右侧面板；请求的面板不可用时回退到第一个可用面板
+function activatePanel(id, persist) {
+  let btn = navItems.find(b => b.dataset.panel === id);
+  if (!btn || !isNavAvailable(btn)) btn = navItems.find(isNavAvailable);
+  if (!btn) return;
+  navItems.forEach(b => b.classList.toggle('active', b === btn));
+  panels.forEach(p => p.classList.toggle('active', p.dataset.panel === btn.dataset.panel));
+  const scroller = document.getElementById('settings-content');
+  if (scroller) scroller.scrollTop = 0;
+  if (persist) saveAndApply({ settingsTab: btn.dataset.panel });
+}
+
+// 当前面板被模式切换隐藏时，自动跳到可用面板
+function ensureActivePanel() {
+  const active = navItems.find(b => b.classList.contains('active'));
+  if (!active || !isNavAvailable(active)) activatePanel('mode', false);
 }
 
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
   await refreshLightsOffDisplays();
+
+  // [v1.0.5.1] 左侧导航点击切换面板
+  navItems.forEach(btn => {
+    btn.addEventListener('click', () => activatePanel(btn.dataset.panel, true));
+  });
 
   // Load alarms
   try { alarmList = await window.electronAPI.getAllAlarms() || []; } catch (e) { alarmList = []; }
