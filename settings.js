@@ -9,6 +9,11 @@ const LOCALE = {
     fontSize: '字号', infoScale: '日期/时区比例', animSpeed: '动画时间', animType: '动画效果',
     animSlideUp: '上滑翻转', animSlideDown: '下滑翻转', animFade: '淡入淡出',
     animShrink: '缩（旧变小）', animExpand: '放（旧变大）', animFlip3d: '3D旋转', animNone: '无动画',
+    // [v1.0.5.4] 翻转/缩放 合并为动画家族 + 方向
+    animFlip: '翻转', animScale: '缩放',
+    animFlipDir: '翻转方向', animScaleDir: '缩放方向',
+    flipDirUp: '向上滑入（旧数字向上移出）', flipDirDown: '向下滑入（旧数字向下移出）',
+    scaleDirShrink: '缩小（旧数字变小消失）', scaleDirGrow: '放大（旧数字变大消失）',
     staggerDelay: '错峰延迟', staggerDir: '错峰方向', staggerLTR: '从左到右', staggerRTL: '从右到左',
     blurEnabled: '添加模糊', blurDuration: '模糊持续', blurStrength: '模糊强度',
     scaleInEnabled: '由小放大滑入', scaleInFactor: '初始大小',
@@ -107,6 +112,11 @@ const LOCALE = {
     fontSize: 'Font Size', infoScale: 'Date/TZ size ratio', animSpeed: 'Anim Duration', animType: 'Animation',
     animSlideUp: 'Slide Up', animSlideDown: 'Slide Down', animFade: 'Fade',
     animShrink: 'Shrink', animExpand: 'Expand', animFlip3d: '3D Flip', animNone: 'None',
+    // [v1.0.5.4] Flip / Scale families with direction
+    animFlip: 'Flip', animScale: 'Scale',
+    animFlipDir: 'Flip Direction', animScaleDir: 'Scale Direction',
+    flipDirUp: 'Slide up (old digit exits upward)', flipDirDown: 'Slide down (old digit exits downward)',
+    scaleDirShrink: 'Shrink (old digit shrinks away)', scaleDirGrow: 'Grow (old digit grows away)',
     staggerDelay: 'Stagger Delay', staggerDir: 'Stagger Direction', staggerLTR: 'Left to Right', staggerRTL: 'Right to Left',
     blurEnabled: 'Add Blur', blurDuration: 'Blur Duration', blurStrength: 'Blur Strength',
     scaleInEnabled: 'Scale-in', scaleInFactor: 'Start Size',
@@ -207,6 +217,12 @@ const els = {
   info_scale: $('info-scale'), info_scale_label: $('info-scale-label'),
   anim_speed: $('anim-speed'), anim_speed_label: $('anim-speed-label'),
   anim_type: $('anim-type'),
+  // [v1.0.5.4] 翻转/缩放 方向选择
+  anim_flip_dir: $('anim-flip-dir'),
+  anim_flip_dir_row: document.getElementById('anim-flip-dir-row'),
+  anim_scale_dir: $('anim-scale-dir'),
+  anim_scale_dir_row: document.getElementById('anim-scale-dir-row'),
+  date_position_row: document.getElementById('date-position-row'),
   stagger_delay: $('stagger-delay'), stagger_delay_label: $('stagger-delay-label'),
   stagger_dir: $('stagger-dir'),
   blur_controls: document.getElementById('blur-controls'),
@@ -274,12 +290,33 @@ let currentLang = 'zh';
 let alarmList = [];
 let activeAlarmIds = { ringingId: null, retryIds: [] };
 
+// [v1.0.5.4] 动画家族归一化：旧的 slide-up/slide-down/shrink/expand → 翻转/缩放 + 方向
+const ANIM_LEGACY_MAP = { 'slide-up': ['flip', 'up'], 'slide-down': ['flip', 'down'], 'shrink': ['scale', 'shrink'], 'expand': ['scale', 'grow'] };
+const ANIM_TYPES = ['flip', 'scale', 'fade', 'flip-3d', 'none'];
+function normalizeAnimConfig(c) {
+  const hit = ANIM_LEGACY_MAP[c.animType];
+  if (hit) {
+    c.animType = hit[0];
+    if (hit[0] === 'flip') c.animFlipDir = hit[1];
+    else c.animScaleDir = hit[1];
+  }
+  if (ANIM_TYPES.indexOf(c.animType) < 0) c.animType = 'flip';
+  if (c.animFlipDir !== 'up' && c.animFlipDir !== 'down') c.animFlipDir = 'up';
+  if (c.animScaleDir !== 'shrink' && c.animScaleDir !== 'grow') c.animScaleDir = 'shrink';
+  return c;
+}
+
 function syncAnimUI(){
-  els.anim_speed.disabled=els.anim_type.value==="none";
-  const canBlur=els.anim_type.value==="slide-up"||els.anim_type.value==="slide-down";
-  els.blur_controls.classList.toggle('hidden',!canBlur);
-  els.scale_controls.classList.toggle('hidden',!canBlur);
-  if(canBlur && els.blur_enabled.checked){
+  const at = els.anim_type.value;
+  els.anim_speed.disabled = at === 'none';
+  // 方向选择只在对应动画家族下出现
+  if (els.anim_flip_dir_row) els.anim_flip_dir_row.classList.toggle('hidden', at !== 'flip');
+  if (els.anim_scale_dir_row) els.anim_scale_dir_row.classList.toggle('hidden', at !== 'scale');
+  // 「模糊」「由小放大滑入」是翻转的可选附加项，只服务翻转家族（避免残留在其它动画上）
+  const canExtras = at === 'flip';
+  els.blur_controls.classList.toggle('hidden', !canExtras);
+  els.scale_controls.classList.toggle('hidden', !canExtras);
+  if(canExtras && els.blur_enabled.checked){
     els.blur_detail.classList.remove('hidden');
     const maxV=parseInt(els.anim_speed.value,10);
     els.blur_duration.max=maxV;
@@ -291,7 +328,7 @@ function syncAnimUI(){
   } else {
     els.blur_detail.classList.add('hidden');
   }
-  if(canBlur && els.scale_in_enabled.checked){
+  if(canExtras && els.scale_in_enabled.checked){
     els.scale_detail.classList.remove('hidden');
   } else {
     els.scale_detail.classList.add('hidden');
@@ -342,6 +379,7 @@ function renderTZList() {
 function renderAlarmList() {
   const dict = LOCALE[currentLang] || LOCALE.zh;
   els.alarm_list.innerHTML = '';
+  syncDatePositionUI(); // [v1.0.5.4] 闹钟开关变化会影响「日期位置」是否该显示
 
   if (alarmList.length === 0) {
     const empty = document.createElement('div');
@@ -494,8 +532,10 @@ function syncUIFromConfig() {
   els.font_size.value = config.fontSize; els.font_size_label.textContent = config.fontSize;
   els.info_scale.value = config.infoScale || 0.3; els.info_scale_label.textContent = (config.infoScale || 0.3).toFixed(2);
   els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
-  els.anim_type.value = config.animType || 'slide-up';
-  if (els.anim_type.value === 'scale') { config.animType = 'shrink'; els.anim_type.value = 'shrink'; }
+  normalizeAnimConfig(config);
+  els.anim_type.value = config.animType;
+  els.anim_flip_dir.value = config.animFlipDir;
+  els.anim_scale_dir.value = config.animScaleDir;
   els.stagger_delay.value = config.staggerDelay || 0; els.stagger_delay_label.textContent = config.staggerDelay || 0;
   els.stagger_dir.value = config.staggerDirection || 'ltr';
   els.blur_enabled.checked = !!config.blurEnabled;
@@ -508,6 +548,7 @@ function syncUIFromConfig() {
   els.show_seconds.checked = config.showSeconds !== false;
   els.show_date.checked = config.showDate !== false;
   els.show_weekday.checked = config.showWeekday !== false;
+  syncDatePositionUI(); // [v1.0.5.4]
   els.date_position.value = config.datePosition || 'below';
   // [v1.0.5.3] 时间制式 + AM/PM 角标
   els.hour_format_select.value = config.hourFormat || 'auto';
@@ -567,7 +608,6 @@ function syncUIFromConfig() {
 async function saveAndApply(nc) {
   const langChanged = nc.language && nc.language !== config.language;
   config = { ...config, ...nc };
-  if (config.animType === 'scale') config.animType = 'shrink';
   try { await window.electronAPI.saveConfig(config); } catch (e) {}
   window.electronAPI.notifyClockUpdate(config);
   if (langChanged) applyLanguage(config.language);
@@ -594,6 +634,14 @@ function hourFormatIs12(fmt) {
 function syncHourFormatUI() {
   if (!els.ampm_corner_row) return;
   els.ampm_corner_row.classList.toggle('hidden', !hourFormatIs12(els.hour_format_select.value));
+}
+
+// [v1.0.5.4] 「日期位置」只在信息栏确实有内容时才有意义：日期 / 星期 / 闹钟 全关就隐藏
+function syncDatePositionUI() {
+  if (!els.date_position_row) return;
+  const hasAlarms = (alarmList || []).some(a => a && a.enabled !== false);
+  const visible = hasAlarms || els.show_date.checked || els.show_weekday.checked;
+  els.date_position_row.classList.toggle('hidden', !visible);
 }
 
 // [v1.0.5.4] 时间校准：正=调快，负=调慢；秒与毫秒合成毫秒数
@@ -823,6 +871,9 @@ function ensureActivePanel() {
   els.info_scale.addEventListener('input', () => { const v = parseFloat(els.info_scale.value); els.info_scale_label.textContent = v.toFixed(2); saveAndApply({ infoScale: v }); });
   els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); syncAnimUI(); });
   els.anim_type.addEventListener('change', function() { saveAndApply({ animType: els.anim_type.value }); syncAnimUI(); });
+  // [v1.0.5.4] 翻转 / 缩放 的方向
+  els.anim_flip_dir.addEventListener('change', function() { saveAndApply({ animFlipDir: els.anim_flip_dir.value }); });
+  els.anim_scale_dir.addEventListener('change', function() { saveAndApply({ animScaleDir: els.anim_scale_dir.value }); });
   els.stagger_delay.addEventListener('input', function() { var v = parseInt(els.stagger_delay.value,10); els.stagger_delay_label.textContent = v; saveAndApply({ staggerDelay: v }); });
   els.stagger_dir.addEventListener('change', function() { saveAndApply({ staggerDirection: els.stagger_dir.value }); });
   els.blur_enabled.addEventListener('change', function() { saveAndApply({ blurEnabled: els.blur_enabled.checked }); syncAnimUI(); });
@@ -872,8 +923,8 @@ function ensureActivePanel() {
   setInterval(syncAutoAdjustUI, 1000);
 
   // 日期
-  els.show_date.addEventListener('change', () => saveAndApply({ showDate: els.show_date.checked }));
-  els.show_weekday.addEventListener('change', () => saveAndApply({ showWeekday: els.show_weekday.checked }));
+  els.show_date.addEventListener('change', () => { saveAndApply({ showDate: els.show_date.checked }); syncDatePositionUI(); });
+  els.show_weekday.addEventListener('change', () => { saveAndApply({ showWeekday: els.show_weekday.checked }); syncDatePositionUI(); });
   els.date_position.addEventListener('change', () => saveAndApply({ datePosition: els.date_position.value }));
 
   // 多时区

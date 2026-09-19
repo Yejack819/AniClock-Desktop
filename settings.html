@@ -134,13 +134,27 @@
         <div class="setting-row edu-hide">
           <label data-lang="animType">动画效果</label>
           <select id="anim-type">
-            <option value="slide-up" data-lang="animSlideUp">上滑翻转</option>
-            <option value="slide-down" data-lang="animSlideDown">下滑翻转</option>
-            <option value="fade" data-lang="animFade">淡入淡出</option>
-            <option value="shrink" data-lang="animShrink">缩（旧变小）</option>
-            <option value="expand" data-lang="animExpand">放（旧变大）</option>
+            <option value="flip" data-lang="animFlip">翻转</option>
+            <option value="scale" data-lang="animScale">缩放</option>
             <option value="flip-3d" data-lang="animFlip3d">3D旋转</option>
+            <option value="fade" data-lang="animFade">淡入淡出</option>
             <option value="none" data-lang="animNone">无动画</option>
+          </select>
+        </div>
+
+        <div class="setting-row edu-hide hidden" id="anim-flip-dir-row">
+          <label data-lang="animFlipDir">翻转方向</label>
+          <select id="anim-flip-dir">
+            <option value="up" data-lang="flipDirUp">向上滑入（旧数字向上移出）</option>
+            <option value="down" data-lang="flipDirDown">向下滑入（旧数字向下移出）</option>
+          </select>
+        </div>
+
+        <div class="setting-row edu-hide hidden" id="anim-scale-dir-row">
+          <label data-lang="animScaleDir">缩放方向</label>
+          <select id="anim-scale-dir">
+            <option value="shrink" data-lang="scaleDirShrink">缩小（旧数字变小消失）</option>
+            <option value="grow" data-lang="scaleDirGrow">放大（旧数字变大消失）</option>
           </select>
         </div>
 
@@ -315,7 +329,7 @@
           </label>
         </div>
 
-        <div class="setting-row edu-hide">
+        <div class="setting-row edu-hide" id="date-position-row">
           <label data-lang="datePosition">日期位置</label>
           <select id="date-position">
             <option value="above" data-lang="dateAbove">上方</option>

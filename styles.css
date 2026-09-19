@@ -70,13 +70,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ====== 动画：下滑 Slide-Down ====== */
-.anim-slide-down .digit-next { transform: translateY(-100%); }
-.anim-slide-down .digit-current.animate-out {
+/* ====== 动画：翻转（方向：上 / 下）====== */
+/* 基础规则（.digit-next / .digit-current.animate-out）本身就是「向上滑入」，
+   这里只补「向下」的覆盖，避免重复声明 */
+.anim-flip.dir-down .digit-next { transform: translateY(-100%); }
+.anim-flip.dir-down .digit-current.animate-out {
   transform: translateY(100%); opacity: 0;
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.anim-slide-down .digit-next.animate-in {
+.anim-flip.dir-down .digit-next.animate-in {
   transform: translateY(0); opacity: 1;
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -92,24 +94,23 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   transition: opacity var(--anim-duration, 350ms) ease;
 }
 
-/* ====== 动画：缩 Shrink (旧变小) ====== */
-.anim-shrink .digit-current.animate-out {
+/* ====== 动画：缩放（方向：旧数字缩小 / 放大）====== */
+.anim-scale.dir-shrink .digit-current.animate-out {
   transform: scale(0.3); opacity: 0;
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.anim-shrink .digit-next { transform: none; }
-.anim-shrink .digit-next.animate-in {
+.anim-scale.dir-shrink .digit-next { transform: none; }
+.anim-scale.dir-shrink .digit-next.animate-in {
   transform: none; opacity: 1;
   transition: opacity var(--anim-duration, 350ms) ease;
 }
 
-/* ====== 动画：放 Expand (旧变大) ====== */
-.anim-expand .digit-current.animate-out {
+.anim-scale.dir-grow .digit-current.animate-out {
   transform: scale(1.5); opacity: 0;
   transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.anim-expand .digit-next { transform: none; }
-.anim-expand .digit-next.animate-in {
+.anim-scale.dir-grow .digit-next { transform: none; }
+.anim-scale.dir-grow .digit-next.animate-in {
   transform: none; opacity: 1;
   transition: opacity var(--anim-duration, 350ms) ease;
 }
@@ -127,8 +128,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   transition: transform var(--anim-duration, 350ms) ease-out, opacity var(--anim-duration, 350ms) ease-out;
 }
 
-/* ====== 添加模糊（勾选 blurEnabled 时激活）====== */
-.blur-enabled .digit-current.animate-out {
+/* ====== 附加效果：模糊（勾选 blurEnabled 时激活）======
+   [v1.0.5.4] 追加 .anim-flip 限定：模糊是「翻转」的可选附加项，
+   必须只在翻转下生效，否则切到淡入淡出/缩放等动画时会残留（原 bug）*/
+.blur-enabled.anim-flip .digit-current.animate-out {
   filter: blur(var(--blur-strength, 15px));
   transition:
     transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -136,24 +139,20 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
     filter var(--blur-duration, 300ms) ease-out;
 }
 
-/* ====== 由小放大滑入（勾选 scaleInEnabled 时激活）====== */
-/* [v1.0.5.2] 修正：scale-in 与 anim-* 两个 class 都挂在同一个 #clock 元素上，
-   这里必须用复合选择器（中间没有空格）。原先后代写法
-   `.scale-in .anim-slide-down ...` 要求 .anim-slide-down 是 .scale-in 的子元素，
-   永远匹配不上，导致「下滑翻转 + 由小放大滑入」时新数字被
-   `.scale-in .digit-next`（translateY(100%)）接管，从下方滑入、方向错乱。
-   同时把规则限定在 slide-up / slide-down 两种翻转动画上，
-   避免 fade / shrink / expand / flip-3d 误叠加位移。 */
-.scale-in.anim-slide-up .digit-next {
+/* ====== 附加效果：由小放大滑入（勾选 scaleInEnabled 时激活）======
+   [v1.0.5.4] 合并动画家族后的修正：同样只跟随「翻转」家族，并区分上/下方向。
+   注意 scale-in 与 anim-flip / dir-* 都挂在同一个 #clock 元素上，
+   必须用复合选择器（中间无空格）。 */
+.scale-in.anim-flip.dir-up .digit-next {
   transform: translateY(100%) scale(var(--scale-factor, 0.3));
 }
-.scale-in.anim-slide-up .digit-next.animate-in {
+.scale-in.anim-flip.dir-up .digit-next.animate-in {
   transform: translateY(0) scale(1);
 }
-.scale-in.anim-slide-down .digit-next {
+.scale-in.anim-flip.dir-down .digit-next {
   transform: translateY(-100%) scale(var(--scale-factor, 0.3));
 }
-.scale-in.anim-slide-down .digit-next.animate-in {
+.scale-in.anim-flip.dir-down .digit-next.animate-in {
   transform: translateY(0) scale(1);
 }
 

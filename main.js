@@ -13,7 +13,7 @@ function getAlarmsPath() {
 
 const DEFAULT_CONFIG = {
   color: '#000000', bgColor: 'rgba(255,255,255,0.2)', fontFamily: 'Arial',
-  fontSize: 200, animType: 'slide-up', positionPreset: 'center', x: 0, y: 0,
+  fontSize: 200, animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', positionPreset: 'center', x: 0, y: 0,
   showSeconds: true, showDate: true, showWeekday: true, datePosition: 'below', autoColor: false,
   extraTimezones: [], animDuration: 350, staggerDelay: 0, staggerDirection: 'ltr',
   layerMode: 'alwaysOnTop', autoStart: false, language: 'zh',
@@ -40,19 +40,41 @@ const DEFAULT_CONFIG = {
   lightsOffDisplay: 'clock',
 };
 
+// [v1.0.5.4] 动画类型归一化：旧的「上滑翻转 / 下滑翻转 / 缩 / 放」已合并为
+// 「翻转（带方向）」与「缩放（带方向）」，这里把老配置迁移过来并兜底非法值
+const ANIM_TYPES = ['flip', 'scale', 'fade', 'flip-3d', 'none'];
+const ANIM_LEGACY = {
+  'slide-up': ['flip', 'up'],
+  'slide-down': ['flip', 'down'],
+  'shrink': ['scale', 'shrink'],
+  'expand': ['scale', 'grow'],
+};
+function normalizeAnimConfig(cfg) {
+  const hit = ANIM_LEGACY[cfg.animType];
+  if (hit) {
+    cfg.animType = hit[0];
+    if (hit[0] === 'flip') cfg.animFlipDir = hit[1];
+    else cfg.animScaleDir = hit[1];
+  }
+  if (ANIM_TYPES.indexOf(cfg.animType) < 0) cfg.animType = 'flip';
+  if (cfg.animFlipDir !== 'up' && cfg.animFlipDir !== 'down') cfg.animFlipDir = 'up';
+  if (cfg.animScaleDir !== 'shrink' && cfg.animScaleDir !== 'grow') cfg.animScaleDir = 'shrink';
+  return cfg;
+}
+
 function loadConfig() {
   try {
     if (!fs.existsSync(getConfigPath())) {
       fs.writeFileSync(getConfigPath(), JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
-      return { ...DEFAULT_CONFIG };
+      return normalizeAnimConfig({ ...DEFAULT_CONFIG });
     }
     const raw = fs.readFileSync(getConfigPath(), 'utf-8');
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_CONFIG, ...parsed };
+    return normalizeAnimConfig({ ...DEFAULT_CONFIG, ...parsed });
   } catch (err) {
     console.error('配置文件损坏，回退默认配置:', err.message);
     fs.writeFileSync(getConfigPath(), JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
-    return { ...DEFAULT_CONFIG };
+    return normalizeAnimConfig({ ...DEFAULT_CONFIG });
   }
 }
 
@@ -1375,7 +1397,7 @@ function pickImportedConfig(parsed) {
 
 // 生成最终落盘的配置：白名单过滤 + 安全兜底
 function buildImportedConfig(cfgIn) {
-  const merged = { ...DEFAULT_CONFIG, ...sanitizeImportedConfig(cfgIn) };
+  const merged = normalizeAnimConfig({ ...DEFAULT_CONFIG, ...sanitizeImportedConfig(cfgIn) });
   merged.welcomeShown = true; // 导入后不要再走欢迎页
   merged.lightsOff = false;   // 导入后不要一启动就全屏关灯
   // 导入的阶梯锚点可能来自很久以前，直接用会让累积量暴涨：重新锚定到当前时刻
