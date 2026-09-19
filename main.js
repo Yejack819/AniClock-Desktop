@@ -28,6 +28,13 @@ const DEFAULT_CONFIG = {
   ampmCorner: 'top-right',
   // [v1.0.5.4] 时间校准（毫秒，正=显示比系统快，负=慢）
   timeOffsetMs: 0,
+  // [v1.0.5.4] 定时自动校准：每隔固定时间自动叠加一个固定的提前/延后量（补偿走时误差）
+  // 累积量 = base + floor((now - anchor) / interval) * amount，用阶梯函数确定性计算，不需要定时器
+  autoAdjustEnabled: false,
+  autoAdjustIntervalSec: 3600, // 间隔（秒），下限 5 秒
+  autoAdjustAmountMs: 0,       // 每次调整量（正=提前/调快，负=延后/调慢）
+  autoAdjustBaseMs: 0,         // 重新配置时承接的既有累积量（避免改设置时跳变或丢量）
+  autoAdjustAnchor: 0,         // 阶梯起点时间戳（ms），0 表示未锚定
   mode: 'normal',
   lightsOff: false,
   lightsOffDisplay: 'clock',
@@ -1371,6 +1378,8 @@ function buildImportedConfig(cfgIn) {
   const merged = { ...DEFAULT_CONFIG, ...sanitizeImportedConfig(cfgIn) };
   merged.welcomeShown = true; // 导入后不要再走欢迎页
   merged.lightsOff = false;   // 导入后不要一启动就全屏关灯
+  // 导入的阶梯锚点可能来自很久以前，直接用会让累积量暴涨：重新锚定到当前时刻
+  merged.autoAdjustAnchor = Date.now();
   return merged;
 }
 

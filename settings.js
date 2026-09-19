@@ -85,6 +85,18 @@ const LOCALE = {
     navAbout: '关于',
     aboutTagline: '可深度定制的桌面翻页时钟',
     aboutAuthors: '作者', aboutFoot: '基于 Electron 构建 · 感谢使用',
+    aboutVersion: '版本',
+    // [v1.0.5.4] 定时自动校准
+    autoAdjust: '定时自动校准',
+    autoInterval: '调整间隔', autoAmount: '每次调整',
+    autoDirAhead: '提前', autoDirBehind: '延后',
+    unitSecond: '秒', unitMinute: '分钟', unitHour: '小时',
+    autoOff: '未开启定时自动校准',
+    autoZeroAmount: '每次调整量为 0，不会产生变化',
+    autoSummary: '已累计 {delta} · 每 {interval}{dir} {amount} · 下次调整还有 {left}',
+    autoClamped: '已累计 {delta}（已达上限 {cap}）',
+    autoResetAccum: '重置累积量',
+    autoHint: '按固定间隔自动叠加提前/延后量，补偿走时误差；改动设置会重新计时，不会跳变',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -171,6 +183,18 @@ const LOCALE = {
     navAbout: 'About',
     aboutTagline: 'A deeply customizable desktop flip clock',
     aboutAuthors: 'Authors', aboutFoot: 'Built with Electron · Thanks for using',
+    aboutVersion: 'Version',
+    // [v1.0.5.4] Scheduled auto-calibration
+    autoAdjust: 'Scheduled auto-calibration',
+    autoInterval: 'Interval', autoAmount: 'Each step',
+    autoDirAhead: 'Advance', autoDirBehind: 'Delay',
+    unitSecond: 's', unitMinute: 'min', unitHour: 'h',
+    autoOff: 'Scheduled auto-calibration is off',
+    autoZeroAmount: 'Step is 0, nothing will change',
+    autoSummary: 'Accumulated {delta} · {dir} {amount} every {interval} · next in {left}',
+    autoClamped: 'Accumulated {delta} (capped at {cap})',
+    autoResetAccum: 'Reset accumulated',
+    autoHint: 'Adds a fixed advance/delay every interval to compensate drift. Changing settings re-anchors without jumping.',
   },
 };
 
@@ -213,6 +237,15 @@ const els = {
   calib_ms: document.getElementById('calib-ms'),
   calib_reset_btn: document.getElementById('calib-reset-btn'),
   calib_summary: document.getElementById('calib-summary'),
+  // [v1.0.5.4] 定时自动校准
+  auto_adjust_switch: document.getElementById('auto-adjust-switch'),
+  auto_interval: document.getElementById('auto-interval'),
+  auto_interval_unit: document.getElementById('auto-interval-unit'),
+  auto_dir: document.getElementById('auto-dir'),
+  auto_sec: document.getElementById('auto-sec'),
+  auto_ms: document.getElementById('auto-ms'),
+  auto_summary: document.getElementById('auto-summary'),
+  auto_reset_btn: document.getElementById('auto-reset-btn'),
   about_version: document.getElementById('about-version'),
   about_authors: document.getElementById('about-authors'),
   about_gitee: document.getElementById('about-gitee'),
@@ -279,6 +312,7 @@ function applyLanguage(lang) {
   });
   document.title = dict.settingsTitle;
   syncCalibUI(); // [v1.0.5.4] 校准摘要文案随语言切换
+  syncAutoAdjustUI(); // [v1.0.5.4] 自动校准摘要同理
   renderAlarmList(); // re-render with new locale
 }
 
@@ -485,6 +519,20 @@ function syncUIFromConfig() {
   els.calib_sec.value = Math.floor(Math.abs(offMs) / 1000);
   els.calib_ms.value = Math.abs(offMs) % 1000;
   syncCalibUI();
+  // [v1.0.5.4] 定时自动校准回填
+  els.auto_adjust_switch.checked = !!config.autoAdjustEnabled;
+  const ivSec = Math.max(AUTO_MIN_INTERVAL_SEC, Number(config.autoAdjustIntervalSec) || 3600);
+  // 按能被整除的最大单位回填，保证输入框里是个好看的整数
+  let ivUnit = '1';
+  if (ivSec % 3600 === 0) ivUnit = '3600';
+  else if (ivSec % 60 === 0) ivUnit = '60';
+  els.auto_interval_unit.value = ivUnit;
+  els.auto_interval.value = ivSec / parseInt(ivUnit, 10);
+  const autoAmt = Number(config.autoAdjustAmountMs) || 0;
+  els.auto_dir.value = autoAmt < 0 ? 'behind' : 'ahead';
+  els.auto_sec.value = Math.floor(Math.abs(autoAmt) / 1000);
+  els.auto_ms.value = Math.abs(autoAmt) % 1000;
+  syncAutoAdjustUI();
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
   els.language_select.value = config.language || 'zh';
@@ -571,6 +619,97 @@ function syncCalibUI() {
   const template = value > 0 ? dict.calibSummaryFast : dict.calibSummarySlow;
   els.calib_summary.textContent = (template || '').replace('{v}', (abs / 1000).toFixed(3) + unit);
   els.calib_summary.classList.add('active');
+}
+
+// ====== [v1.0.5.4] 定时自动校准（与 renderer.js 同一套计算规则）======
+const AUTO_MIN_INTERVAL_SEC = 5, AUTO_MAX_ABS_MS = 3600000; // 最小间隔 5 秒；累积上限 ±1 小时
+function clampAuto(v) { return Math.max(-AUTO_MAX_ABS_MS, Math.min(AUTO_MAX_ABS_MS, v)); }
+
+// 阶梯累积 = base + floor(已过间隔数) × 每次量；确定性计算，重启不丢，时钟回拨/未锚定按 0 步
+function autoDeltaMsOf(c, nowMs) {
+  if (!c || !c.autoAdjustEnabled) return 0;
+  const interval = Math.max(AUTO_MIN_INTERVAL_SEC, Number(c.autoAdjustIntervalSec) || AUTO_MIN_INTERVAL_SEC) * 1000;
+  const amount = Number(c.autoAdjustAmountMs) || 0;
+  const base = Number(c.autoAdjustBaseMs) || 0;
+  if (!amount) return clampAuto(base);
+  const anchor = Number(c.autoAdjustAnchor) || nowMs;
+  const steps = Math.floor(Math.max(0, nowMs - anchor) / interval);
+  return clampAuto(base + steps * amount);
+}
+
+function fmtOffset(ms) {
+  const sign = ms > 0 ? '+' : (ms < 0 ? '−' : '');
+  return sign + (Math.abs(ms) / 1000).toFixed(3) + (currentLang === 'zh' ? ' 秒' : ' s');
+}
+function fmtInterval(sec) {
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  if (sec % 3600 === 0) return (sec / 3600) + ' ' + dict.unitHour;
+  if (sec % 60 === 0) return (sec / 60) + ' ' + dict.unitMinute;
+  return sec + ' ' + dict.unitSecond;
+}
+function fmtCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  return (h > 0 ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+}
+
+function readAutoIntervalSec() {
+  const n = Math.max(1, Math.min(999, parseInt(els.auto_interval.value, 10) || 1));
+  return n * (parseInt(els.auto_interval_unit.value, 10) || 60);
+}
+function readAutoAmountMs() {
+  const sec = Math.max(0, Math.min(59, parseInt(els.auto_sec.value, 10) || 0));
+  const ms = Math.max(0, Math.min(999, parseInt(els.auto_ms.value, 10) || 0));
+  const total = sec * 1000 + ms;
+  return els.auto_dir.value === 'behind' ? -total : total;
+}
+
+// 保存并重新锚定：把「按旧配置算出的当前累积量」承接为 base —— 改设置既不跳变也不丢量；
+// 关闭开关时改为归零（累积量随之失效，回到仅手动校准）
+function commitAutoAdjust(patch) {
+  const now = Date.now();
+  const stillOn = patch.autoAdjustEnabled !== undefined ? !!patch.autoAdjustEnabled : !!config.autoAdjustEnabled;
+  const carried = stillOn ? autoDeltaMsOf(config, now) : 0;
+  saveAndApply({ autoAdjustBaseMs: carried, autoAdjustAnchor: stillOn ? now : 0, ...patch });
+  syncAutoAdjustUI();
+}
+
+function syncAutoAdjustUI() {
+  const on = !!config.autoAdjustEnabled;
+  if (els.auto_adjust_switch) els.auto_adjust_switch.checked = on;
+  document.querySelectorAll('.auto-only').forEach(el => el.classList.toggle('hidden', !on));
+  if (!els.auto_summary) return;
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  if (!on) {
+    els.auto_summary.textContent = dict.autoOff;
+    els.auto_summary.classList.remove('active');
+    return;
+  }
+  const now = Date.now();
+  const amount = Number(config.autoAdjustAmountMs) || 0;
+  const intervalSec = Math.max(AUTO_MIN_INTERVAL_SEC, Number(config.autoAdjustIntervalSec) || AUTO_MIN_INTERVAL_SEC);
+  const delta = autoDeltaMsOf(config, now);
+  if (!amount) {
+    els.auto_summary.textContent = dict.autoZeroAmount;
+    els.auto_summary.classList.remove('active');
+    return;
+  }
+  if (Math.abs(delta) >= AUTO_MAX_ABS_MS) {
+    els.auto_summary.textContent = (dict.autoClamped || '')
+      .replace('{delta}', fmtOffset(delta)).replace('{cap}', fmtOffset(AUTO_MAX_ABS_MS));
+    els.auto_summary.classList.add('active');
+    return;
+  }
+  const periodMs = intervalSec * 1000;
+  const anchor = Number(config.autoAdjustAnchor) || now;
+  const leftMs = periodMs - ((((now - anchor) % periodMs) + periodMs) % periodMs);
+  els.auto_summary.textContent = (dict.autoSummary || '')
+    .replace('{delta}', fmtOffset(delta))
+    .replace('{interval}', fmtInterval(intervalSec))
+    .replace('{dir}', amount > 0 ? dict.autoDirAhead : dict.autoDirBehind)
+    .replace('{amount}', fmtOffset(Math.abs(amount)))
+    .replace('{left}', fmtCountdown(leftMs));
+  els.auto_summary.classList.add('active');
 }
 
 // [v1.0.5] 模式切换（正常/教育）
@@ -717,6 +856,20 @@ function ensureActivePanel() {
     els.calib_ms.value = 0;
     applyCalib();
   });
+
+  // [v1.0.5.4] 定时自动校准：任何改动都重新锚定（承接既有累积量，不跳变）
+  els.auto_adjust_switch.addEventListener('change', () => commitAutoAdjust({ autoAdjustEnabled: els.auto_adjust_switch.checked }));
+  els.auto_interval.addEventListener('input', () => commitAutoAdjust({ autoAdjustIntervalSec: readAutoIntervalSec() }));
+  els.auto_interval_unit.addEventListener('change', () => commitAutoAdjust({ autoAdjustIntervalSec: readAutoIntervalSec() }));
+  els.auto_sec.addEventListener('input', () => commitAutoAdjust({ autoAdjustAmountMs: readAutoAmountMs() }));
+  els.auto_ms.addEventListener('input', () => commitAutoAdjust({ autoAdjustAmountMs: readAutoAmountMs() }));
+  els.auto_dir.addEventListener('change', () => commitAutoAdjust({ autoAdjustAmountMs: readAutoAmountMs() }));
+  els.auto_reset_btn.addEventListener('click', () => {
+    saveAndApply({ autoAdjustBaseMs: 0, autoAdjustAnchor: Date.now() });
+    syncAutoAdjustUI();
+  });
+  // 摘要里的「下次调整还有 …」需要每秒刷新
+  setInterval(syncAutoAdjustUI, 1000);
 
   // 日期
   els.show_date.addEventListener('change', () => saveAndApply({ showDate: els.show_date.checked }));

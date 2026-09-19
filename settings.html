@@ -247,6 +247,50 @@
           <div class="calib-summary" id="calib-summary">当前未校准</div>
         </div>
 
+        <!-- [v1.0.5.4] 定时自动校准 -->
+        <div class="setting-row edu-hide">
+          <label data-lang="autoAdjust">定时自动校准</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="auto-adjust-switch">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row edu-hide auto-only" id="auto-interval-row">
+          <label data-lang="autoInterval">调整间隔</label>
+          <div class="calib-row">
+            <input type="number" id="auto-interval" min="1" max="999" step="1" value="1">
+            <select id="auto-interval-unit">
+              <option value="3600" data-lang="unitHour">小时</option>
+              <option value="60" data-lang="unitMinute">分钟</option>
+              <option value="1" data-lang="unitSecond">秒</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="setting-row edu-hide auto-only" id="auto-amount-row">
+          <label data-lang="autoAmount">每次调整</label>
+          <div class="calib-row">
+            <select id="auto-dir">
+              <option value="ahead" data-lang="autoDirAhead">提前</option>
+              <option value="behind" data-lang="autoDirBehind">延后</option>
+            </select>
+            <input type="number" id="auto-sec" min="0" max="59" step="1" value="0">
+            <span class="sub-label" data-lang="calibSec">秒</span>
+            <input type="number" id="auto-ms" min="0" max="999" step="1" value="100">
+            <span class="sub-label" data-lang="calibMs">毫秒</span>
+          </div>
+        </div>
+
+        <div class="setting-row edu-hide auto-only">
+          <div class="calib-summary" id="auto-summary">未开启</div>
+        </div>
+
+        <div class="setting-row edu-hide auto-only">
+          <button id="auto-reset-btn" class="mini-btn" data-lang="autoResetAccum">重置累积量</button>
+          <span class="auto-hint" data-lang="autoHint">按固定间隔自动叠加提前/延后量，用于补偿走时误差；改设置会重新计时，不会跳变</span>
+        </div>
+
         <div class="setting-row edu-hide">
           <label data-lang="showSeconds">显示秒</label>
           <label class="toggle-switch">
@@ -441,11 +485,14 @@
           <div class="about-head-text">
             <div class="about-name">Digital Clock</div>
             <div class="about-tagline" data-lang="aboutTagline">可深度定制的桌面翻页时钟</div>
-            <div class="about-ver">v<span id="about-version">—</span></div>
           </div>
         </div>
 
         <div class="about-block">
+          <div class="about-row">
+            <span class="about-key" data-lang="aboutVersion">版本</span>
+            <span class="about-val" id="about-version">—</span>
+          </div>
           <div class="about-row">
             <span class="about-key" data-lang="aboutAuthors">作者</span>
             <span class="about-val" id="about-authors">—</span>

@@ -21,9 +21,25 @@ let lastInlineType="";
 function gdf(l){try{return new Intl.DateTimeFormat(l==="zh"?"zh-CN":"en-US",{year:"numeric",month:"2-digit",day:"2-digit"});}catch(e){return new Intl.DateTimeFormat("zh-CN",{year:"numeric",month:"2-digit",day:"2-digit"});}}
 function fmt(d){if(!df)return"";const p=df.formatToParts(d),m={};p.forEach(x=>m[x.type]=x.value);return cfg.language==="zh"?m.year+"年"+m.month+"月"+m.day+"日":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m.month,10)-1]+" "+m.day+", "+m.year;}
 // [v1.0.5.4] ====== 时间校准 ======
-// cfg.timeOffsetMs > 0 = 显示比系统时间快，< 0 = 慢；所有"当前时间"都走 cnow()
-function calMs(){const v=Number(cfg.timeOffsetMs);return Number.isFinite(v)?v:0;}
-function cnow(){return new Date(Date.now()+calMs());}
+// 手动校准（cfg.timeOffsetMs：正=显示比系统快）+ 定时自动校准的累积量；所有"当前时间"都走 cnow()
+function manualOffsetMs(){const v=Number(cfg.timeOffsetMs);return Number.isFinite(v)?v:0;}
+const AUTO_MIN_INTERVAL_SEC=5,AUTO_MAX_ABS_MS=3600000; // 最小间隔 5s；累积量上限 ±1 小时，避免异常配置把时间拉离谱
+function numOr(v,d){const n=Number(v);return Number.isFinite(n)?n:d;}
+function clampAuto(v){return Math.max(-AUTO_MAX_ABS_MS,Math.min(AUTO_MAX_ABS_MS,v));}
+// 阶梯累积 = base + floor(已过间隔数) * 每次量；确定性计算，重启/关窗都不丢，时钟回拨或未锚定按 0 步处理
+function autoDeltaMs(nowMs){
+  if(!cfg.autoAdjustEnabled)return 0;
+  const interval=Math.max(AUTO_MIN_INTERVAL_SEC,numOr(cfg.autoAdjustIntervalSec,AUTO_MIN_INTERVAL_SEC))*1000;
+  const amount=numOr(cfg.autoAdjustAmountMs,0);
+  const base=numOr(cfg.autoAdjustBaseMs,0);
+  if(!amount)return clampAuto(base);
+  const anchor=numOr(cfg.autoAdjustAnchor,0)||nowMs;
+  const steps=Math.floor(Math.max(0,nowMs-anchor)/interval);
+  return clampAuto(base+steps*amount);
+}
+function cnow(){const t=Date.now();return new Date(t+manualOffsetMs()+autoDeltaMs(t));}
+// 当前总偏移（手动 + 自动累积），供秒边界对齐使用
+function calMs(){const t=Date.now();return manualOffsetMs()+autoDeltaMs(t);}
 function gc(){if(!cfg.autoColor)return null;const h=cnow().getHours(),isDay=h>=6&&h<18;var a=0,m=cfg.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);if(m)a=parseFloat(m[4]);return isDay?{fg:"#000000",bg:"rgba(255,255,255,"+a+")"}:{fg:"#ffffff",bg:"rgba(0,0,0,"+a+")"};}
 // [v1.0.5.3] ====== 12 小时制 / AM·PM 角标 ======
 // 数据层永远是 24 小时，这里只做显示换算；12h 保留两位（07 而非 7）以维持数字位数恒定
@@ -340,7 +356,7 @@ cl.addEventListener('click', () => {
   }
 });
 
-window.electronAPI.onConfigUpdated(nc=>{const lc=nc.language&&nc.language!==cfg.language;Object.assign(cfg,nc);if(cfg.animType==="scale")cfg.animType="shrink";if(lc){df=gdf(cfg.language);wf=gwf(cfg.language);cds="";cws="";}if(nc.passthrough!==undefined)sp(!!nc.passthrough);acf();cds="";ltk="";if(nc.showSeconds!==undefined||lc||nc.extraTimezones!==undefined)cts="";if(nc.timeOffsetMs!==undefined)sc();uc();if(nc.fontSize!==undefined||nc.showSeconds!==undefined||nc.fontFamily!==undefined||nc.showDate!==undefined||nc.showWeekday!==undefined||nc.datePosition!==undefined||lc||nc.autoColor!==undefined||nc.color!==undefined||nc.bgColor!==undefined||nc.extraTimezones!==undefined||nc.language!==undefined){if(rdt)clearTimeout(rdt);rdt=setTimeout(()=>{rdt=null;requestAnimationFrame(()=>requestAnimationFrame(fw));},300);}});window.addEventListener("beforeunload",()=>{stc();stopAlarmSound();stopAlarmFlash();if(alarmInlineTimer)clearInterval(alarmInlineTimer);if(rdt)clearTimeout(rdt);});}init();
+window.electronAPI.onConfigUpdated(nc=>{const lc=nc.language&&nc.language!==cfg.language;Object.assign(cfg,nc);if(cfg.animType==="scale")cfg.animType="shrink";if(lc){df=gdf(cfg.language);wf=gwf(cfg.language);cds="";cws="";}if(nc.passthrough!==undefined)sp(!!nc.passthrough);acf();cds="";ltk="";if(nc.showSeconds!==undefined||lc||nc.extraTimezones!==undefined)cts="";if(['timeOffsetMs','autoAdjustEnabled','autoAdjustIntervalSec','autoAdjustAmountMs','autoAdjustBaseMs','autoAdjustAnchor'].some(k=>nc[k]!==undefined))sc();uc();if(nc.fontSize!==undefined||nc.showSeconds!==undefined||nc.fontFamily!==undefined||nc.showDate!==undefined||nc.showWeekday!==undefined||nc.datePosition!==undefined||lc||nc.autoColor!==undefined||nc.color!==undefined||nc.bgColor!==undefined||nc.extraTimezones!==undefined||nc.language!==undefined){if(rdt)clearTimeout(rdt);rdt=setTimeout(()=>{rdt=null;requestAnimationFrame(()=>requestAnimationFrame(fw));},300);}});window.addEventListener("beforeunload",()=>{stc();stopAlarmSound();stopAlarmFlash();if(alarmInlineTimer)clearInterval(alarmInlineTimer);if(rdt)clearTimeout(rdt);});}init();
 
 // [v1.0.6] 关灯联动：时钟窗口获得焦点时按 ESC 也能退出关灯模式
 (function () {
