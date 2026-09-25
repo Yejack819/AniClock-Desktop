@@ -7,7 +7,7 @@
   <title data-lang="settingsTitle">时钟设置</title>
   <link rel="stylesheet" href="settings.css">
 </head>
-<body>
+<body data-plugin-hook="settings.theme">
   <div class="settings-window">
     <!-- ====== [v1.0.5.1] 左侧导航栏 ====== -->
     <aside class="sidebar">
@@ -33,6 +33,10 @@
         </button>
         <button class="nav-item" data-panel="system">
           <span class="nav-icon">⚙️</span><span class="nav-text" data-lang="navSystem">系统</span>
+        </button>
+        <!-- [v1.0.5.5] 插件 -->
+        <button class="nav-item" data-panel="plugins">
+          <span class="nav-icon">🧩</span><span class="nav-text" data-lang="navPlugins">插件</span>
         </button>
         <button class="nav-item edu-hide" data-panel="data">
           <span class="nav-icon">🗑️</span><span class="nav-text" data-lang="navData">数据管理</span>
@@ -476,6 +480,25 @@
         </div>
       </section>
 
+      <!-- ====== [v1.0.5.5] 插件 ====== -->
+      <section class="panel" data-panel="plugins">
+        <h2 class="panel-title" data-lang="navPlugins">插件</h2>
+
+        <div class="setting-row">
+          <label data-lang="pluginIntro">插件可以给关灯背景板加内容、给时钟日期栏加文字、美化设置界面；每个插件都能带自己的设置项。插件代码在受限沙箱里运行，只能使用宿主提供的接口。</label>
+        </div>
+
+        <div class="plugin-toolbar">
+          <button id="plugin-import-btn" class="primary-btn" data-lang="pluginImportBtn">📦 导入插件…</button>
+          <button id="plugin-import-folder-btn" class="ghost-btn" data-lang="pluginImportFolderBtn">导入文件夹…</button>
+          <button id="plugin-folder-btn" class="ghost-btn" data-lang="pluginFolderBtn">打开插件目录</button>
+        </div>
+
+        <div id="plugin-status" class="plugin-status hidden"></div>
+        <div id="plugin-empty" class="plugin-empty" data-lang="pluginEmpty">还没有安装插件。点上面的按钮导入插件包（.dcplugin / .zip）或文件夹。</div>
+        <div id="plugin-list"></div>
+      </section>
+
       <!-- ====== 数据管理 ====== -->
       <section class="panel" data-panel="data">
         <h2 class="panel-title" data-lang="navData">数据管理</h2>
@@ -537,5 +560,6 @@
     </main>
   </div>
   <script src="settings.js"></script>
+  <script src="plugin-host.js"></script>
 </body>
 </html>

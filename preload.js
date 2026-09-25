@@ -66,4 +66,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLightsOffBgUpdate: (callback) => {
     ipcRenderer.on('lights-off-bg-update', (_event, color) => callback(color));
   },
+
+  // ====== [v1.0.5.5] 插件 ======
+  // 渲染进程只拿到「要跑什么」和「能改什么」，文件读写、清单校验全在主进程
+  getPluginBundle: () => ipcRenderer.invoke('plugin-bundle'),
+  getPluginList: () => ipcRenderer.invoke('plugin-list'),
+  getPluginSettingsView: (id) => ipcRenderer.invoke('plugin-settings-view', id),
+  importPlugin: (kind) => ipcRenderer.invoke('plugin-import', kind),
+  commitPlugin: (stageId, force) => ipcRenderer.invoke('plugin-commit', stageId, force),
+  cancelPluginImport: (stageId) => ipcRenderer.invoke('plugin-cancel', stageId),
+  setPluginEnabled: (id, enabled) => ipcRenderer.invoke('plugin-set-enabled', id, enabled),
+  removePlugin: (id) => ipcRenderer.invoke('plugin-remove', id),
+  reloadPlugin: (id) => ipcRenderer.invoke('plugin-reload', id),
+  setPluginSetting: (id, key, value) => ipcRenderer.invoke('plugin-set-setting', id, key, value),
+  reportPluginError: (id, message) => ipcRenderer.invoke('plugin-error', id, message),
+  pluginDataGet: (id, key) => ipcRenderer.invoke('plugin-data-get', id, key),
+  pluginDataSet: (id, key, value) => ipcRenderer.invoke('plugin-data-set', id, key, value),
+  openPluginFolder: () => ipcRenderer.invoke('plugin-open-folder'),
+  onPluginsChanged: (callback) => {
+    ipcRenderer.on('plugins-changed', () => callback());
+  },
 });

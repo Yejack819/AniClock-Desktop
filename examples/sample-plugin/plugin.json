@@ -1,0 +1,25 @@
+{
+  "id": "com.digitalclock.sample",
+  "name": "示例插件",
+  "version": "1.0.0",
+  "author": "Yejack819",
+  "description": "演示三种钩子的示例插件：给时钟日期栏加文字、给关灯背景板加内容、美化设置界面。你可以直接改这个文件夹里的文件来试。",
+  "apiVersion": 1,
+  "hooks": ["clock.infoBar", "lightsOff.background", "settings.theme"],
+  "permissions": ["storage"],
+  "main": "index.js",
+  "style": "style.css",
+  "settingsView": "settings.html",
+  "settings": [
+    { "key": "text", "type": "text", "label": "显示文字", "hint": "日期栏与关灯背景板都会用它", "default": "示例插件已生效" },
+    { "key": "size", "type": "number", "label": "关灯背景板字号", "min": 12, "max": 200, "step": 2, "default": 48 },
+    { "key": "color", "type": "color", "label": "关灯背景板文字颜色", "default": "#ffffff" },
+    { "key": "accent", "type": "color", "label": "设置界面强调色", "default": "#6C8CFF" },
+    { "key": "bold", "type": "toggle", "label": "加粗", "default": true },
+    { "key": "position", "type": "select", "label": "关灯内容位置", "options": [
+      { "value": "center", "label": "居中" },
+      { "value": "top", "label": "靠上" },
+      { "value": "bottom", "label": "靠下" }
+    ], "default": "center" }
+  ]
+}

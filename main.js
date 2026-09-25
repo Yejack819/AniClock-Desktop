@@ -514,6 +514,503 @@ function checkAlarms() {
   cleanupTriggerWindows();
 }
 
+// ========== [v1.0.5.5] 插件系统 ==========
+// 设计要点：
+// - 插件是「本地 JS 文件」，不是 npm 包。运行在渲染进程的轻量沙箱里（Function 包裹，
+//   没有 require / Node / Electron 能力），只能通过宿主下发的 dc API 做事。
+// - 主进程 = 插件管理器：扫描目录、校验清单、记录启用状态与设置值、下发代码与数据。
+// - 插件状态单独存 plugins.json，不混进 config.json（避免污染偏好导入导出的白名单）。
+const PLUGIN_API_VERSION = 1;
+const PLUGIN_HOOKS = ['lightsOff.background', 'clock.infoBar', 'settings.theme'];
+const PLUGIN_PERMISSIONS = ['storage', 'net'];
+const PLUGIN_SETTING_TYPES = ['text', 'textarea', 'number', 'slider', 'select', 'toggle', 'color'];
+const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/;
+const PLUGIN_LIMITS = { totalBytes: 20 * 1024 * 1024, assetBytes: 8 * 1024 * 1024, textBytes: 512 * 1024, dataBytes: 256 * 1024 };
+
+const pluginErrors = {}; // 运行时错误（内存态，重新加载/重新启用即清空）
+
+function getPluginsDir() { return path.join(app.getPath('userData'), 'plugins'); }
+function getPluginStagingDir() { return path.join(getPluginsDir(), '.staging'); }
+function getPluginDataDir(id) { return path.join(app.getPath('userData'), 'plugins-data', String(id)); }
+function getPluginsStatePath() { return path.join(app.getPath('userData'), 'plugins.json'); }
+
+function ensureDir(dir) { try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {} }
+
+function isInsideDir(child, parent) {
+  const rel = path.relative(parent, child);
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+// 所有来自清单/zip 的相对路径都必须过这一关，杜绝 ../ 逃逸与绝对路径
+function safeResolve(base, rel) {
+  if (typeof rel !== 'string' || !rel.trim()) throw new Error('invalid-path');
+  const root = path.resolve(base);
+  const target = path.resolve(root, rel);
+  if (!isInsideDir(target, root)) throw new Error('invalid-path');
+  return target;
+}
+function writeFileSafe(file, data) {
+  ensureDir(path.dirname(file));
+  fs.writeFileSync(file, data);
+}
+function readTextCapped(file, cap) {
+  const stat = fs.statSync(file);
+  if (stat.size > (cap || PLUGIN_LIMITS.textBytes)) throw new Error('file-too-large');
+  return fs.readFileSync(file, 'utf8');
+}
+function treeSize(dir) {
+  let total = 0;
+  const walk = d => {
+    let entries = [];
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+    entries.forEach(e => {
+      const p = path.join(d, e.name);
+      try {
+        if (e.isDirectory()) walk(p);
+        else if (e.isFile()) total += fs.statSync(p).size;
+      } catch (err) {}
+    });
+  };
+  walk(dir);
+  return total;
+}
+// 安全复制：拒绝符号链接，边复制边累计体积，超限即中断
+function copyTreeSafe(src, dest, budget) {
+  ensureDir(dest);
+  fs.readdirSync(src, { withFileTypes: true }).forEach(e => {
+    const s = path.join(src, e.name), d = path.join(dest, e.name);
+    if (e.isSymbolicLink()) throw new Error('symlink-not-allowed');
+    if (e.isDirectory()) copyTreeSafe(s, d, budget);
+    else if (e.isFile()) {
+      budget.bytes += fs.statSync(s).size;
+      if (budget.bytes > PLUGIN_LIMITS.totalBytes) throw new Error('too-large');
+      fs.copyFileSync(s, d);
+    }
+  });
+}
+function removeDirSafe(dir, base) {
+  const root = path.resolve(base);
+  const target = path.resolve(dir);
+  if (!isInsideDir(target, root)) return false; // 兜底：绝不允许删到插件目录之外
+  try { fs.rmSync(target, { recursive: true, force: true }); return true; } catch (e) { return false; }
+}
+
+function loadPluginsState() {
+  try {
+    if (!fs.existsSync(getPluginsStatePath())) return { enabled: {}, settings: {} };
+    const parsed = JSON.parse(fs.readFileSync(getPluginsStatePath(), 'utf8'));
+    return { enabled: parsed.enabled || {}, settings: parsed.settings || {} };
+  } catch (e) {
+    console.error('插件状态读取失败，回退为空:', e.message);
+    return { enabled: {}, settings: {} };
+  }
+}
+function savePluginsState(state) {
+  try { fs.writeFileSync(getPluginsStatePath(), JSON.stringify(state, null, 2), 'utf8'); }
+  catch (e) { console.error('插件状态保存失败:', e.message); }
+}
+
+// 清单校验：字段/类型/钩子/权限全部白名单化，未知项一律丢弃
+function parsePluginManifest(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'bad-manifest' };
+  const id = String(raw.id || '').trim().toLowerCase();
+  if (!PLUGIN_ID_RE.test(id)) return { error: 'bad-id' };
+  if (raw.apiVersion !== undefined && Number(raw.apiVersion) > PLUGIN_API_VERSION) return { error: 'api-too-new' };
+  const hooks = Array.isArray(raw.hooks) ? raw.hooks.filter(h => PLUGIN_HOOKS.includes(h)) : [];
+  if (!hooks.length) return { error: 'no-hooks' };
+  const main = typeof raw.main === 'string' && raw.main.trim() ? raw.main.trim() : 'index.js';
+  const manifest = {
+    id,
+    name: String(raw.name || id).slice(0, 64),
+    version: String(raw.version || '1.0.0').slice(0, 24),
+    author: String(raw.author || '').slice(0, 64),
+    description: String(raw.description || '').slice(0, 200),
+    homepage: /^https:\/\//.test(String(raw.homepage || '')) ? String(raw.homepage).slice(0, 300) : '',
+    apiVersion: Number(raw.apiVersion) || PLUGIN_API_VERSION,
+    hooks,
+    permissions: Array.isArray(raw.permissions) ? raw.permissions.filter(p => PLUGIN_PERMISSIONS.includes(p)) : [],
+    main,
+    style: typeof raw.style === 'string' && raw.style.trim() ? raw.style.trim() : null,
+    settingsView: typeof raw.settingsView === 'string' && raw.settingsView.trim() ? raw.settingsView.trim() : null,
+    settings: [],
+  };
+  if (Array.isArray(raw.settings)) {
+    raw.settings.slice(0, 24).forEach(item => {
+      if (!item || typeof item !== 'object') return;
+      const key = String(item.key || '').trim();
+      if (!/^[a-zA-Z0-9_-]{1,32}$/.test(key)) return;
+      const type = PLUGIN_SETTING_TYPES.includes(item.type) ? item.type : 'text';
+      const fallback = type === 'toggle' ? false : (type === 'number' || type === 'slider' ? 0 : '');
+      const field = {
+        key, type,
+        label: String(item.label || key).slice(0, 48),
+        hint: String(item.hint || '').slice(0, 120),
+        default: item.default !== undefined ? item.default : fallback,
+      };
+      if (type === 'select') {
+        field.options = (Array.isArray(item.options) ? item.options : []).slice(0, 24).map(o => ({
+          value: String(o && o.value !== undefined ? o.value : '').slice(0, 64),
+          label: String(o && o.label !== undefined ? o.label : (o && o.value)).slice(0, 48),
+        }));
+      }
+      if (type === 'number' || type === 'slider') {
+        field.min = Number.isFinite(Number(item.min)) ? Number(item.min) : 0;
+        field.max = Number.isFinite(Number(item.max)) ? Number(item.max) : 100;
+        field.step = Number.isFinite(Number(item.step)) ? Number(item.step) : 1;
+      }
+      manifest.settings.push(field);
+    });
+  }
+  return { manifest };
+}
+
+// 按类型把保存值收敛回合法范围，杜绝手工改 json 塞进奇怪的值
+function coercePluginValue(field, value) {
+  if (value === undefined || value === null) return field.default;
+  switch (field.type) {
+    case 'toggle': return value === true || value === 'true';
+    case 'number': case 'slider': {
+      let n = Number(value);
+      if (!Number.isFinite(n)) n = Number(field.default) || 0;
+      if (Number.isFinite(field.min)) n = Math.max(field.min, n);
+      if (Number.isFinite(field.max)) n = Math.min(field.max, n);
+      return n;
+    }
+    case 'color': return /^#[0-9a-fA-F]{3,8}$/.test(String(value)) ? String(value) : String(field.default || '#ffffff');
+    case 'select': {
+      const ok = (field.options || []).some(o => o.value === String(value));
+      return ok ? String(value) : String(field.default);
+    }
+    default: return String(value).slice(0, 4000);
+  }
+}
+function mergePluginValues(manifest, saved) {
+  const out = {};
+  (manifest.settings || []).forEach(f => {
+    out[f.key] = coercePluginValue(f, saved ? saved[f.key] : undefined);
+  });
+  return out;
+}
+
+// 扫描插件目录，返回「清单 + 状态 + 错误」的完整记录
+function scanPlugins() {
+  const dir = getPluginsDir();
+  ensureDir(dir);
+  const state = loadPluginsState();
+  let folders = [];
+  try {
+    folders = fs.readdirSync(dir, { withFileTypes: true })
+      .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+      .map(e => e.name);
+  } catch (e) { folders = []; }
+  return folders.map(folder => {
+    const pluginDir = path.join(dir, folder);
+    const record = { folder, dir: pluginDir, enabled: false, error: null, runtimeError: null, sizeBytes: 0 };
+    const parsed = (() => {
+      try {
+        const manifestPath = safeResolve(pluginDir, 'plugin.json');
+        if (!fs.existsSync(manifestPath)) return { error: 'manifest-missing' };
+        return parsePluginManifest(JSON.parse(readTextCapped(manifestPath, 256 * 1024)));
+      } catch (e) { return { error: e.message || 'bad-manifest' }; }
+    })();
+    if (parsed.error) { record.error = parsed.error; return record; }
+    const m = parsed.manifest;
+    try {
+      if (!fs.existsSync(safeResolve(pluginDir, m.main))) throw new Error('main-missing');
+      if (m.style && !fs.existsSync(safeResolve(pluginDir, m.style))) m.style = null;
+      if (m.settingsView && !fs.existsSync(safeResolve(pluginDir, m.settingsView))) m.settingsView = null;
+      record.sizeBytes = treeSize(pluginDir);
+      if (record.sizeBytes > PLUGIN_LIMITS.totalBytes) throw new Error('too-large');
+    } catch (e) { record.error = e.message || 'invalid'; return record; }
+    record.manifest = m;
+    record.enabled = state.enabled[m.id] === true;
+    record.values = mergePluginValues(m, state.settings[m.id]);
+    record.runtimeError = pluginErrors[m.id] || null;
+    return record;
+  });
+}
+
+function pluginSummary(record) {
+  const m = record.manifest || {};
+  return {
+    id: m.id || record.folder,
+    name: m.name || record.folder,
+    version: m.version || '',
+    author: m.author || '',
+    description: m.description || '',
+    homepage: m.homepage || '',
+    hooks: m.hooks || [],
+    permissions: m.permissions || [],
+    settings: m.settings || [],
+    hasSettingsView: !!m.settingsView,
+    hasStyle: !!m.style,
+    values: record.values || {},
+    enabled: !!record.enabled,
+    readable: !!record.manifest, // 清单都没读出来（缺文件/格式错）→ 界面上折叠显示
+    error: record.error || null,
+    runtimeError: record.runtimeError || null,
+    sizeBytes: record.sizeBytes || 0,
+    assetsBase: record.dir ? 'file:///' + record.dir.replace(/\\/g, '/') : '',
+  };
+}
+
+// 下发给渲染进程的「可运行插件包」：代码 + 样式 + 设置值 + 自绘设置页
+function getPluginBundle() {
+  return scanPlugins().filter(r => r.enabled && !r.error).map(r => {
+    const m = r.manifest;
+    try {
+      return {
+        id: m.id, name: m.name, version: m.version, author: m.author,
+        hooks: m.hooks, permissions: m.permissions, values: r.values,
+        code: readTextCapped(safeResolve(r.dir, m.main)),
+        style: m.style ? readTextCapped(safeResolve(r.dir, m.style), PLUGIN_LIMITS.assetBytes) : null,
+        settingsView: m.settingsView ? readTextCapped(safeResolve(r.dir, m.settingsView)) : null,
+        assetsBase: 'file:///' + r.dir.replace(/\\/g, '/'),
+      };
+    } catch (e) {
+      pluginErrors[m.id] = 'bundle: ' + (e.message || 'error');
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+function broadcastPlugins() {
+  const targets = [mainWindow, settingsWindow].concat(lightsOffWindows);
+  targets.forEach(win => {
+    if (win && !win.isDestroyed()) win.webContents.send('plugins-changed');
+  });
+}
+
+// 解压 zip 到 staging：逐条校验条目名，杜绝 zip-slip
+function extractPluginZip(zipPath, dest) {
+  const AdmZip = require('adm-zip');
+  const zip = new AdmZip(zipPath);
+  const budget = { bytes: 0 };
+  ensureDir(dest);
+  zip.getEntries().forEach(entry => {
+    const raw = String(entry.entryName || '').replace(/\\/g, '/');
+    if (!raw || raw.endsWith('/')) return; // 目录条目
+    if (raw.startsWith('/') || /^[a-zA-Z]:/.test(raw) || raw.split('/').includes('..')) throw new Error('bad-entry');
+    const size = (entry.header && Number(entry.header.size)) || 0;
+    if (size > PLUGIN_LIMITS.assetBytes) throw new Error('file-too-large');
+    budget.bytes += size;
+    if (budget.bytes > PLUGIN_LIMITS.totalBytes) throw new Error('too-large');
+    writeFileSafe(safeResolve(dest, raw), entry.getData());
+  });
+}
+
+// 允许「plugin.json 直接躺在 zip 根」或「外面套一层目录」两种打包习惯
+function findManifestRoot(dir) {
+  if (fs.existsSync(path.join(dir, 'plugin.json'))) return dir;
+  const subs = fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith('.'));
+  for (const sub of subs) {
+    const p = path.join(dir, sub.name);
+    if (fs.existsSync(path.join(p, 'plugin.json'))) return p;
+  }
+  return null;
+}
+
+function stagePluginPayload(kind, sourcePath) {
+  ensureDir(getPluginStagingDir());
+  const stageId = 'stage-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const stageDir = path.join(getPluginStagingDir(), stageId);
+  ensureDir(stageDir);
+  if (kind === 'zip') extractPluginZip(sourcePath, stageDir);
+  else copyTreeSafe(sourcePath, stageDir, { bytes: 0 });
+  const root = findManifestRoot(stageDir);
+  if (!root) throw new Error('manifest-missing');
+  const parsed = parsePluginManifest(JSON.parse(readTextCapped(path.join(root, 'plugin.json'), 256 * 1024)));
+  if (parsed.error) throw new Error(parsed.error);
+  const m = parsed.manifest;
+  if (!fs.existsSync(safeResolve(root, m.main))) throw new Error('main-missing');
+  return { stageId, stageDir, root, manifest: m, sizeBytes: treeSize(root) };
+}
+
+// 把 staging 里的插件正式安装（force=true 时覆盖同 id 的旧版本）
+function commitPlugin(stageRoot, manifest, force) {
+  const dest = path.join(getPluginsDir(), manifest.id);
+  if (fs.existsSync(dest)) {
+    if (!force) return { success: false, error: 'exists' };
+    if (!removeDirSafe(dest, getPluginsDir())) return { success: false, error: 'remove-failed' };
+  }
+  copyTreeSafe(stageRoot, dest, { bytes: 0 });
+  const state = loadPluginsState();
+  if (force) { state.settings[manifest.id] = state.settings[manifest.id] || {}; }
+  state.enabled[manifest.id] = true; // 导入即启用，用户可随手关掉
+  delete pluginErrors[manifest.id];
+  savePluginsState(state);
+  broadcastPlugins();
+  return { success: true, id: manifest.id, name: manifest.name };
+}
+
+function cleanupStaging(stageId) {
+  if (stageId && /^stage-/.test(stageId)) {
+    removeDirSafe(path.join(getPluginStagingDir(), stageId), getPluginsDir());
+  }
+}
+
+function getPluginDataFile(id) {
+  if (!PLUGIN_ID_RE.test(String(id))) throw new Error('bad-id');
+  return path.join(getPluginDataDir(id), 'data.json');
+}
+function readPluginData(id) {
+  const file = getPluginDataFile(id); // 非法 id 直接抛，不吞掉
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) { return {}; }
+}
+function writePluginData(id, data) {
+  const raw = JSON.stringify(data);
+  if (raw.length > PLUGIN_LIMITS.dataBytes) return { success: false, error: 'data-too-large' };
+  writeFileSafe(getPluginDataFile(id), raw);
+  return { success: true };
+}
+
+ipcMain.handle('plugin-list', () => scanPlugins().map(pluginSummary));
+
+ipcMain.handle('plugin-bundle', () => getPluginBundle());
+
+// 插件自绘的设置视图（只在用户展开该插件的设置时才取，渲染前由渲染进程做白名单清洗）
+ipcMain.handle('plugin-settings-view', (_event, id) => {
+  const key = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key)) return { success: false, error: 'bad-id' };
+  const record = scanPlugins().find(r => r.manifest && r.manifest.id === key);
+  if (!record || !record.manifest.settingsView) return { success: false, error: 'none' };
+  try { return { success: true, html: readTextCapped(safeResolve(record.dir, record.manifest.settingsView)) }; }
+  catch (e) { return { success: false, error: e.message || 'read-failed' }; }
+});
+
+ipcMain.handle('plugin-import', async (_event, kind) => {
+  const parent = getDialogParent();
+  let sourcePath = null;
+  if (kind === 'folder') {
+    const r = await dialog.showOpenDialog(parent, { title: '选择插件文件夹', properties: ['openDirectory'] });
+    if (r.canceled || !r.filePaths.length) return { success: false, error: 'canceled' };
+    sourcePath = r.filePaths[0];
+    if (path.resolve(sourcePath) === path.resolve(getPluginsDir())) return { success: false, error: 'is-plugins-dir' };
+  } else {
+    const r = await dialog.showOpenDialog(parent, {
+      title: '选择插件包', properties: ['openFile'],
+      filters: [{ name: 'Digital Clock 插件', extensions: ['dcplugin', 'zip'] }],
+    });
+    if (r.canceled || !r.filePaths.length) return { success: false, error: 'canceled' };
+    sourcePath = r.filePaths[0];
+  }
+  let staged;
+  try {
+    staged = stagePluginPayload(kind === 'folder' ? 'folder' : 'zip', sourcePath);
+  } catch (e) {
+    return { success: false, error: e.message || 'install-failed' };
+  }
+  const exists = fs.existsSync(path.join(getPluginsDir(), staged.manifest.id));
+  if (exists) {
+    return {
+      success: false, error: 'exists', stageId: staged.stageId,
+      manifest: { id: staged.manifest.id, name: staged.manifest.name, version: staged.manifest.version },
+    };
+  }
+  const result = commitPlugin(staged.root, staged.manifest, false);
+  cleanupStaging(staged.stageId);
+  return result;
+});
+
+ipcMain.handle('plugin-commit', (_event, stageId, force) => {
+  try {
+    const stageDir = path.join(getPluginStagingDir(), String(stageId || ''));
+    if (!isInsideDir(stageDir, getPluginStagingDir())) return { success: false, error: 'bad-stage' };
+    const root = findManifestRoot(stageDir);
+    if (!root) return { success: false, error: 'manifest-missing' };
+    const parsed = parsePluginManifest(JSON.parse(readTextCapped(path.join(root, 'plugin.json'), 256 * 1024)));
+    if (parsed.error) return { success: false, error: parsed.error };
+    const result = commitPlugin(root, parsed.manifest, force !== false);
+    cleanupStaging(stageId);
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message || 'commit-failed' };
+  }
+});
+
+ipcMain.handle('plugin-cancel', (_event, stageId) => { cleanupStaging(stageId); return { success: true }; });
+
+ipcMain.handle('plugin-set-enabled', (_event, id, enabled) => {
+  const state = loadPluginsState();
+  const key = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key)) return { success: false, error: 'bad-id' };
+  state.enabled[key] = enabled === true;
+  if (enabled === true) delete pluginErrors[key];
+  savePluginsState(state);
+  broadcastPlugins();
+  return { success: true };
+});
+
+ipcMain.handle('plugin-remove', (_event, id) => {
+  const key = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key)) return { success: false, error: 'bad-id' };
+  removeDirSafe(path.join(getPluginsDir(), key), getPluginsDir());
+  removeDirSafe(getPluginDataDir(key), path.join(app.getPath('userData'), 'plugins-data'));
+  const state = loadPluginsState();
+  delete state.enabled[key];
+  delete state.settings[key];
+  savePluginsState(state);
+  delete pluginErrors[key];
+  broadcastPlugins();
+  return { success: true };
+});
+
+ipcMain.handle('plugin-reload', (_event, id) => {
+  const key = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key)) return { success: false, error: 'bad-id' };
+  delete pluginErrors[key];
+  broadcastPlugins();
+  return { success: true };
+});
+
+ipcMain.handle('plugin-set-setting', (_event, id, key, value) => {
+  const key2 = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key2)) return { success: false, error: 'bad-id' };
+  const record = scanPlugins().find(r => r.manifest && r.manifest.id === key2);
+  if (!record) return { success: false, error: 'not-found' };
+  const field = (record.manifest.settings || []).find(f => f.key === key);
+  if (!field) return { success: false, error: 'unknown-setting' };
+  const state = loadPluginsState();
+  state.settings[key2] = state.settings[key2] || {};
+  state.settings[key2][key] = coercePluginValue(field, value);
+  savePluginsState(state);
+  broadcastPlugins();
+  return { success: true, value: state.settings[key2][key] };
+});
+
+ipcMain.handle('plugin-error', (_event, id, message) => {
+  const key = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key)) return { success: false };
+  const msg = String(message || 'error').slice(0, 300);
+  // 去重：同一插件同一错误只广播一次，避免「报错 → 广播 → 重载 → 再报错」的循环
+  if (pluginErrors[key] === msg) return { success: true, unchanged: true };
+  pluginErrors[key] = msg;
+  broadcastPlugins();
+  return { success: true };
+});
+
+ipcMain.handle('plugin-data-get', (_event, id, key) => {
+  const data = readPluginData(id);
+  return { success: true, value: key === undefined ? data : data[String(key)] };
+});
+
+ipcMain.handle('plugin-data-set', (_event, id, key, value) => {
+  const data = readPluginData(id);
+  if (key === undefined) return writePluginData(id, value && typeof value === 'object' ? value : {});
+  if (key === null || value === undefined) delete data[String(key)];
+  else data[String(key)] = value;
+  return writePluginData(id, data);
+});
+
+ipcMain.handle('plugin-open-folder', async () => {
+  ensureDir(getPluginsDir());
+  const err = await shell.openPath(getPluginsDir());
+  return { success: !err, error: err || null, path: getPluginsDir() };
+});
+
 // ========== Window Management ==========
 let mainWindow = null;
 let settingsWindow = null;

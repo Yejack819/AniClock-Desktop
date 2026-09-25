@@ -31,6 +31,8 @@
       "!.workbuddy/**",
       "!dist",
       "!dist/**",
+      "!examples",
+      "!examples/**",
       "!node_modules",
       "!node_modules/**",
       "!.git",
@@ -52,5 +54,8 @@
     "asar": "^3.2.0",
     "electron": "^33.0.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1"
   }
 }

@@ -93,7 +93,32 @@ const LOCALE = {
     aboutTagline: '可深度定制的桌面翻页时钟',
     aboutAuthors: '作者', aboutFoot: '基于 Electron 构建 · 感谢使用',
     aboutVersion: '版本',
+    navPlugins: '插件',
+    pluginIntro: '插件可以给关灯背景板加内容、给时钟日期栏加文字、美化设置界面；每个插件都能带自己的设置项。插件代码在受限沙箱里运行，只能使用宿主提供的接口。',
+    pluginImportBtn: '📦 导入插件…', pluginImportFolderBtn: '导入文件夹…', pluginFolderBtn: '打开插件目录',
+    pluginEmpty: '还没有安装插件。点上面的按钮导入插件包（.dcplugin / .zip）或文件夹。',
+    pluginSettingsBtn: '设置', pluginReloadBtn: '重新加载', pluginDeleteBtn: '删除',
+    pluginEnable: '启用', pluginEnabled: '已启用', pluginDisabled: '已禁用',
+    pluginGrantTitle: '这个插件申请了额外权限：',
+    pluginGrantAsk: '\n\n仅在你信任插件来源时继续。要启用吗？',
+    pluginPermStorage: '读写自己的数据', pluginPermNet: '访问网络（https）',
+    pluginHookLightsOff: '关灯背景板', pluginHookInfoBar: '时钟日期栏', pluginHookSettingsTheme: '设置界面美化',
+    pluginImported: '已导入并启用：', pluginExists: '同名插件已存在，要用新版本覆盖吗？\n（现有设置会保留）',
+    pluginRemoved: '已删除插件：', pluginImportFailed: '导入失败：',
+    pluginRemoveConfirm: '确定删除这个插件吗？它的数据与设置也会一并删除。',
+    pluginNoSettings: '这个插件没有设置项。',
+    pluginErrorLabel: '插件加载失败：', pluginRuntimeError: '插件运行出错：',
+    pluginOpenFolderDone: '插件目录：', pluginOpenFolderFail: '无法打开插件目录：',
+    pluginMissingFolder: '插件目录里存在无法读取的插件（缺 plugin.json 或入口文件），已折叠显示。',
+    pluginSettingsSection: '插件设置',
+    pluginErrBadId: '插件 id 不合法', pluginErrBadManifest: 'plugin.json 格式不正确',
+    pluginErrManifestMissing: '缺少 plugin.json', pluginErrMainMissing: '缺少入口文件',
+    pluginErrNoHooks: '没有声明任何可用钩子', pluginErrApiTooNew: '插件要求的接口版本高于当前应用',
+    pluginErrTooLarge: '插件体积超过上限', pluginErrBadEntry: '插件包里有非法路径',
+    pluginErrFileTooLarge: '插件包里有超大文件', pluginErrExists: '同名插件已存在',
+    pluginErrIsPluginsDir: '不能把插件目录本身当作插件导入',
     // [v1.0.5.4] 定时自动校准
+
     autoAdjust: '定时自动校准',
     autoInterval: '调整间隔', autoAmount: '每次调整',
     autoDirAhead: '提前', autoDirBehind: '延后',
@@ -198,6 +223,31 @@ const LOCALE = {
     aboutTagline: 'A deeply customizable desktop flip clock',
     aboutAuthors: 'Authors', aboutFoot: 'Built with Electron · Thanks for using',
     aboutVersion: 'Version',
+    // [v1.0.5.5] Plugins
+    navPlugins: 'Plugins',
+    pluginIntro: 'Plugins can add content to the Lights Off board, add text to the clock info bar, and restyle this settings window. Each plugin can ship its own settings. Plugin code runs in a restricted sandbox with only the host API available.',
+    pluginImportBtn: '📦 Import plugin…', pluginImportFolderBtn: 'Import folder…', pluginFolderBtn: 'Open plugins folder',
+    pluginEmpty: 'No plugins installed yet. Use the buttons above to import a .dcplugin / .zip package or a folder.',
+    pluginSettingsBtn: 'Settings', pluginReloadBtn: 'Reload', pluginDeleteBtn: 'Delete',
+    pluginEnable: 'Enable', pluginEnabled: 'Enabled', pluginDisabled: 'Disabled',
+    pluginGrantTitle: 'This plugin requests extra permissions:',
+    pluginGrantAsk: '\n\nContinue only if you trust the source. Enable it?',
+    pluginPermStorage: 'read/write its own data', pluginPermNet: 'network access (https)',
+    pluginHookLightsOff: 'Lights Off board', pluginHookInfoBar: 'Clock info bar', pluginHookSettingsTheme: 'Settings theme',
+    pluginImported: 'Imported and enabled: ', pluginExists: 'A plugin with the same id already exists. Overwrite it with the new version?\n(Existing settings are kept)',
+    pluginRemoved: 'Plugin removed: ', pluginImportFailed: 'Import failed: ',
+    pluginRemoveConfirm: 'Delete this plugin? Its data and settings will be removed too.',
+    pluginNoSettings: 'This plugin has no settings.',
+    pluginErrorLabel: 'Plugin failed to load: ', pluginRuntimeError: 'Plugin runtime error: ',
+    pluginOpenFolderDone: 'Plugins folder: ', pluginOpenFolderFail: 'Could not open the plugins folder: ',
+    pluginMissingFolder: 'Some folders in the plugins directory are unreadable (missing plugin.json or entry file); they are collapsed.',
+    pluginSettingsSection: 'Plugin settings',
+    pluginErrBadId: 'Invalid plugin id', pluginErrBadManifest: 'Malformed plugin.json',
+    pluginErrManifestMissing: 'plugin.json is missing', pluginErrMainMissing: 'Entry file is missing',
+    pluginErrNoHooks: 'No usable hooks declared', pluginErrApiTooNew: 'Plugin needs a newer host API',
+    pluginErrTooLarge: 'Plugin exceeds the size limit', pluginErrBadEntry: 'Illegal path inside the package',
+    pluginErrFileTooLarge: 'A file inside the package is too large', pluginErrExists: 'A plugin with the same id already exists',
+    pluginErrIsPluginsDir: 'You cannot import the plugins folder itself',
     // [v1.0.5.4] Scheduled auto-calibration
     autoAdjust: 'Scheduled auto-calibration',
     autoInterval: 'Interval', autoAmount: 'Each step',
@@ -283,6 +333,13 @@ const els = {
   delete_data_btn: document.getElementById('delete-data-btn'),
   export_data_btn: document.getElementById('export-data-btn'),
   import_data_btn: document.getElementById('import-data-btn'),
+  // [v1.0.5.5] 插件
+  plugin_import_btn: document.getElementById('plugin-import-btn'),
+  plugin_import_folder_btn: document.getElementById('plugin-import-folder-btn'),
+  plugin_folder_btn: document.getElementById('plugin-folder-btn'),
+  plugin_status: document.getElementById('plugin-status'),
+  plugin_empty: document.getElementById('plugin-empty'),
+  plugin_list: document.getElementById('plugin-list'),
   data_transfer_status: document.getElementById('data-transfer-status'),
   mode_select: document.getElementById('mode-select'),
   lights_off_switch: document.getElementById('lights-off-switch'),
@@ -805,6 +862,9 @@ function activatePanel(id, persist) {
   panels.forEach(p => p.classList.toggle('active', p.dataset.panel === btn.dataset.panel));
   const scroller = document.getElementById('settings-content');
   if (scroller) scroller.scrollTop = 0;
+  // [v1.0.5.5] 进入插件分区时刷新插件列表（清单以主进程为准，避免显示过期状态）
+  // 插件渲染逻辑在文件末尾的 IIFE 里，作用域不互通，这里走显式桥接
+  if (btn.dataset.panel === 'plugins' && window.DCPlugins && typeof window.DCPlugins.render === 'function') window.DCPlugins.render();
   if (persist) saveAndApply({ settingsTab: btn.dataset.panel });
 }
 
@@ -1188,6 +1248,337 @@ function ensureActivePanel() {
     if (nc.hourFormat !== undefined) { els.hour_format_select.value = nc.hourFormat; syncHourFormatUI(); }
     if (nc.ampmCorner !== undefined) els.ampm_corner_select.value = nc.ampmCorner;
   });
+
+  // ====== [v1.0.5.5] 插件 ======
+  let pluginList = [];
+  let pluginsRenderTimer = null;
+
+  function dict() { return LOCALE[currentLang] || LOCALE.zh; }
+
+  function pluginErrorText(code) {
+    const map = {
+      'bad-manifest': dict().pluginErrBadManifest, 'bad-id': dict().pluginErrBadId,
+      'manifest-missing': dict().pluginErrManifestMissing, 'main-missing': dict().pluginErrMainMissing,
+      'no-hooks': dict().pluginErrNoHooks, 'api-too-new': dict().pluginErrApiTooNew,
+      'too-large': dict().pluginErrTooLarge, 'bad-entry': dict().pluginErrBadEntry,
+      'file-too-large': dict().pluginErrFileTooLarge, 'exists': dict().pluginErrExists,
+      'is-plugins-dir': dict().pluginErrIsPluginsDir,
+      'invalid-path': dict().pluginErrBadEntry, 'symlink-not-allowed': dict().pluginErrBadEntry,
+    };
+    return map[code] || String(code || '');
+  }
+  function hookLabel(h) {
+    if (h === 'lightsOff.background') return dict().pluginHookLightsOff;
+    if (h === 'clock.infoBar') return dict().pluginHookInfoBar;
+    if (h === 'settings.theme') return dict().pluginHookSettingsTheme;
+    return h;
+  }
+  function permLabel(p) {
+    if (p === 'storage') return dict().pluginPermStorage;
+    if (p === 'net') return dict().pluginPermNet;
+    return p;
+  }
+  function showPluginStatus(text, isError) {
+    if (!els.plugin_status) return;
+    els.plugin_status.textContent = text;
+    els.plugin_status.classList.remove('hidden');
+    els.plugin_status.classList.toggle('error', !!isError);
+  }
+  function setPluginBusy(busy) {
+    [els.plugin_import_btn, els.plugin_import_folder_btn].forEach(b => { if (b) b.disabled = !!busy; });
+  }
+
+  // 按 manifest 里声明的字段类型生成设置项，复用现有 .setting-row 样式
+  function buildPluginSettingRow(field, value, onChange) {
+    const row = document.createElement('div');
+    row.className = 'setting-row';
+    const label = document.createElement('label');
+    label.textContent = field.label;
+    if (field.hint) label.title = field.hint;
+    row.appendChild(label);
+
+    let input;
+    if (field.type === 'toggle') {
+      const sw = document.createElement('label');
+      sw.className = 'toggle-switch';
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = value === true;
+      const slider = document.createElement('span');
+      slider.className = 'toggle-slider';
+      sw.appendChild(input); sw.appendChild(slider);
+      row.appendChild(sw);
+    } else if (field.type === 'select') {
+      input = document.createElement('select');
+      (field.options || []).forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label || o.value;
+        input.appendChild(opt);
+      });
+      input.value = value;
+      row.appendChild(input);
+    } else if (field.type === 'textarea') {
+      row.classList.add('row-col');
+      input = document.createElement('textarea');
+      input.className = 'custom-input';
+      input.rows = 3;
+      input.value = value === undefined ? '' : value;
+      row.appendChild(input);
+    } else if (field.type === 'color') {
+      input = document.createElement('input');
+      input.type = 'color';
+      input.value = /^#[0-9a-fA-F]{6}$/.test(String(value)) ? value : '#ffffff';
+      row.appendChild(input);
+    } else if (field.type === 'slider' || field.type === 'number') {
+      input = document.createElement('div');
+      input.className = 'bg-row';
+      const range = document.createElement('input');
+      range.type = field.type === 'slider' ? 'range' : 'number';
+      if (field.type === 'number') range.className = 'custom-input';
+      range.min = field.min; range.max = field.max; range.step = field.step;
+      range.value = value;
+      const num = document.createElement('span');
+      num.className = 'sub-label';
+      num.textContent = String(value);
+      range.addEventListener('input', () => { num.textContent = range.value; });
+      range.addEventListener('change', () => onChange(field, Number(range.value)));
+      input.appendChild(range); input.appendChild(num);
+      row.appendChild(input);
+      row._input = range;
+      return row;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'custom-input';
+      input.value = value === undefined ? '' : value;
+      row.classList.add('row-col');
+      row.appendChild(input);
+    }
+    row._input = input;
+    input.addEventListener('change', () => {
+      const v = field.type === 'toggle' ? input.checked : input.value;
+      onChange(field, v);
+    });
+    return row;
+  }
+
+  async function renderPluginSettings(card, plugin) {
+    const holder = card.querySelector('.plugin-settings');
+    if (!holder) return;
+    holder.innerHTML = '';
+    const schema = plugin.settings || [];
+    const values = plugin.values || {};
+    schema.forEach(field => {
+      holder.appendChild(buildPluginSettingRow(field, values[field.key], async (f, v) => {
+        const r = await window.electronAPI.setPluginSetting(plugin.id, f.key, v);
+        if (r && r.success) plugin.values[f.key] = r.value;
+      }));
+    });
+    if (plugin.hasSettingsView) {
+      const r = await window.electronAPI.getPluginSettingsView(plugin.id);
+      if (r && r.success && r.html) {
+        const box = document.createElement('div');
+        box.className = 'plugin-view';
+        const ok = window.DCPluginHost ? window.DCPluginHost.renderSettingsView(box, r.html, plugin.assetsBase) : false;
+        if (ok) holder.appendChild(box);
+      }
+    }
+    if (!holder.childElementCount) {
+      const note = document.createElement('div');
+      note.className = 'plugin-section-label';
+      note.textContent = dict().pluginNoSettings;
+      holder.appendChild(note);
+    }
+  }
+
+  function buildPluginCard(plugin) {
+    const card = document.createElement('div');
+    card.className = 'plugin-card' + (plugin.enabled ? '' : ' is-off') + (plugin.error ? ' has-error' : '');
+    card.dataset.id = plugin.id;
+
+    const head = document.createElement('div');
+    head.className = 'plugin-head';
+    const text = document.createElement('div');
+    text.className = 'plugin-head-text';
+
+    const name = document.createElement('div');
+    name.className = 'plugin-name';
+    name.textContent = plugin.name;
+    const ver = document.createElement('span');
+    ver.className = 'plugin-ver';
+    ver.textContent = plugin.version ? 'v' + plugin.version : '';
+    name.appendChild(ver);
+    text.appendChild(name);
+
+    const meta = document.createElement('div');
+    meta.className = 'plugin-meta';
+    const bits = [];
+    if (plugin.author) bits.push(plugin.author);
+    bits.push(plugin.id);
+    meta.textContent = bits.join(' · ');
+    text.appendChild(meta);
+
+    if (plugin.description) {
+      const desc = document.createElement('div');
+      desc.className = 'plugin-desc';
+      desc.textContent = plugin.description;
+      text.appendChild(desc);
+    }
+
+    const badges = document.createElement('div');
+    badges.className = 'plugin-badges';
+    (plugin.hooks || []).forEach(h => {
+      const b = document.createElement('span');
+      b.className = 'plugin-badge';
+      b.textContent = hookLabel(h);
+      badges.appendChild(b);
+    });
+    (plugin.permissions || []).forEach(p => {
+      const b = document.createElement('span');
+      b.className = 'plugin-badge warn';
+      b.textContent = permLabel(p);
+      badges.appendChild(b);
+    });
+    if (plugin.error) {
+      const b = document.createElement('span');
+      b.className = 'plugin-badge err';
+      b.textContent = dict().pluginErrorLabel + pluginErrorText(plugin.error);
+      badges.appendChild(b);
+    } else if (plugin.runtimeError) {
+      const b = document.createElement('span');
+      b.className = 'plugin-badge err';
+      b.textContent = dict().pluginRuntimeError + plugin.runtimeError;
+      badges.appendChild(b);
+    }
+    text.appendChild(badges);
+    head.appendChild(text);
+
+    const sw = document.createElement('label');
+    sw.className = 'toggle-switch';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!plugin.enabled;
+    cb.disabled = !plugin.readable;
+    const slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    sw.appendChild(cb); sw.appendChild(slider);
+    head.appendChild(sw);
+    card.appendChild(head);
+
+    const actions = document.createElement('div');
+    actions.className = 'plugin-actions';
+    const settingsBtn = document.createElement('button');
+    settingsBtn.textContent = dict().pluginSettingsBtn;
+    const reloadBtn = document.createElement('button');
+    reloadBtn.textContent = dict().pluginReloadBtn;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'danger';
+    delBtn.textContent = dict().pluginDeleteBtn;
+    actions.appendChild(settingsBtn); actions.appendChild(reloadBtn); actions.appendChild(delBtn);
+    card.appendChild(actions);
+
+    const body = document.createElement('div');
+    body.className = 'plugin-body hidden';
+    const secLabel = document.createElement('div');
+    secLabel.className = 'plugin-section-label';
+    secLabel.textContent = dict().pluginSettingsSection;
+    const settingsBox = document.createElement('div');
+    settingsBox.className = 'plugin-settings';
+    body.appendChild(secLabel);
+    body.appendChild(settingsBox);
+    card.appendChild(body);
+
+    settingsBtn.addEventListener('click', () => {
+      const willShow = body.classList.contains('hidden');
+      body.classList.toggle('hidden', !willShow);
+      if (willShow) renderPluginSettings(card, plugin);
+    });
+
+    reloadBtn.addEventListener('click', async () => {
+      await window.electronAPI.reloadPlugin(plugin.id);
+      showPluginStatus(dict().pluginReloadBtn + ': ' + plugin.name);
+    });
+
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(dict().pluginRemoveConfirm + '\n\n' + plugin.name)) return;
+      const r = await window.electronAPI.removePlugin(plugin.id);
+      if (r && r.success) { showPluginStatus(dict().pluginRemoved + plugin.name); renderPluginList(); }
+    });
+
+    cb.addEventListener('change', async () => {
+      const want = cb.checked;
+      if (want && (plugin.permissions || []).length) {
+        const list = plugin.permissions.map(p => '• ' + permLabel(p)).join('\n');
+        const ok = confirm(plugin.name + '\n\n' + dict().pluginGrantTitle + '\n' + list + dict().pluginGrantAsk);
+        if (!ok) { cb.checked = false; return; }
+      }
+      const r = await window.electronAPI.setPluginEnabled(plugin.id, want);
+      if (!r || !r.success) { cb.checked = !want; return; }
+      card.classList.toggle('is-off', !want);
+      showPluginStatus((want ? dict().pluginEnabled : dict().pluginDisabled) + ': ' + plugin.name);
+    });
+
+    return card;
+  }
+
+  async function renderPluginList() {
+    if (!els.plugin_list) return;
+    try { pluginList = (await window.electronAPI.getPluginList()) || []; }
+    catch (e) { pluginList = []; }
+    els.plugin_list.innerHTML = '';
+    const readable = pluginList.filter(p => p.readable);
+    const broken = pluginList.filter(p => !p.readable);
+
+    if (!pluginList.length) {
+      if (els.plugin_empty) els.plugin_empty.classList.remove('hidden');
+      return;
+    }
+    if (els.plugin_empty) els.plugin_empty.classList.add('hidden');
+
+    readable.forEach(p => els.plugin_list.appendChild(buildPluginCard(p)));
+
+    if (broken.length) {
+      const box = document.createElement('div');
+      box.className = 'plugin-empty';
+      box.textContent = dict().pluginMissingFolder + ' (' + broken.map(b => b.id).join(', ') + ')';
+      els.plugin_list.appendChild(box);
+    }
+  }
+
+  function schedulePluginRender() {
+    if (pluginsRenderTimer) clearTimeout(pluginsRenderTimer);
+    pluginsRenderTimer = setTimeout(() => { pluginsRenderTimer = null; renderPluginList(); }, 150);
+  }
+
+  async function doPluginImport(kind) {
+    setPluginBusy(true);
+    try {
+      let r = await window.electronAPI.importPlugin(kind);
+      if (!r || r.canceled || r.error === 'canceled') return;
+      if (!r.success && r.error === 'exists' && r.stageId) {
+        const ok = confirm(dict().pluginExists + '\n\n' + (r.manifest ? r.manifest.name + ' v' + r.manifest.version : ''));
+        if (!ok) { await window.electronAPI.cancelPluginImport(r.stageId); return; }
+        r = await window.electronAPI.commitPlugin(r.stageId, true);
+      }
+      if (r && r.success) { showPluginStatus(dict().pluginImported + r.name); renderPluginList(); }
+      else showPluginStatus(dict().pluginImportFailed + pluginErrorText(r && r.error), true);
+    } finally { setPluginBusy(false); }
+  }
+
+  if (els.plugin_import_btn) els.plugin_import_btn.addEventListener('click', () => doPluginImport('file'));
+  if (els.plugin_import_folder_btn) els.plugin_import_folder_btn.addEventListener('click', () => doPluginImport('folder'));
+  if (els.plugin_folder_btn) els.plugin_folder_btn.addEventListener('click', async () => {
+    const r = await window.electronAPI.openPluginFolder();
+    if (r && r.success) showPluginStatus(dict().pluginOpenFolderDone + r.path);
+    else showPluginStatus(dict().pluginOpenFolderFail + ((r && r.error) || ''), true);
+  });
+  if (window.electronAPI.onPluginsChanged) window.electronAPI.onPluginsChanged(() => schedulePluginRender());
+
+  // 供外层 activatePanel 调用（两个作用域不互通）
+  window.DCPlugins = { render: renderPluginList, schedule: schedulePluginRender };
+  // 启动时若上次停在插件分区，初始化那一刻桥接还没建立，这里补渲染一次
+  renderPluginList();
 
   // [v1.0.5] 每 30 秒刷新闹钟列表以更新倒计时
   let alarmRefreshTimer = setInterval(() => {

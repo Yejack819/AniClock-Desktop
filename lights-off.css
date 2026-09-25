@@ -130,3 +130,13 @@ body.no-cursor {
 #btn-lock.locked:hover {
   background: rgba(255,204,0,0.2);
 }
+
+/* ====== [v1.0.5.5] 插件层 ====== */
+/* 铺满全屏、默认不吃鼠标事件 —— 这样「双击背景退出 / ESC 退出」在插件显示内容时依然有效。
+   插件如需交互，可自行开启（会挡住该区域的双击退出）。 */
+#plugin-layer {
+  position: fixed; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.plugin-stage { pointer-events: none; text-align: center; color: inherit; }

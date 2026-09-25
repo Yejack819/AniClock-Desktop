@@ -180,3 +180,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 #alarm-inline.alarm-scheduled {
   opacity: 0.9;
 }
+
+/* ====== [v1.0.5.5] 插件：信息栏插槽 ====== */
+/* 与日期 / 星期 / 时区同款：颜色继承（自动配色、文本颜色、闹钟闪烁都会带着它一起变），
+   宽度会被 fw() 计入窗口自适应计算 */
+.plugin-info-slot { display: inline-flex; align-items: center; gap: 4px; }
+.plugin-info-slot:empty { display: none; }

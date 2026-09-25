@@ -1,0 +1,16 @@
+<!-- 示例插件的「自绘设置」片段（可选功能）
+     宿主会做白名单清洗：script / iframe / 事件属性 / javascript: 一律去掉。
+     想跟宿主通信，请用 data-plugin-field="设置项 key" 标注输入控件，宿主不会自动绑定，
+     需要交互时更推荐用 plugin.json 里的 settings 声明式表单。 -->
+<div class="plugin-section-label">这个区块由插件的 settings.html 提供</div>
+
+<p style="font-size:13px;color:#bbb;line-height:1.6">
+  声明式设置项（上面那几行）能满足绝大多数需求；只有需要特殊排版时，才用这个自绘区域。
+  这里的内容会被清洗后插入，不能执行脚本。
+</p>
+
+<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+  <span class="plugin-badge">示例徽章</span>
+  <span style="font-size:12px;color:#888">data-plugin-field 的输入框示例：</span>
+  <input type="text" data-plugin-field="note" placeholder="备注" style="padding:4px 8px;border-radius:6px;border:1px solid #555;background:#3a3a4a;color:#eee">
+</div>
