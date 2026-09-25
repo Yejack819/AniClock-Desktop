@@ -405,6 +405,7 @@ cd my-plugin && zip -r ../my-plugin.dcplugin . -x '.*'
 | `Plugin needs a newer host API` | `apiVersion` 高于当前版本支持的能力 |
 | `Illegal path inside the package` / `A file inside the package is too large` | 压缩包里有越权路径或超大文件 |
 | `Plugin exceeds the size limit` | 插件总体积超过 20MB |
+| `当前版本不支持导入压缩包` | 包里缺 `adm-zip` 依赖 —— 解压后用「导入文件夹…」 |
 | `permission-denied: storage` / `net` | 没声明权限就调用了对应 API |
 | `only-https` | `dc.fetchText` 用了非 https 地址 |
 

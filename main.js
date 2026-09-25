@@ -782,7 +782,13 @@ function broadcastPlugins() {
 
 // 解压 zip 到 staging：逐条校验条目名，杜绝 zip-slip
 function extractPluginZip(zipPath, dest) {
-  const AdmZip = require('adm-zip');
+  let AdmZip;
+  try {
+    AdmZip = require('adm-zip');
+  } catch (e) {
+    // 依赖没打进包时的兜底：给出可读原因，而不是抛 MODULE_NOT_FOUND
+    throw new Error('zip-support-missing');
+  }
   const zip = new AdmZip(zipPath);
   const budget = { bytes: 0 };
   ensureDir(dest);

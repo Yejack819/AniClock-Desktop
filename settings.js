@@ -117,6 +117,7 @@ const LOCALE = {
     pluginErrTooLarge: '插件体积超过上限', pluginErrBadEntry: '插件包里有非法路径',
     pluginErrFileTooLarge: '插件包里有超大文件', pluginErrExists: '同名插件已存在',
     pluginErrIsPluginsDir: '不能把插件目录本身当作插件导入',
+    pluginErrZipMissing: '当前版本不支持导入压缩包，请把插件解压后改用「导入文件夹…」',
     // [v1.0.5.4] 定时自动校准
 
     autoAdjust: '定时自动校准',
@@ -248,6 +249,7 @@ const LOCALE = {
     pluginErrTooLarge: 'Plugin exceeds the size limit', pluginErrBadEntry: 'Illegal path inside the package',
     pluginErrFileTooLarge: 'A file inside the package is too large', pluginErrExists: 'A plugin with the same id already exists',
     pluginErrIsPluginsDir: 'You cannot import the plugins folder itself',
+    pluginErrZipMissing: 'This build cannot import archives — unzip the plugin and use “Import folder…” instead',
     // [v1.0.5.4] Scheduled auto-calibration
     autoAdjust: 'Scheduled auto-calibration',
     autoInterval: 'Interval', autoAmount: 'Each step',
@@ -1264,6 +1266,7 @@ function ensureActivePanel() {
       'file-too-large': dict().pluginErrFileTooLarge, 'exists': dict().pluginErrExists,
       'is-plugins-dir': dict().pluginErrIsPluginsDir,
       'invalid-path': dict().pluginErrBadEntry, 'symlink-not-allowed': dict().pluginErrBadEntry,
+      'zip-support-missing': dict().pluginErrZipMissing,
     };
     return map[code] || String(code || '');
   }

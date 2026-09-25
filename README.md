@@ -405,6 +405,7 @@ Settings → **Plugins**:
 | `Plugin needs a newer host API` | `apiVersion` is higher than this build supports |
 | `Illegal path inside the package` / `A file inside the package is too large` | Zip-slip attempt or an oversized entry |
 | `Plugin exceeds the size limit` | Total size over 20 MB |
+| `This build cannot import archives` | `adm-zip` is missing from the build — unzip the plugin and use “Import folder…” |
 | `permission-denied: storage` / `net` | The API was used without declaring the permission |
 | `only-https` | `dc.fetchText` was called with a non-https URL |
 
