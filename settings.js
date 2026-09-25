@@ -24,7 +24,9 @@ const LOCALE = {
     position: '窗口位置', posTL: '左上', posTR: '右上', posCenter: '居中',
     posBL: '左下', posBR: '右下', posCustom: '自定义', applyPos: '应用位置',
     layerMode: '图层模式', layerTop: '置顶', layerNormal: '桌面',
-    autoStart: '开机自启动', language: '语言', langZh: '中文', langEn: 'English',
+    autoStart: '开机自启动', silentStart: '静默自启动',
+    silentStartHint: '开机启动时不显示时钟窗口，仅驻留系统托盘；点击托盘图标即可随时唤出',
+    language: '语言', langZh: '中文', langEn: 'English',
     autoStartFail: '设置开机自启动失败：', permissionDenied: '权限被拒绝',
     passthrough: '鼠标穿透（整个窗口）', passthroughWarn: '开启鼠标穿透后无法拖动窗口以更改其位置',
     secAlarm: '--- 闹钟 ---',
@@ -127,7 +129,9 @@ const LOCALE = {
     position: 'Window Position', posTL: 'Top-Left', posTR: 'Top-Right', posCenter: 'Center',
     posBL: 'Bottom-Left', posBR: 'Bottom-Right', posCustom: 'Custom', applyPos: 'Apply',
     layerMode: 'Layer Mode', layerTop: 'Always on Top', layerNormal: 'Normal',
-    autoStart: 'Auto Start on Boot', language: 'Language', langZh: 'Chinese', langEn: 'English',
+    autoStart: 'Auto Start on Boot', silentStart: 'Silent Start',
+    silentStartHint: 'Start without showing the clock window — stays in the system tray; click the tray icon to show it anytime.',
+    language: 'Language', langZh: 'Chinese', langEn: 'English',
     autoStartFail: 'Failed to set auto-start: ', permissionDenied: 'Permission denied',
     passthrough: 'Mouse passthrough (entire window)', passthroughWarn: 'When enabled, you cannot drag the window to move it.',
     secAlarm: '--- Alarm ---',
@@ -235,7 +239,7 @@ const els = {
   scale_detail: document.getElementById('scale-detail'),
   scale_factor: $('scale-factor'), scale_factor_label: $('scale-factor-label'),
   show_seconds: $('show-seconds'), show_date: $('show-date'), show_weekday: $('show-weekday'), date_position: $('date-position'),
-  layer_mode: $('layer-mode'), auto_start: $('auto-start'), language_select: $('language-select'),
+  layer_mode: $('layer-mode'), auto_start: $('auto-start'), silent_start: $('silent-start'), language_select: $('language-select'),
   pos_x: $('pos-x'), pos_y: $('pos-y'), apply_pos: $('apply-pos'),
   pos_buttons: document.querySelectorAll('.position-buttons button'),
   custom_pos: document.getElementById('custom-pos-controls'),
@@ -576,6 +580,8 @@ function syncUIFromConfig() {
   syncAutoAdjustUI();
   els.layer_mode.value = config.layerMode || 'alwaysOnTop';
   els.auto_start.checked = !!config.autoStart;
+  els.silent_start.checked = !!config.silentStart;
+  syncSilentStartUI();
   els.language_select.value = config.language || 'zh';
   els.settings_font_size.value = config.settingsFontSize || 'md';
   applySettingsFontSize(config.settingsFontSize || 'md');
@@ -637,6 +643,13 @@ function syncHourFormatUI() {
 }
 
 // [v1.0.5.4] 「日期位置」只在信息栏确实有内容时才有意义：日期 / 星期 / 闹钟 全关就隐藏
+// [v1.0.5.5] 静默自启动只在「开机自启动」开启时才有意义，否则置灰
+function syncSilentStartUI() {
+  if (!els.silent_start) return;
+  const row = els.silent_start.closest('.setting-row');
+  if (row) row.classList.toggle('is-disabled', !els.auto_start.checked);
+}
+
 function syncDatePositionUI() {
   if (!els.date_position_row) return;
   const hasAlarms = (alarmList || []).some(a => a && a.enabled !== false);
@@ -1012,9 +1025,19 @@ function ensureActivePanel() {
 
   els.auto_start.addEventListener('change', async () => {
     const en = els.auto_start.checked;
-    const r = await window.electronAPI.setAutoStart(en);
+    const silent = els.silent_start.checked;
+    const r = await window.electronAPI.setAutoStart(en, silent);
     if (!r.success) { els.auto_start.checked = !en; const d=LOCALE[currentLang]||LOCALE.zh; alert(d.autoStartFail+(r.error||d.permissionDenied)); }
     saveAndApply({ autoStart: en });
+    syncSilentStartUI();
+  });
+
+  // [v1.0.5.5] 静默自启动：需要把参数同步写进开机启动项
+  els.silent_start.addEventListener('change', async () => {
+    const silent = els.silent_start.checked;
+    const r = await window.electronAPI.setAutoStart(els.auto_start.checked, silent);
+    if (!r.success) { els.silent_start.checked = !silent; const d=LOCALE[currentLang]||LOCALE.zh; alert(d.autoStartFail+(r.error||d.permissionDenied)); return; }
+    saveAndApply({ silentStart: silent });
   });
   els.language_select.addEventListener('change', async () => {
     await saveAndApply({ language: els.language_select.value });
@@ -1130,7 +1153,7 @@ function ensureActivePanel() {
   window.electronAPI.onConfigUpdated((nc) => {
     if (nc.positionPreset === undefined && nc.x === undefined && nc.y === undefined && nc.extraTimezones === undefined) {
       // Check if any alarm advanced setting / 时间制式 changed
-      const syncKeys = ['alarmSoundDuration','alarmFlash','alarmAutoShow','alarmAutoPassthrough','alarmAutoTop','hourFormat','ampmCorner'];
+      const syncKeys = ['alarmSoundDuration','alarmFlash','alarmAutoShow','alarmAutoPassthrough','alarmAutoTop','hourFormat','ampmCorner','autoStart','silentStart'];
       if (!syncKeys.some(k => nc[k] !== undefined)) return;
     }
     Object.assign(config, nc);
@@ -1158,6 +1181,9 @@ function ensureActivePanel() {
     if (nc.alarmAutoShow !== undefined) els.alarm_auto_show.checked = nc.alarmAutoShow;
     if (nc.alarmAutoPassthrough !== undefined) els.alarm_auto_passthrough.checked = nc.alarmAutoPassthrough;
     if (nc.alarmAutoTop !== undefined) els.alarm_auto_top.checked = nc.alarmAutoTop;
+    // [v1.0.5.5] 开机 / 静默自启动
+    if (nc.autoStart !== undefined) { els.auto_start.checked = !!nc.autoStart; syncSilentStartUI(); }
+    if (nc.silentStart !== undefined) els.silent_start.checked = !!nc.silentStart;
     // [v1.0.5.3] 时间制式 / AM/PM 角标
     if (nc.hourFormat !== undefined) { els.hour_format_select.value = nc.hourFormat; syncHourFormatUI(); }
     if (nc.ampmCorner !== undefined) els.ampm_corner_select.value = nc.ampmCorner;

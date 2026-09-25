@@ -16,7 +16,7 @@ const DEFAULT_CONFIG = {
   fontSize: 200, animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', positionPreset: 'center', x: 0, y: 0,
   showSeconds: true, showDate: true, showWeekday: true, datePosition: 'below', autoColor: false,
   extraTimezones: [], animDuration: 350, staggerDelay: 0, staggerDirection: 'ltr',
-  layerMode: 'alwaysOnTop', autoStart: false, language: 'zh',
+  layerMode: 'alwaysOnTop', autoStart: false, silentStart: false, language: 'zh',
   infoScale: 0.3, blurEnabled: false, blurDuration: 300, blurStrength: 15,
   scaleInEnabled: false, scaleInFactor: 0.3,
   alarmSoundDuration: 120, alarmFlash: true, alarmAutoShow: true, alarmAutoPassthrough: true, alarmAutoTop: true,
@@ -527,7 +527,8 @@ let lightsOffLocked = false; // [v1.0.6] 关灯锁定：锁定时仅退出按钮
 let tray = null;
 let suppressMoveSave = false;
 
-function createWindow() {
+function createWindow(opts) {
+  const showWindow = !opts || opts.show !== false;
   const config = loadConfig();
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
@@ -548,6 +549,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 800, height: 400, x: winX, y: winY,
     transparent: true, frame: false,
+    show: showWindow,
     alwaysOnTop: config.layerMode === 'alwaysOnTop',
     resizable: true, skipTaskbar: true, hasShadow: false,
     webPreferences: {
@@ -1125,13 +1127,31 @@ ipcMain.handle('resize-window', (_event, { width, height }) => {
   return { success: true };
 });
 
-ipcMain.handle('set-auto-start', (_event, enabled) => {
+// [v1.0.5.5] ====== 开机自启动 ======
+// portable 版每次运行都会把应用解压到 %TEMP% 下的随机目录，并在退出时删掉它。
+// 所以自启动绝不能指向 process.execPath（那是临时解压出来的 electron.exe，重启后必然失效），
+// 必须指向用户实际存放的那个 portable exe —— electron-builder 把它放在 PORTABLE_EXECUTABLE_FILE。
+function getStartupExePath() {
+  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+}
+
+// 静默自启动：开机后带 --silent 启动，主窗口不显示，只驻留托盘
+function applyAutoStartSettings(openAtLogin, silent) {
+  app.setLoginItemSettings({
+    openAtLogin: !!openAtLogin,
+    path: getStartupExePath(),
+    args: silent ? ['--silent'] : [],
+  });
+}
+
+// 本次是否由自启动的静默方式拉起（portable 的 NSIS 外壳会原样透传命令行参数）
+function isSilentLaunch() {
+  return process.argv.includes('--silent');
+}
+
+ipcMain.handle('set-auto-start', (_event, enabled, silent) => {
   try {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      path: process.execPath,
-      args: [],
-    });
+    applyAutoStartSettings(enabled, silent);
     return { success: true };
   } catch (err) { return { success: false, error: err.message }; }
 });
@@ -1589,13 +1609,9 @@ app.whenReady().then(() => {
     });
   });
 
-  // 强制重写一次开机自启动
+  // 强制重写一次开机自启动（含静默参数，保证与当前配置一致）
   try {
-    app.setLoginItemSettings({
-      openAtLogin: !!config.autoStart,
-      path: process.execPath,
-      args: [],
-    });
+    applyAutoStartSettings(config.autoStart, config.silentStart);
   } catch (e) { console.error('开机自启动设置失败:', e.message); }
 
   // Load alarms
@@ -1603,13 +1619,15 @@ app.whenReady().then(() => {
   initAlarms();
 
   // [v1.0.5] 首次使用 → 欢迎界面；否则正常启动
-  if (!config.welcomeShown) {
+  // [v1.0.5.5] 静默自启动：主窗口与关灯窗口都不显示，只留托盘
+  const silentLaunch = isSilentLaunch();
+  if (!config.welcomeShown && !silentLaunch) {
     openWelcomeWindow();
   } else {
-    createWindow();
+    createWindow({ show: !silentLaunch });
     createTray();
-    // [v1.0.5] 若上次退出时关灯开启，恢复关灯窗口
-    if (config.lightsOff) {
+    // [v1.0.5] 若上次退出时关灯开启，恢复关灯窗口（静默启动时不恢复，避免开机即全屏）
+    if (config.lightsOff && !silentLaunch) {
       openLightsOffWindows();
     }
   }

@@ -436,6 +436,16 @@
           </label>
         </div>
 
+        <!-- [v1.0.5.5] 静默自启动：开机后不显示时钟窗口，仅驻留托盘 -->
+        <div class="setting-row row-col switch-with-note edu-hide">
+          <label data-lang="silentStart">静默自启动</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="silent-start">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="setting-note" data-lang="silentStartHint">开机启动时不显示时钟窗口，仅驻留系统托盘；点击托盘图标即可随时唤出</div>
+        </div>
+
         <div class="setting-row edu-hide">
           <label data-lang="language">语言</label>
           <select id="language-select">
@@ -444,13 +454,13 @@
           </select>
         </div>
 
-        <div class="setting-row row-col">
+        <div class="setting-row row-col switch-with-note">
           <label data-lang="passthrough">鼠标穿透（整个窗口）</label>
           <label class="toggle-switch">
             <input type="checkbox" id="passthrough-switch">
             <span class="toggle-slider"></span>
           </label>
-          <div class="passthrough-warning" data-lang="passthroughWarn">开启鼠标穿透后无法拖动窗口以更改其位置</div>
+          <div class="setting-note warn" data-lang="passthroughWarn">开启鼠标穿透后无法拖动窗口以更改其位置</div>
         </div>
 
         <!-- [v1.0.5] 设置界面尺寸 -->

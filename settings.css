@@ -162,7 +162,23 @@ select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; backgrou
 
 .tz-hint { font-size: calc(var(--sfz) - 3px); color: #666; margin: 2px 0 14px; }
 
-.passthrough-warning { font-size: calc(var(--sfz) - 3px); color: #f88; margin-top: 4px; line-height: 1.4; }
+/* [v1.0.5.5] 带说明文字的开关行：开关依然靠右，与其它行严格对齐；
+   说明文字独占一行（原先后代写法让整行退回纵向布局，开关被挤到左侧） */
+.setting-row.row-col.switch-with-note {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.setting-row.row-col.switch-with-note > label:first-child { margin-right: auto; }
+.setting-row.row-col.switch-with-note > .setting-note { flex-basis: 100%; }
+
+/* 从属开关（如「静默自启动」依赖「开机自启动」）：父项关闭时置灰不可点 */
+.setting-row.is-disabled { opacity: 0.45; }
+.setting-row.is-disabled .toggle-switch { pointer-events: none; cursor: not-allowed; }
+
+.setting-note { font-size: calc(var(--sfz) - 3px); color: #888; line-height: 1.4; }
+.setting-note.warn { color: #f88; }
 
 /* ====== 时区列表 ====== */
 #tz-list { margin-bottom: 6px; }
