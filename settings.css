@@ -469,6 +469,44 @@ select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; backgrou
 .plugin-status.error { background: rgba(255, 102, 102, 0.12); color: #f99; }
 .plugin-status.hidden { display: none; }
 
+/* ====== [v1.0.5.5] 插件安全模式提示 ====== */
+.plugin-safe-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(255, 170, 60, 0.14); border: 1px solid rgba(255, 170, 60, 0.35);
+  color: #ffca7a; font-size: calc(var(--sfz) - 1px); line-height: 1.5;
+}
+.plugin-safe-banner.hidden { display: none; }
+.plugin-safe-text { flex: 1; min-width: 0; }
+.plugin-safe-banner button {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 170, 60, 0.5);
+  background: transparent; color: #ffca7a; font-family: inherit;
+  font-size: calc(var(--sfz) - 1px); cursor: pointer; transition: background 0.15s;
+}
+.plugin-safe-banner button:hover { background: rgba(255, 170, 60, 0.2); }
+
+/* ====== [v1.0.5.5] 插件自建的导航页 ====== */
+/* 导航项沿用内置 .nav-item 的样式，这里只加一条左侧色条表示「这是插件页」 */
+.plugin-nav-item { position: relative; }
+.plugin-nav-item::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 60%; border-radius: 2px; background: rgba(108, 140, 255, 0.5);
+}
+.plugin-nav-item.active::before { background: #6C8CFF; }
+.plugin-nav-body {
+  display: flex; flex-direction: column; gap: 12px;
+  font-size: calc(var(--sfz) - 1px); line-height: 1.6; color: #ddd;
+}
+/* 插件页里不给按钮写样式时的兜底外观，与内置按钮一致 */
+.plugin-nav-body button {
+  align-self: flex-start;
+  padding: 6px 12px; border-radius: 6px; border: 1px solid #3a3a4a; background: #2b2b36;
+  color: #ddd; font-family: inherit; font-size: calc(var(--sfz) - 1px); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.plugin-nav-body button:hover { background: #35354a; border-color: #6C8CFF; color: #fff; }
+.plugin-nav-body .plugin-nav-note { color: #9aa0b4; }
+
 .plugin-empty {
   padding: 18px 14px; border: 1px dashed #3a3a48; border-radius: 10px;
   color: #888; font-size: calc(var(--sfz) - 1px); line-height: 1.6; text-align: center;

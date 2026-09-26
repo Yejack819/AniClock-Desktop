@@ -83,6 +83,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pluginDataGet: (id, key) => ipcRenderer.invoke('plugin-data-get', id, key),
   pluginDataSet: (id, key, value) => ipcRenderer.invoke('plugin-data-set', id, key, value),
   openPluginFolder: () => ipcRenderer.invoke('plugin-open-folder'),
+  // [v1.0.5.5] 安全模式：停用全部插件（托盘菜单与设置界面共用），改完需要重启才生效
+  setPluginSafeMode: (on) => ipcRenderer.invoke('plugin-safe-mode', on),
+  getPluginRuntimeState: () => ipcRenderer.invoke('plugin-runtime-state'),
   onPluginsChanged: (callback) => {
     ipcRenderer.on('plugins-changed', () => callback());
   },

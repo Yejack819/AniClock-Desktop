@@ -140,3 +140,12 @@ body.no-cursor {
   pointer-events: none;
 }
 .plugin-stage { pointer-events: none; text-align: center; color: inherit; }
+
+/* ====== [v1.0.5.5] 插件背景层 ====== */
+/* 插件（需 ui.lightsOffBg 权限）通过 dc.lightsOff.setBackground() 支配的一层，盖在宿主底色之上。
+   故意放在 body 首个子元素 + z-index:0：都是定位元素，绘制顺序按文档顺序 → 它永远在
+   #hint(9) / #controls(10) / #btn-lock(10) / #plugin-layer(1) 之下，压不住任何控件。 */
+#plugin-bg-layer {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+}

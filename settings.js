@@ -94,15 +94,22 @@ const LOCALE = {
     aboutAuthors: '作者', aboutFoot: '基于 Electron 构建 · 感谢使用',
     aboutVersion: '版本',
     navPlugins: '插件',
-    pluginIntro: '插件可以给关灯背景板加内容、给时钟日期栏加文字、美化设置界面；每个插件都能带自己的设置项。插件代码在受限沙箱里运行，只能使用宿主提供的接口。',
+    pluginIntro: '插件可以给关灯背景板加内容、给时钟日期栏加文字、美化设置界面；申请了界面编辑权的插件还能改这两个窗口里的文字与样式（不会删除宿主元素，卸载或改设置时自动还原）。插件代码在受限沙箱里运行，只能使用宿主提供的接口。',
     pluginImportBtn: '📦 导入插件…', pluginImportFolderBtn: '导入文件夹…', pluginFolderBtn: '打开插件目录',
     pluginEmpty: '还没有安装插件。点上面的按钮导入插件包（.dcplugin / .zip）或文件夹。',
     pluginSettingsBtn: '设置', pluginReloadBtn: '重新加载', pluginDeleteBtn: '删除',
     pluginEnable: '启用', pluginEnabled: '已启用', pluginDisabled: '已禁用',
     pluginGrantTitle: '这个插件申请了额外权限：',
     pluginGrantAsk: '\n\n仅在你信任插件来源时继续。要启用吗？',
+    pluginGrantUiWarn: '\n\n⚠️ 它会修改窗口里的文字与样式（不会删除宿主元素，卸载或改设置时自动还原）。万一界面被改坏，可在托盘菜单里开启安全模式一键停用全部插件。',
     pluginPermStorage: '读写自己的数据', pluginPermNet: '访问网络（https）',
+    pluginPermUiClock: '编辑时钟窗口内容', pluginPermUiSettings: '编辑设置窗口内容', pluginPermUiLightsBg: '控制关灯背景板背景',
     pluginHookLightsOff: '关灯背景板', pluginHookInfoBar: '时钟日期栏', pluginHookSettingsTheme: '设置界面美化',
+    pluginSafeText: '安全模式：全部插件已暂停，时钟与设置界面回到原始状态。确认插件没问题后可退出。',
+    pluginSafeExit: '退出安全模式并重启', pluginSafeBadge: '安全模式已暂停',
+    pluginSafeConfirm: '退出安全模式需要重启应用，确定继续吗？', pluginSafeOn: '已关闭安全模式，正在重启…',
+    pluginRuntimeDenied: '缺少权限被拒绝：', pluginRuntimeProtected: '这个元素受保护，不能隐藏或删除',
+    pluginRuntimeNoUi: '当前窗口不开放宿主元素编辑（关灯窗口只开放背景）',
     pluginImported: '已导入并启用：', pluginExists: '同名插件已存在，要用新版本覆盖吗？\n（现有设置会保留）',
     pluginRemoved: '已删除插件：', pluginImportFailed: '导入失败：',
     pluginRemoveConfirm: '确定删除这个插件吗？它的数据与设置也会一并删除。',
@@ -226,15 +233,22 @@ const LOCALE = {
     aboutVersion: 'Version',
     // [v1.0.5.5] Plugins
     navPlugins: 'Plugins',
-    pluginIntro: 'Plugins can add content to the Lights Off board, add text to the clock info bar, and restyle this settings window. Each plugin can ship its own settings. Plugin code runs in a restricted sandbox with only the host API available.',
+    pluginIntro: 'Plugins can add content to the Lights Off board, add text to the clock info bar, and restyle this settings window. Plugins holding a UI permission can also edit text and styles inside those two windows (host elements are never deleted, and every change is restored on unload). Plugin code runs in a restricted sandbox with only the host API available.',
     pluginImportBtn: '📦 Import plugin…', pluginImportFolderBtn: 'Import folder…', pluginFolderBtn: 'Open plugins folder',
     pluginEmpty: 'No plugins installed yet. Use the buttons above to import a .dcplugin / .zip package or a folder.',
     pluginSettingsBtn: 'Settings', pluginReloadBtn: 'Reload', pluginDeleteBtn: 'Delete',
     pluginEnable: 'Enable', pluginEnabled: 'Enabled', pluginDisabled: 'Disabled',
     pluginGrantTitle: 'This plugin requests extra permissions:',
     pluginGrantAsk: '\n\nContinue only if you trust the source. Enable it?',
+    pluginGrantUiWarn: '\n\n⚠️ It edits text and styles inside host windows (host elements are never deleted, and changes are restored on unload). If the UI ever breaks, use Safe Mode from the tray menu to disable all plugins at once.',
     pluginPermStorage: 'read/write its own data', pluginPermNet: 'network access (https)',
+    pluginPermUiClock: 'edit clock window content', pluginPermUiSettings: 'edit settings window content', pluginPermUiLightsBg: 'control the Lights Off board background',
     pluginHookLightsOff: 'Lights Off board', pluginHookInfoBar: 'Clock info bar', pluginHookSettingsTheme: 'Settings theme',
+    pluginSafeText: 'Safe mode: all plugins are paused, clock and settings are back to their original state. Leave safe mode once you have checked the plugin.',
+    pluginSafeExit: 'Leave safe mode & restart', pluginSafeBadge: 'paused by safe mode',
+    pluginSafeConfirm: 'Leaving safe mode restarts the app. Continue?', pluginSafeOn: 'Safe mode off, restarting…',
+    pluginRuntimeDenied: 'Denied, missing permission: ', pluginRuntimeProtected: 'This element is protected and cannot be hidden or removed',
+    pluginRuntimeNoUi: 'This window does not allow host element editing (Lights Off only exposes the background)',
     pluginImported: 'Imported and enabled: ', pluginExists: 'A plugin with the same id already exists. Overwrite it with the new version?\n(Existing settings are kept)',
     pluginRemoved: 'Plugin removed: ', pluginImportFailed: 'Import failed: ',
     pluginRemoveConfirm: 'Delete this plugin? Its data and settings will be removed too.',
@@ -342,6 +356,8 @@ const els = {
   plugin_status: document.getElementById('plugin-status'),
   plugin_empty: document.getElementById('plugin-empty'),
   plugin_list: document.getElementById('plugin-list'),
+  plugin_safe_banner: document.getElementById('plugin-safe-banner'),
+  plugin_safe_exit: document.getElementById('plugin-safe-exit'),
   data_transfer_status: document.getElementById('data-transfer-status'),
   mode_select: document.getElementById('mode-select'),
   lights_off_switch: document.getElementById('lights-off-switch'),
@@ -876,15 +892,32 @@ function ensureActivePanel() {
   if (!active || !isNavAvailable(active)) activatePanel('mode', false);
 }
 
+// [v1.0.5.5] 插件会动态往导航里插入自己的页面（dc.ui.nav）——
+// navItems / panels 是加载时一次性抓取的数组，插件增删页面后必须重新抓一遍，
+// 否则插件页切不过去、被删掉的页面还会留在数组里。
+function refreshNavItems() {
+  navItems.length = 0;
+  panels.length = 0;
+  navItems.push(...Array.from(document.querySelectorAll('.nav-item')));
+  panels.push(...Array.from(document.querySelectorAll('.panel')));
+  // 当前活动面板若已从 DOM 里消失（插件被卸载/重新加载），退回插件页而不是留一片空白
+  if (!document.querySelector('.panel.active')) activatePanel('plugins', false);
+}
+
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
   await refreshLightsOffDisplays();
 
   // [v1.0.5.1] 左侧导航点击切换面板
-  navItems.forEach(btn => {
-    btn.addEventListener('click', () => activatePanel(btn.dataset.panel, true));
-  });
+  // [v1.0.5.5] 改成事件委托：插件可以随时往导航里插入自己的页面，逐项绑定会漏掉动态项
+  const navRoot = document.getElementById('settings-nav');
+  if (navRoot) {
+    navRoot.addEventListener('click', event => {
+      const btn = event.target && event.target.closest ? event.target.closest('.nav-item') : null;
+      if (btn && btn.dataset.panel) activatePanel(btn.dataset.panel, true);
+    });
+  }
 
   // [v1.0.5.4] 关于界面：版本（四位）/ 作者 / 仓库地址
   try {
@@ -1254,6 +1287,7 @@ function ensureActivePanel() {
   // ====== [v1.0.5.5] 插件 ======
   let pluginList = [];
   let pluginsRenderTimer = null;
+  let pluginSafeMode = false; // [v1.0.5.5] 安全模式：插件全部暂停
 
   function dict() { return LOCALE[currentLang] || LOCALE.zh; }
 
@@ -1279,7 +1313,20 @@ function ensureActivePanel() {
   function permLabel(p) {
     if (p === 'storage') return dict().pluginPermStorage;
     if (p === 'net') return dict().pluginPermNet;
+    if (p === 'ui.clock') return dict().pluginPermUiClock;
+    if (p === 'ui.settings') return dict().pluginPermUiSettings;
+    if (p === 'ui.lightsOffBg') return dict().pluginPermUiLightsBg;
     return p;
+  }
+  // 运行时报错（沙箱里抛出来的）翻成人话；认不出来的原样显示
+  function pluginRuntimeText(msg) {
+    const s = String(msg || '');
+    if (s.indexOf('permission-denied:') === 0) {
+      return dict().pluginRuntimeDenied + permLabel(s.slice('permission-denied:'.length).split('（')[0].trim());
+    }
+    if (s.indexOf('protected-element:') === 0) return dict().pluginRuntimeProtected;
+    if (s.indexOf('ui-not-supported-in-this-window') === 0) return dict().pluginRuntimeNoUi;
+    return s;
   }
   function showPluginStatus(text, isError) {
     if (!els.plugin_status) return;
@@ -1451,7 +1498,13 @@ function ensureActivePanel() {
     } else if (plugin.runtimeError) {
       const b = document.createElement('span');
       b.className = 'plugin-badge err';
-      b.textContent = dict().pluginRuntimeError + plugin.runtimeError;
+      b.textContent = dict().pluginRuntimeError + pluginRuntimeText(plugin.runtimeError);
+      badges.appendChild(b);
+    }
+    if (plugin.blocked) {
+      const b = document.createElement('span');
+      b.className = 'plugin-badge warn';
+      b.textContent = dict().pluginSafeBadge;
       badges.appendChild(b);
     }
     text.appendChild(badges);
@@ -1513,7 +1566,10 @@ function ensureActivePanel() {
       const want = cb.checked;
       if (want && (plugin.permissions || []).length) {
         const list = plugin.permissions.map(p => '• ' + permLabel(p)).join('\n');
-        const ok = confirm(plugin.name + '\n\n' + dict().pluginGrantTitle + '\n' + list + dict().pluginGrantAsk);
+        // 界面编辑权风险更高：说清能改到什么程度，并告知出问题时的自救入口
+        const hasUi = (plugin.permissions || []).some(p => p.indexOf('ui.') === 0);
+        const extra = hasUi ? dict().pluginGrantUiWarn : '';
+        const ok = confirm(plugin.name + '\n\n' + dict().pluginGrantTitle + '\n' + list + extra + dict().pluginGrantAsk);
         if (!ok) { cb.checked = false; return; }
       }
       const r = await window.electronAPI.setPluginEnabled(plugin.id, want);
@@ -1527,6 +1583,7 @@ function ensureActivePanel() {
 
   async function renderPluginList() {
     if (!els.plugin_list) return;
+    refreshPluginSafeBanner();
     try { pluginList = (await window.electronAPI.getPluginList()) || []; }
     catch (e) { pluginList = []; }
     els.plugin_list.innerHTML = '';
@@ -1578,8 +1635,25 @@ function ensureActivePanel() {
   });
   if (window.electronAPI.onPluginsChanged) window.electronAPI.onPluginsChanged(() => schedulePluginRender());
 
+  // [v1.0.5.5] 安全模式：停用全部插件时的提示条 + 一键退出（退出需重启才生效）
+  async function refreshPluginSafeBanner() {
+    if (!els.plugin_safe_banner) return;
+    let state = null;
+    try { state = await window.electronAPI.getPluginRuntimeState(); } catch (e) {}
+    pluginSafeMode = !!(state && state.safeMode);
+    els.plugin_safe_banner.classList.toggle('hidden', !pluginSafeMode);
+  }
+  if (els.plugin_safe_exit) els.plugin_safe_exit.addEventListener('click', async () => {
+    if (!confirm(dict().pluginSafeConfirm)) return;
+    try { await window.electronAPI.setPluginSafeMode(false); } catch (e) {}
+    showPluginStatus(dict().pluginSafeOn);
+    window.electronAPI.relaunchApp();
+  });
+  refreshPluginSafeBanner();
+
   // 供外层 activatePanel 调用（两个作用域不互通）
-  window.DCPlugins = { render: renderPluginList, schedule: schedulePluginRender };
+  // refreshNav 供 plugin-host 在插件增删导航页后刷新宿主数组（见 refreshNavItems）
+  window.DCPlugins = { render: renderPluginList, schedule: schedulePluginRender, refreshNav: refreshNavItems };
   // 启动时若上次停在插件分区，初始化那一刻桥接还没建立，这里补渲染一次
   renderPluginList();
 

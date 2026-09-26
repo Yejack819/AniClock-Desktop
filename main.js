@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+// [v1.0.5.5] 位置预设/夹取/层级的纯函数（单独文件，便于用 Node 直接单测）
+const { computePresetPosition, clampPositionToDisplays, displayForPoint, shouldRaiseClockAboveBoards } = require('./window-layout');
 
 // ========== 配置路径 ==========
 function getConfigPath() {
@@ -14,6 +16,8 @@ function getAlarmsPath() {
 const DEFAULT_CONFIG = {
   color: '#000000', bgColor: 'rgba(255,255,255,0.2)', fontFamily: 'Arial',
   fontSize: 200, animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', positionPreset: 'center', x: 0, y: 0,
+  // [v1.0.5.5] 上次退出时的窗口尺寸：启动时按它创建，位置预设才能一次算对（否则先按 800×400 定位、被字号撑开后就走偏）
+  winW: 800, winH: 400,
   showSeconds: true, showDate: true, showWeekday: true, datePosition: 'below', autoColor: false,
   extraTimezones: [], animDuration: 350, staggerDelay: 0, staggerDirection: 'ltr',
   layerMode: 'alwaysOnTop', autoStart: false, silentStart: false, language: 'zh',
@@ -457,7 +461,8 @@ function restoreAlarmState() {
     }
     // Restore layer mode at runtime level (don't touch config)
     if (layerModeWasNormal && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setAlwaysOnTop(false);
+      // [v1.0.5.5] 关灯期间时钟必须保持在背景板之上，不能被「恢复原层级」压下去
+      applyClockTopmost();
       layerModeWasNormal = false;
     }
   }
@@ -520,9 +525,25 @@ function checkAlarms() {
 //   没有 require / Node / Electron 能力），只能通过宿主下发的 dc API 做事。
 // - 主进程 = 插件管理器：扫描目录、校验清单、记录启用状态与设置值、下发代码与数据。
 // - 插件状态单独存 plugins.json，不混进 config.json（避免污染偏好导入导出的白名单）。
-const PLUGIN_API_VERSION = 1;
+// apiVersion 2 起新增三个界面编辑权（ui.clock / ui.settings / ui.lightsOffBg）与 dc.ui 选择器 API；
+// 声明 apiVersion:1 的老插件行为完全不变，声明 2 的插件可以据此判定宿主能力（老宿主会拒载 api-too-new）。
+const PLUGIN_API_VERSION = 2;
 const PLUGIN_HOOKS = ['lightsOff.background', 'clock.infoBar', 'settings.theme'];
-const PLUGIN_PERMISSIONS = ['storage', 'net'];
+// [v1.0.5.5] 除 storage / net 外新增三个「界面编辑权」。
+// 分工：hooks 决定插件在哪个窗口运行，permissions 决定它在该窗口能碰到什么 ——
+// 两者分开，用户只看权限徽章就知道某个插件要动哪个窗口，插件作者也不用理解额外概念。
+const PLUGIN_PERMISSIONS = ['storage', 'net', 'ui.clock', 'ui.settings', 'ui.lightsOffBg'];
+// 每个界面编辑权只在对应的那个窗口里生效（用于清单校验时的提示，不做强制拒绝）
+const PLUGIN_UI_PERMISSION_HOOK = {
+  'ui.clock': 'clock.infoBar',
+  'ui.settings': 'settings.theme',
+  'ui.lightsOffBg': 'lightsOff.background',
+};
+// 安全模式：插件的救命通道。托盘菜单随时可用（主进程级，不受插件影响），
+// 也可用 `--safe-plugins` 启动；连续多次「启动期渲染进程异常」会自动进入，避免插件把界面改坏后无法自救。
+const SAFE_MODE_ARG = '--safe-plugins';
+const SAFE_MODE_STRIKES = 3;
+const SAFE_MODE_CRASH_WINDOW_MS = 10000;
 const PLUGIN_SETTING_TYPES = ['text', 'textarea', 'number', 'slider', 'select', 'toggle', 'color'];
 const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/;
 const PLUGIN_LIMITS = { totalBytes: 20 * 1024 * 1024, assetBytes: 8 * 1024 * 1024, textBytes: 512 * 1024, dataBytes: 256 * 1024 };
@@ -596,17 +617,42 @@ function removeDirSafe(dir, base) {
 
 function loadPluginsState() {
   try {
-    if (!fs.existsSync(getPluginsStatePath())) return { enabled: {}, settings: {} };
+    if (!fs.existsSync(getPluginsStatePath())) return { enabled: {}, settings: {}, safeMode: false, strikes: 0 };
     const parsed = JSON.parse(fs.readFileSync(getPluginsStatePath(), 'utf8'));
-    return { enabled: parsed.enabled || {}, settings: parsed.settings || {} };
+    return {
+      enabled: parsed.enabled || {},
+      settings: parsed.settings || {},
+      safeMode: parsed.safeMode === true,
+      strikes: Number.isFinite(Number(parsed.strikes)) ? Number(parsed.strikes) : 0,
+    };
   } catch (e) {
     console.error('插件状态读取失败，回退为空:', e.message);
-    return { enabled: {}, settings: {} };
+    return { enabled: {}, settings: {}, safeMode: false, strikes: 0 };
   }
 }
 function savePluginsState(state) {
   try { fs.writeFileSync(getPluginsStatePath(), JSON.stringify(state, null, 2), 'utf8'); }
   catch (e) { console.error('插件状态保存失败:', e.message); }
+}
+
+// 安全模式开（或关）——只改状态，重启后生效，由调用方决定是否 relaunch
+function setSafeMode(on) {
+  const state = loadPluginsState();
+  state.safeMode = on === true;
+  if (state.safeMode) state.strikes = 0;
+  savePluginsState(state);
+  return state.safeMode;
+}
+function isSafeModeOn() {
+  if (process.argv.includes(SAFE_MODE_ARG)) return true;
+  return loadPluginsState().safeMode === true;
+}
+// 给渲染进程（设置界面）看的运行时状态
+function getPluginRuntimeState() {
+  const state = loadPluginsState();
+  const safeMode = isSafeModeOn();
+  const total = scanPlugins().filter(r => r.manifest && r.enabled && !r.error).length;
+  return { safeMode, strikes: state.strikes || 0, blockedCount: safeMode ? total : 0 };
 }
 
 // 清单校验：字段/类型/钩子/权限全部白名单化，未知项一律丢弃
@@ -750,17 +796,23 @@ function pluginSummary(record) {
     runtimeError: record.runtimeError || null,
     sizeBytes: record.sizeBytes || 0,
     assetsBase: record.dir ? 'file:///' + record.dir.replace(/\\/g, '/') : '',
+    // 安全模式下插件仍在列表里，但不会被下发执行 —— 界面据此显示「已暂停」
+    blocked: isSafeModeOn(),
   };
 }
 
 // 下发给渲染进程的「可运行插件包」：代码 + 样式 + 设置值 + 自绘设置页
+// 安全模式下一律返回空数组：插件连加载都不会发生，界面一定回得来。
 function getPluginBundle() {
+  if (isSafeModeOn()) return [];
   return scanPlugins().filter(r => r.enabled && !r.error).map(r => {
     const m = r.manifest;
     try {
       return {
         id: m.id, name: m.name, version: m.version, author: m.author,
         hooks: m.hooks, permissions: m.permissions, values: r.values,
+        // 宿主支持的插件 API 版本：插件用 dc.apiVersion 判定能否使用界面编辑权
+        hostApiVersion: PLUGIN_API_VERSION,
         code: readTextCapped(safeResolve(r.dir, m.main)),
         style: m.style ? readTextCapped(safeResolve(r.dir, m.style), PLUGIN_LIMITS.assetBytes) : null,
         settingsView: m.settingsView ? readTextCapped(safeResolve(r.dir, m.settingsView)) : null,
@@ -779,6 +831,35 @@ function broadcastPlugins() {
     if (win && !win.isDestroyed()) win.webContents.send('plugins-changed');
   });
 }
+
+// 启动期渲染进程异常 → 记一次「strike」。插件把窗口改到崩溃通常发生在启动后很短时间内，
+// 用「窗口创建 10 秒内 + reason 是 crashed/oom」把误判挡掉（本机 GPU 偶发崩不在这个窗口里）。
+// 连续 SAFE_MODE_STRIKES 次即自动进入安全模式：宁可多停一次插件，也不能让界面彻底进不去。
+app.on('web-contents-created', (_event, wc) => {
+  const createdAt = Date.now();
+  wc.on('render-process-gone', (_ev, details) => {
+    try {
+      const state = loadPluginsState();
+      if (state.safeMode) return;
+      const enabledCount = Object.keys(state.enabled).filter(k => state.enabled[k]).length;
+      if (!enabledCount) return;
+      if (Date.now() - createdAt > SAFE_MODE_CRASH_WINDOW_MS) return;
+      const reason = (details && details.reason) || '';
+      if (reason && reason !== 'crashed' && reason !== 'oom') return;
+      state.strikes = (state.strikes || 0) + 1;
+      if (state.strikes >= SAFE_MODE_STRIKES) {
+        state.safeMode = true;
+        state.strikes = 0;
+        console.error('检测到连续启动异常，已自动进入插件安全模式');
+      }
+      savePluginsState(state);
+    } catch (e) {}
+  });
+});
+
+// 安全模式开关 / 状态查询（设置界面与托盘共用）
+ipcMain.handle('plugin-safe-mode', (_event, on) => ({ success: true, safeMode: setSafeMode(on === true) }));
+ipcMain.handle('plugin-runtime-state', () => getPluginRuntimeState());
 
 // 解压 zip 到 staging：逐条校验条目名，杜绝 zip-slip
 function extractPluginZip(zipPath, dest) {
@@ -1028,29 +1109,95 @@ let clockBoundsBeforeLightsOff = null; // 关灯前的时钟位置，退出时�
 let clockVisibleBeforeLightsOff = null;
 let lightsOffLocked = false; // [v1.0.6] 关灯锁定：锁定时仅退出按钮可退出
 let tray = null;
+
+// ========== [v1.0.5.5] 关灯层级自愈 ==========
+// 设计：关灯背景板是**非置顶**的全屏窗口，时钟窗口靠 always-on-top 压在它上面。
+// 但这个前提会被好几条路径破坏：
+//   ① 闹钟响完 restoreAlarmState() 按 config.layerMode 恢复层级；
+//   ② 设置窗口切「图层模式」→ set-layer-mode；
+//   ③ restoreClockLayer() 无条件按 config 重设；
+//   ④ 别的应用（如希沃白板5）引起显示器/DPI 变化 → 我们的背景板重新 setFullScreen，
+//      而 Windows 对「窗口进入全屏」有已知行为：会把其它置顶窗口压到全屏窗口之下。
+// 所以这里做两件事：把「关灯期间时钟必须在最上层」收成一个单一事实来源，
+// 再加一个自检轮询兜住所有未知触发。
+let lightsOffTopGuard = null;
+const LIGHTS_OFF_TOP_GUARD_MS = 1500;
+
+function lightsOffActive() {
+  if (lightsOffWindows.some(w => w && !w.isDestroyed())) return true;
+  try { return loadConfig().lightsOff === true; } catch (e) { return false; }
+}
+
+// 时钟窗口「应该」是置顶吗 —— 关灯期间恒为 true，否则看用户配置
+function desiredClockTopmost() {
+  if (lightsOffActive()) return true;
+  return loadConfig().layerMode === 'alwaysOnTop';
+}
+
+// 按单一事实来源恢复时钟层级（替代原来各处直接读 config.layerMode）
+function applyClockTopmost() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.setAlwaysOnTop(desiredClockTopmost());
+}
+
+// 把关灯背景板按回非置顶，并把时钟抬到它之上
+function raiseClockAboveLightsOff() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!lightsOffActive()) return;
+  lightsOffWindows.forEach(win => {
+    if (win && !win.isDestroyed() && win.isAlwaysOnTop()) win.setAlwaysOnTop(false);
+  });
+  mainWindow.setAlwaysOnTop(true);
+  // moveTop 不激活、不改变尺寸，只是把窗口提到所在层级的顶部
+  if (typeof mainWindow.moveTop === 'function') mainWindow.moveTop();
+}
+
+function lightsOffTopGuardTick() {
+  if (!lightsOffWindows.some(w => w && !w.isDestroyed())) { stopLightsOffTopGuard(); return; }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const boardPromoted = lightsOffWindows.some(w => w && !w.isDestroyed() && w.isAlwaysOnTop());
+  // 判定规则收在纯函数里（可单测）：关灯期间时钟丢了置顶、或背景板被抬成置顶，都该抢回
+  if (shouldRaiseClockAboveBoards({ lightsOffActive: true, clockTopmost: mainWindow.isAlwaysOnTop(), boardPromoted })) {
+    raiseClockAboveLightsOff();
+  }
+}
+
+function startLightsOffTopGuard() {
+  if (lightsOffTopGuard) return;
+  lightsOffTopGuard = setInterval(lightsOffTopGuardTick, LIGHTS_OFF_TOP_GUARD_MS);
+}
+function stopLightsOffTopGuard() {
+  if (lightsOffTopGuard) { clearInterval(lightsOffTopGuard); lightsOffTopGuard = null; }
+}
 let suppressMoveSave = false;
 
 function createWindow(opts) {
   const showWindow = !opts || opts.show !== false;
   const config = loadConfig();
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
 
-  let winX, winY;
-  if (config.positionPreset === 'top-left') { winX = 0; winY = 0; }
-  else if (config.positionPreset === 'top-right') { winX = screenW - 800; winY = 0; }
-  else if (config.positionPreset === 'bottom-left') { winX = 0; winY = screenH - 400; }
-  else if (config.positionPreset === 'bottom-right') { winX = screenW - 800; winY = screenH - 400; }
-  else if (config.positionPreset === 'custom') {
-    winX = config.x || 0; winY = config.y || 0;
-    winX = Math.max(0, Math.min(winX, screenW - 100));
-    winY = Math.max(0, Math.min(winY, screenH - 100));
+  // [v1.0.5.5] 用上次退出时的尺寸创建：预设定位按窗口真实尺寸算，
+  // 若仍写死 800×400，等渲染进程按字号把窗口撑开后右下角/居中预设就整体偏掉了。
+  const startSize = {
+    width: Math.max(200, Math.min(8000, Math.round(Number(config.winW) || 800))),
+    height: Math.max(100, Math.min(8000, Math.round(Number(config.winH) || 400))),
+  };
+  const displays = screen.getAllDisplays();
+  const area = primaryDisplay.workArea;
+
+  let pos;
+  if (config.positionPreset && config.positionPreset !== 'custom') {
+    pos = computePresetPosition(config.positionPreset, area, startSize);
+  } else {
+    // 自定义：先按保存的左上角，再夹进**它所在的那块屏**（原来用主屏宽度夹，副屏坐标会被拉回主屏）
+    pos = clampPositionToDisplays({ x: Number(config.x) || 0, y: Number(config.y) || 0 }, startSize, displays);
   }
-  else { winX = Math.round((screenW - 800) / 2); winY = Math.round((screenH - 400) / 2); }
+  const winX = pos.x;
+  const winY = pos.y;
 
   suppressMoveSave = true;
   mainWindow = new BrowserWindow({
-    width: 800, height: 400, x: winX, y: winY,
+    width: startSize.width, height: startSize.height, x: winX, y: winY,
     transparent: true, frame: false,
     show: showWindow,
     alwaysOnTop: config.layerMode === 'alwaysOnTop',
@@ -1084,6 +1231,49 @@ function createWindow(opts) {
   });
 }
 
+// ========== [v1.0.5.5] 位置与尺寸 ==========
+// 为什么需要在尺寸变化后重新对齐：窗口是按内容/字号撑开的，而 setSize 保持左上角不动 ——
+// 「右下角」这类预设会随窗口变大整体偏出屏幕，居中也会偏。所以每次尺寸变化后按**当前尺寸**再算一次。
+let realignTimer = null;
+let sizeSaveTimer = null;
+
+function realignWindowPosition() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (lightsOffActive()) return; // 关灯期间时钟由关灯逻辑居中，交给它自己管
+  const cfg = loadConfig();
+  const bounds = mainWindow.getBounds();
+  const displays = screen.getAllDisplays();
+  const anchor = { x: bounds.x + Math.round(bounds.width / 2), y: bounds.y + Math.round(bounds.height / 2) };
+  const display = displayForPoint(anchor, displays) || screen.getPrimaryDisplay();
+  const next = (cfg.positionPreset && cfg.positionPreset !== 'custom')
+    ? computePresetPosition(cfg.positionPreset, display.workArea, bounds)
+    : clampPositionToDisplays({ x: bounds.x, y: bounds.y }, bounds, displays, anchor);
+  if (!next || (next.x === bounds.x && next.y === bounds.y)) return;
+  suppressMoveSave = true;
+  mainWindow.setPosition(next.x, next.y);
+  setTimeout(() => { suppressMoveSave = false; }, 200);
+}
+
+function scheduleRealign() {
+  if (realignTimer) clearTimeout(realignTimer);
+  realignTimer = setTimeout(() => { realignTimer = null; realignWindowPosition(); }, 120);
+}
+
+// 记住窗口尺寸（防抖）：下次启动按它创建，预设定位一次就算对，不会先歪一下再弹回去
+function scheduleSizeSave() {
+  if (sizeSaveTimer) clearTimeout(sizeSaveTimer);
+  sizeSaveTimer = setTimeout(() => {
+    sizeSaveTimer = null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const b = mainWindow.getBounds();
+    const cfg = loadConfig();
+    if (cfg.winW === b.width && cfg.winH === b.height) return;
+    cfg.winW = b.width;
+    cfg.winH = b.height;
+    saveConfig(cfg);
+  }, 600);
+}
+
 // ========== 系统托盘 ==========
 let trayMenuWindow = null;
 
@@ -1111,6 +1301,11 @@ function showTrayMenu() {
   const lightsLabel = config.lightsOff
     ? (lang === 'zh' ? '☀️ 退出关灯' : '☀️ Exit Lights Off')
     : (lang === 'zh' ? '🌙 关灯' : '🌙 Lights Off');
+  // [v1.0.5.5] 安全模式入口：主进程级自绘菜单，插件改坏渲染界面时依然可点
+  const safeOn = isSafeModeOn();
+  const safeLabel = safeOn
+    ? (lang === 'zh' ? '🛡️ 退出安全模式' : '🛡️ Exit Safe Mode')
+    : (lang === 'zh' ? '🛡️ 安全模式（停用插件）' : '🛡️ Safe Mode (plugins off)');
 
   if (tray) tray.setToolTip(lang === 'zh' ? '大时钟' : 'Digital Clock');
 
@@ -1120,7 +1315,7 @@ function showTrayMenu() {
   }
 
   trayMenuWindow = new BrowserWindow({
-    width: 170, height: 126,
+    width: 170, height: 164,
     frame: false, alwaysOnTop: true, skipTaskbar: true,
     transparent: true, resizable: false, show: false,
     webPreferences: {
@@ -1142,10 +1337,13 @@ function showTrayMenu() {
     '<div class="sep"></div>' +
     '<div class="mi" id="btn-set">'+setLabel+'</div>' +
     '<div class="sep"></div>' +
+    '<div class="mi" id="btn-safe">'+safeLabel+'</div>' +
+    '<div class="sep"></div>' +
     '<div class="mi" id="btn-quit">'+quitLabel+'</div>' +
     '<script>' +
     'document.getElementById("btn-lights").onclick=()=>{window.electronAPI.setLightsOff(' + (config.lightsOff ? 'false' : 'true') + ');}' +
     ';document.getElementById("btn-set").onclick=()=>{window.electronAPI.openSettings();}' +
+    ';document.getElementById("btn-safe").onclick=()=>{window.electronAPI.setPluginSafeMode(' + (safeOn ? 'false' : 'true') + ').then(()=>window.electronAPI.relaunchApp());}' +
     ';document.getElementById("btn-quit").onclick=()=>{window.electronAPI.quitApp();}' +
     '</script></body></html>';
 
@@ -1454,6 +1652,9 @@ function openLightsOffWindows() {
       win.setBounds(display.bounds);
       win.show();
       win.setFullScreen(true);
+      // [v1.0.5.5] 背景板必须保持非置顶，并立刻把时钟抬到它之上
+      win.setAlwaysOnTop(false);
+      setTimeout(() => { raiseClockAboveLightsOff(); }, 60);
       // 验证全屏是否真正生效（任务栏隐藏、铺满整屏）。多屏/DPI 场景偶发请求被忽略，300ms 后复查重试
       setTimeout(() => {
         if (!win || win.isDestroyed()) return;
@@ -1461,12 +1662,20 @@ function openLightsOffWindows() {
           win.setBounds(display.bounds);
           win.setFullScreen(true);
         }
+        win.setAlwaysOnTop(false);
+        // Windows 的「窗口进入全屏」会把其它置顶窗口压下去 —— 每次进全屏都补一次抬升
+        raiseClockAboveLightsOff();
       }, 300);
     });
+    // 别的应用引起的显示器/DPI 变化也会让背景板重新进全屏，这里同样补一次
+    win.on('enter-full-screen', () => { setTimeout(() => { if (!win.isDestroyed()) { win.setAlwaysOnTop(false); raiseClockAboveLightsOff(); } }, 80); });
     win.on('closed', () => {
       const idx = lightsOffWindows.indexOf(win);
       if (idx >= 0) lightsOffWindows.splice(idx, 1);
       if (lightsOffWindows.length > 0) return;
+      // [v1.0.5.5] 所有背景板都没了 → 停掉自检轮询（若有），并把时钟层级交回给用户配置
+      stopLightsOffTopGuard();
+      setTimeout(() => { applyClockTopmost(); }, 50);
       // 显示器切换等场景：旧窗口全部关闭后按新目标重建
       if (lightsOffRestarting) {
         lightsOffRestarting = false;
@@ -1502,7 +1711,10 @@ function openLightsOffWindows() {
     centerClockOnDisplay(clockDisplay);
     mainWindow.setAlwaysOnTop(true);
     if (!mainWindow.isVisible()) mainWindow.show();
+    // [v1.0.5.5] 抬到背景板之上，并开启自检轮询
+    raiseClockAboveLightsOff();
   }
+  startLightsOffTopGuard();
   // 恢复原有层级关系：背景在底层，设置/闹钟窗口保持在上层
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.setAlwaysOnTop(true);
@@ -1542,10 +1754,8 @@ function restartLightsOffWindows() {
 
 // 恢复时钟窗口的图层模式（依据配置）
 function restoreClockLayer() {
-  const cfg = loadConfig();
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setAlwaysOnTop(cfg.layerMode === 'alwaysOnTop');
-  }
+  // [v1.0.5.5] 统一走 applyClockTopmost：关灯期间不能被 config 把时钟层级收回去
+  applyClockTopmost();
 }
 
 function broadcastLightsOffState(enabled) {
@@ -1592,29 +1802,29 @@ ipcMain.handle('save-config', (_event, data) => {
 
 ipcMain.handle('move-window', (_event, args) => {
   if (!mainWindow) return { success: false };
-  const w = mainWindow.getSize()[0];
-  const h = mainWindow.getSize()[1];
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenW, height: screenH } = primaryDisplay.workAreaSize;
-  let x, y;
+  const bounds = mainWindow.getBounds();
+  const size = { width: bounds.width, height: bounds.height };
+  const displays = screen.getAllDisplays();
+  const anchor = { x: bounds.x + Math.round(bounds.width / 2), y: bounds.y + Math.round(bounds.height / 2) };
+  const display = displayForPoint(anchor, displays) || screen.getPrimaryDisplay();
+  let next;
   if (args.preset) {
-    switch (args.preset) {
-      case 'center': x = Math.round((screenW - w) / 2); y = Math.round((screenH - h) / 2); break;
-      case 'top-left': x = 0; y = 0; break;
-      case 'top-right': x = screenW - w; y = 0; break;
-      case 'bottom-left': x = 0; y = screenH - h; break;
-      case 'bottom-right': x = screenW - w; y = screenH - h; break;
-      default: x = args.x || 0; y = args.y || 0;
-    }
-  } else { x = args.x; y = args.y; }
+    // [v1.0.5.5] 统一走纯函数：按**当前真实尺寸**与鼠标所在那块屏算（原来固定用主屏，副屏会跳到主屏）
+    next = computePresetPosition(args.preset, display.workArea, size);
+  } else {
+    next = clampPositionToDisplays({ x: Number(args.x) || 0, y: Number(args.y) || 0 }, size, displays);
+  }
   suppressMoveSave = true;
-  mainWindow.setPosition(x, y);
+  mainWindow.setPosition(next.x, next.y);
   setTimeout(() => { suppressMoveSave = false; }, 300);
   return { success: true };
 });
 
 ipcMain.handle('set-layer-mode', (_event, mode) => {
   if (!mainWindow) return { success: false };
+  // [v1.0.5.5] 关灯期间忽略「取消置顶」：关灯背景板是非置顶全屏窗口，
+  // 时钟一旦不是置顶就会掉到它后面（配置照常保存，退出关灯时 applyClockTopmost 会按配置收回）
+  if (lightsOffActive()) { mainWindow.setAlwaysOnTop(true); return { success: true }; }
   mainWindow.setAlwaysOnTop(mode === 'alwaysOnTop');
   return { success: true };
 });
@@ -1627,6 +1837,9 @@ ipcMain.handle('resize-window', (_event, { width, height }) => {
   suppressMoveSave = true;
   mainWindow.setSize(nw, nh);
   setTimeout(() => { suppressMoveSave = false; }, 300);
+  // [v1.0.5.5] 尺寸变了 → 预设位置要按新尺寸重算；顺手记住尺寸供下次启动用
+  scheduleRealign();
+  scheduleSizeSave();
   return { success: true };
 });
 
@@ -1994,7 +2207,8 @@ ipcMain.handle('import-data', async () => {
 
 // 导入生效需要整进程重启（与「删除所有数据」同一套机制：exit() 跳过 beforeunload 回写）
 ipcMain.handle('relaunch-app', () => {
-  app.relaunch();
+  // 重启时去掉 --safe-plugins：否则用该参数启动过一次后，退出安全模式也一直是安全模式
+  app.relaunch({ args: process.argv.slice(1).filter(a => a !== SAFE_MODE_ARG) });
   app.exit(0);
   return { success: true };
 });
@@ -2151,11 +2365,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  // Save window position
+  // Save window position（含尺寸：下次启动按它创建，位置预设一次算对）
   if (mainWindow && !mainWindow.isDestroyed()) {
-    const [x, y] = mainWindow.getPosition();
+    const b = mainWindow.getBounds();
     const cfg = loadConfig();
-    cfg.x = x; cfg.y = y;
+    // [v1.0.5.5] 关灯期间时钟是被强制居中到屏幕的，直接存会把用户设的位置覆盖成居中 ——
+    // 这种情况存关灯前记录的原始位置
+    const keep = clockBoundsBeforeLightsOff && lightsOffActive() ? clockBoundsBeforeLightsOff : b;
+    cfg.x = keep.x; cfg.y = keep.y;
+    cfg.winW = b.width; cfg.winH = b.height;
     saveConfig(cfg);
   }
   // Clean up alarm timers
@@ -2174,4 +2392,9 @@ app.on('before-quit', () => {
   // Save alarms
   saveAlarmsData({ alarms });
   if (tray) { tray.destroy(); tray = null; }
+  // [v1.0.5.5] 正常退出即清掉「启动异常」计数，只有连续异常（用户没机会正常退出）才累计到安全模式
+  try {
+    const st = loadPluginsState();
+    if (st.strikes) { st.strikes = 0; savePluginsState(st); }
+  } catch (e) {}
 });

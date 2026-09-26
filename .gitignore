@@ -6,3 +6,9 @@ releases/
 release.json
 start.bat
 alarms.json
+
+# [v1.0.5.5] 插件验证脚手架（复刻窗口 + 探针日志/截图，用完即删，别误提交）
+.plugin-probe/
+# 系统垃圾文件
+Thumbs.db
+.DS_Store

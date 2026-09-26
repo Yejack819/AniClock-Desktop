@@ -172,7 +172,21 @@ NODE_OPTIONS= \
 | `lightsOff.background` | 关灯全屏窗口 | 背景板上一个铺满、居中的内容层。默认**不吃鼠标事件**，所以「双击背景 / ESC 退出关灯」依然有效。 |
 | `settings.theme` | 设置窗口 | 可以用 CSS 变量和附加样式表给设置界面换肤。 |
 
-**如实说明边界。** `storage` 权限是真正被强制的（插件数据由主进程写到以插件 id 命名的目录里）；`net` 权限目前是「声明 + 首次启用时向你确认」，因为插件代码与宿主页面同源运行，它本来也能直接调 `fetch` —— 请把 `net` 当作意图声明，而不是硬性拦截。插件样式是全局的，请给自己的类名加前缀。**只安装你信任的插件。**
+**钩子决定「在哪个窗口运行」，权限决定「在那个窗口能碰什么」。** 想改窗口里的内容，还要声明对应的界面编辑权：
+
+| 权限 | 配合的钩子 | 能做什么 |
+|---|---|---|
+| `ui.clock` | `clock.infoBar` | 编辑时钟窗口里的任意元素、往整个窗口叠加自己的层 |
+| `ui.settings` | `settings.theme` | 编辑设置窗口里的任意元素、往整个窗口叠加自己的层 |
+| `ui.lightsOffBg` | `lightsOff.background` | 支配关灯背景板的背景（颜色 / 渐变 / 图片 / 透明度 / 模糊） |
+
+**如实说明边界。** `storage` 权限是真正被强制的（插件数据由主进程写到以插件 id 命名的目录里）；`net` 权限目前是「声明 + 首次启用时向你确认」，因为插件代码与宿主页面同源运行，它本来也能直接调 `fetch` —— 请把 `net` 当作意图声明，而不是硬性拦截。界面编辑权同理：它给的是**正当接口 + 自动还原 + 用户知情**，不是一堵墙。具体边界：
+
+- **可改样式 / 文字 / 属性 / 类名，可隐藏元素，可往元素里追加内容；但不能删除宿主元素，也不能改宿主行为**（拖动、双击退出关灯、闹钟、保存设置……）。
+- 少数元素受保护，连隐藏都会被拒绝：关灯窗口的退出 / 锁定 / 设置按钮，设置窗口的插件列表与插件导航项 —— 保证任何插件出问题时你都还能自救。
+- 通过 `dc.ui` 做的每一处改动都会被登记，插件被禁用 / 卸载 / 改设置时逐个还原。
+- 万一插件把界面改坏了：**托盘菜单 →「🛡️ 安全模式（停用插件）」**，一键停用全部插件并重启，界面立刻回到原始状态（这个菜单由主进程绘制，插件改不到）。连续多次「启动期渲染进程异常」时宿主也会自动进入安全模式，并在设置 → 插件页顶部显示提示条。
+- 插件样式是全局的，请给自己的类名加前缀。**只安装你信任的插件。**
 
 ## 二、目录结构
 
@@ -216,9 +230,9 @@ my-plugin/
 | `author` | string | 否 | ≤ 64 字 |
 | `description` | string | 否 | ≤ 200 字 |
 | `homepage` | string | 否 | 必须以 `https://` 开头，否则丢弃 |
-| `apiVersion` | number | 否 | 缺省 1；若高于当前宿主支持的版本，插件会带 `api-too-new` 错误加载 |
+| `apiVersion` | number | 否 | 缺省 1；当前宿主支持 **2**（`2` 起才有界面编辑权）。填高于宿主的版本会以 `api-too-new` 拒绝加载 |
 | `hooks` | string[] | **是** | 至少包含一个已知钩子，未知项会被丢弃；一个可用钩子都没有则拒绝加载（`no-hooks`） |
-| `permissions` | string[] | 否 | 可填 `storage`、`net`，未知项丢弃 |
+| `permissions` | string[] | 否 | 可填 `storage`、`net`、`ui.clock`、`ui.settings`、`ui.lightsOffBg`，未知项丢弃；首次启用时宿主会把这些逐条列出来让你确认 |
 | `main` | string | 否 | 插件目录内的相对路径，缺省 `index.js`；文件必须存在 |
 | `style` | string | 否 | 相对路径的 CSS 文件；只会注入到「声明了该插件钩子」的窗口 |
 | `settingsView` | string | 否 | 相对路径的 HTML 片段，插入前会被清洗（见第七节） |
@@ -249,7 +263,7 @@ dc.mount(function (slot, dc) {
 |---|---|
 | `dc.id` / `dc.name` / `dc.version` | 插件身份信息 |
 | `dc.hook` | 当前实例运行在哪个窗口 |
-| `dc.apiVersion` | 宿主 API 版本（当前为 `1`） |
+| `dc.apiVersion` | 宿主 API 版本（当前为 `2`）。需要界面编辑权时判定 `>= 2`，或用 `typeof dc.ui.get === 'function'` 探测 |
 | `dc.settings` | 插件当前设置值的只读副本（对象已冻结） |
 | `dc.theme()` | 返回 `{ isDark, fg, bg }`，按实际渲染出来的底色计算。**请用它来判断明暗，不要写死颜色。** |
 | `dc.mount(fn)` | 注册挂载回调。`fn(slot, dc)` 会拿到 DOM 插槽；需要收尾就返回一个清理函数 |
@@ -270,13 +284,79 @@ dc.mount(function (slot, dc) {
 | `dc.lightsOff.root()` | 插件自己的内容层元素 |
 | `dc.lightsOff.setText(text)` | 往里写文字 |
 | `dc.lightsOff.setInteractive(true)` | 让该层接收鼠标事件。默认关闭；开启后那一块不再传递「双击退出关灯」，请谨慎并尽量缩小范围 |
+| `dc.lightsOff.setBackground({ color, gradient, image, size, position, repeat, opacity, blur })` | **需 `ui.lightsOffBg`**：设置背景板的背景。`gradient` 优先于 `image`，`image` 优先于 `color`；`image` 只接受本插件目录内的 `file://` 资源或 `https://` 地址 |
+| `dc.lightsOff.clearBackground()` | **需 `ui.lightsOffBg`**：恢复透明（露出宿主底色） |
+| `dc.lightsOff.bgLayer()` | 背景层元素本身，想精细控制（动画、叠加）时可直接用 |
 
-### `dc.ui` —— 仅 `settings.theme`
+背景层在宿主底色**之上**、内容与控件**之下**，压不住「退出 / 设置 / 锁定」按钮。宿主仍然照常推送底色与昼夜切换（`onLightsOffBgUpdate`），想让背景跟着昼夜走就自己监听重设；不理会则固定成你设的样子。
+
+### `dc.ui` —— 界面编辑
+
+**换肤类（任意窗口可用，不需要界面权限）**
 
 | 成员 | 说明 |
 |---|---|
-| `dc.ui.applyVars({ '--名字': 值 })` | 在 `:root` 上设置 CSS 自定义属性（卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
 | `dc.ui.addStyle(cssText)` | 为该窗口追加一段样式表（卸载时移除） |
+| `dc.ui.applyVars({ '--名字': 值 })` | 仅设置窗口：在 `:root` 上设置 CSS 自定义属性（卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
+
+**编辑类（需要该窗口的界面编辑权：时钟 `ui.clock`、设置 `ui.settings`）**
+
+| 成员 | 说明 |
+|---|---|
+| `dc.ui.layer()` | 该窗口里属于你的自绘层：铺满、居中、默认不吃鼠标事件，可以自由往里画 |
+| `dc.ui.get(sel)` | 取宿主元素的可写句柄（见下）；找不到返回 `null` |
+| `dc.ui.hide(sel)` / `dc.ui.show(sel)` | 隐藏 / 恢复。受保护元素会抛错 |
+| `dc.ui.setText(sel, text)` | 改文字 |
+| `dc.ui.patch(sel, { style, class, attr })` | 批量改。`style` 键驼峰或短横线都行；`class` 可给字符串 / 数组（添加），或 `{ add, remove }` |
+| `dc.ui.push(sel, html)` | 往元素**里追加**一段清洗过的片段（白名单同第七节），不替换原有内容 |
+| `dc.ui.on(sel, type, cb)` | 绑定事件。会自动 `stopPropagation`（避免误触发宿主行为，例如「双击退出关灯」），并给元素加上 `no-drag`（时钟窗口整块是拖动区，不加就点不动） |
+| `dc.ui.nav({ id, label, icon })` | 在设置窗口左侧导航新增一个属于你的页面，**返回该页的内容容器**（见下）。`id` 需匹配 `/^[a-z0-9][a-z0-9._-]{0,31}$/`，`label` ≤ 24 字，`icon` 建议单个 emoji |
+
+`dc.ui.get(sel)` 返回的句柄把上面这些方法挂在元素上，可链式调用：
+
+```js
+dc.mount(function (slot, dc) {
+  if (dc.hook !== 'clock.infoBar') return;
+  const h = dc.ui.get('#time-display');
+  if (!h) return;
+  h.style('letterSpacing', '0.02em').cls('my-glow').attr('title', '由插件美化');
+  h.on('click', () => dc.log('clicked'));
+  dc.ui.get('#date-inline').hide();                    // 藏掉日期（卸载后自动回来）
+  dc.ui.push('#info-bar', '<span class="my-mark">·</span>');
+});
+```
+
+`h.node()` 只用于**读**（量尺寸、读计算样式）；直接改它不会被自动还原。
+
+### 在设置界面里给自己开一页（`dc.ui.nav`）
+
+设置窗口里页面很多时，别把东西全塞进插件卡片 —— 可以申请一个自己的导航页：
+
+```js
+dc.mount(function (slot, dc) {
+  if (dc.hook !== 'settings.theme') return;
+  const page = dc.ui.nav({ id: 'stats', label: '专注统计', icon: '📊' });
+  if (!page) return;
+  const p = document.createElement('p');
+  p.textContent = '今天已专注 3 小时';
+  page.appendChild(p);
+  dc.ui.push('.plugin-nav-body', '<button type="button" class="my-reset">重置</button>');
+  dc.ui.on('.my-reset', 'click', () => dc.storage.set('total', 0));
+});
+```
+
+- 导航项插在「插件」项之后，与内置项**同款样式**，左侧多一条细色条表示这是插件页；点击即切换，不需要自己做路由。
+- 返回的容器是普通 DOM 元素，你已经持有 `ui.settings` 权限，可以自由往里写内容、绑事件；宿主也提供了 `.plugin-nav-body button` 的兜底按钮样式。
+- 上限：单个插件最多 3 个导航页，所有插件合计最多 5 个（超了会抛 `too-many-nav-pages`）。
+- 插件被禁用/卸载/改设置时，导航项与该页面整块移除；如果你当时正停在这一页，宿主会自动退回「插件」页。
+- 导航文案**不要加 `data-lang`**（那是宿主切换语言用的，会被覆盖）；要跟随中英切换请用 `MutationObserver` 观察 `document.documentElement.lang` 自己换。
+
+几条硬性规则：
+
+- **不能删除宿主元素**：没有 `remove()`，`push()` 只能追加。
+- **受保护元素**（关灯退出 / 锁定 / 设置按钮、设置窗口插件列表与插件导航项）不能被隐藏，`patch` 里塞 `display:none` 同样会被拒绝。
+- 关灯窗口不开放宿主元素编辑，只有 `dc.lightsOff.setBackground()` 那条背景通路。
+- `sel` 就是普通 CSS 选择器，宿主只按你给的选择器办事 —— 选中什么就改什么，请自己保证选择器够准。
 
 ### 需要权限的成员
 
@@ -286,6 +366,8 @@ dc.mount(function (slot, dc) {
 | `dc.storage.set(key, value)` | `storage` | 写一个值（JSON，总量 ≤ 256KB） |
 | `dc.storage.all()` | `storage` | 读回整个对象 |
 | `dc.fetchText(url, { timeout })` | `net` | 仅 `https`，默认 8 秒超时，返回内容截断到 20 万字符 |
+| `dc.ui.get/hide/show/setText/patch/push/on/layer/nav` | `ui.clock` 或 `ui.settings` | 该窗口的宿主元素编辑权（按窗口判定，见第一节）；`nav()` 只在设置窗口有意义 |
+| `dc.lightsOff.setBackground/clearBackground` | `ui.lightsOffBg` | 关灯背景板的背景 |
 
 没声明权限就调用会抛错，错误会显示在该插件的设置卡片上。
 
@@ -330,8 +412,12 @@ dc.mount(function (slot, dc) {
 ## 六、三个钩子的实战建议
 
 - **日期栏文字** — 尽量短：时钟窗口会按「数字区宽度」与「信息栏宽度」的较大值撑开。推荐用 `setInfoText`，因为元素由宿主托管，颜色继承（自动昼夜、闹钟闪烁）都不会丢。
+- **时钟窗口内容**（需 `ui.clock`）— 想改时间数字的字体 / 间距 / 加装饰，用 `dc.ui.get('#time-display')`；想放整块自己的东西，用 `dc.ui.layer()`，别去动 `#clock` 的拖动属性（`-webkit-app-region`），否则窗口拖不动了。
 - **关灯背景板** — 适合放信息量大的内容（一句话、农历、倒计时）。记得这一层默认不吃鼠标事件；确实需要交互时再显式开启，并且把可交互区域做小，避免用户无法退出。
-- **设置界面美化** — 尽量只注入变量而不是整段覆盖样式；`--sfz` 是设置界面的基准字号，用 `calc()` 基于它计算，能跟随用户选择自动缩放。
+- **关灯背景**（需 `ui.lightsOffBg`）— 适合壁纸、渐变、氛围光。整层被 `filter: blur()` 会连内容一起糊掉时，把模糊放在背景层的子元素上，或直接用 `opacity` + 半透明色。
+- **设置界面美化** — 尽量只注入变量而不是整段覆盖样式；`--sfz` 是设置界面的基准字号，用 `calc()` 基于它计算，能跟随用户选择自动缩放。改宿主元素时**别隐藏插件面板**（那是用户停用你的唯一入口，受保护）。
+- **设置界面导航页**（需 `ui.settings`）— 功能一多就用 `dc.ui.nav()` 开自己的页，别把插件卡片撑成第二个设置界面；一个插件最多 3 页，超额会抛错。
+- **通用** — `dc.ui` 的每一次调用都会校验权限与保护名单，写错选择器只会返回 `false`（不抛错）；但**受保护元素**和**越权调用**会抛错并显示在该插件的错误徽章上，开发时留意设置页面。
 
 ## 七、自绘设置视图（`settingsView`）
 
@@ -386,8 +472,11 @@ cd my-plugin && zip -r ../my-plugin.dcplugin . -x '.*'
 - 每张卡片显示名称、版本、作者、id、钩子与权限徽章；出错时会有红色错误徽章
 - **设置** 展开该插件的声明式表单（有 `settingsView` 的话也会一起渲染）
 - **重新加载** 清掉记录的错误并重新运行；**删除** 会同时删掉插件目录与它的数据
-- 首次开启一个申请了权限的插件时，会先列出权限让你确认
+- 首次开启一个申请了权限的插件时，会先列出权限让你确认；申请了界面编辑权的会额外提示风险与自救入口
 - **打开插件目录** 直接定位到 `%APPDATA%/digital-clock/plugins/`
+- 插件面板顶部会出现**安全模式**提示条（如果你从托盘菜单开过安全模式）：一键退出即可恢复所有插件
+
+> **界面被插件改坏了怎么办？** 托盘图标右键 →「🛡️ 安全模式（停用插件）」→ 全部插件停用并自动重启，界面立刻回到原始状态（插件文件与设置都还在）。连续多次出现「启动期渲染进程异常」时宿主也会自动进入安全模式。
 
 ## 十、示例插件
 
@@ -406,8 +495,12 @@ cd my-plugin && zip -r ../my-plugin.dcplugin . -x '.*'
 | `Illegal path inside the package` / `A file inside the package is too large` | 压缩包里有越权路径或超大文件 |
 | `Plugin exceeds the size limit` | 插件总体积超过 20MB |
 | `当前版本不支持导入压缩包` | 包里缺 `adm-zip` 依赖 —— 解压后用「导入文件夹…」 |
-| `permission-denied: storage` / `net` | 没声明权限就调用了对应 API |
+| `permission-denied: storage` / `net` / `ui.*` | 没声明权限就调用了对应 API |
 | `only-https` | `dc.fetchText` 用了非 https 地址 |
+| 缺少权限被拒绝：编辑时钟窗口内容 | 用了 `dc.ui.get/hide/patch…` 却没声明 `ui.clock`（同理 `ui.settings`） |
+| 这个元素受保护，不能隐藏或删除 | 试图隐藏关灯的退出 / 锁定按钮，或设置窗口的插件列表 |
+| 当前窗口不开放宿主元素编辑 | 在关灯窗口调了 `dc.ui.get()` —— 那里只有 `setBackground` 一条通路 |
+| `bad-image-url` | `dc.lightsOff.setBackground({ image })` 的地址既不在本插件目录也不是 `https://` |
 
 运行时错误按插件单独捕获、只上报一次，并显示在该插件的卡片上 —— 插件崩了不会拖垮时钟本身。
 

@@ -172,7 +172,21 @@ Plugins extend Digital Clock without touching its source: add content to the Lig
 | `lightsOff.background` | Lights Off fullscreen window | A full-screen, centred content layer on the board. It is click-through by default, so double-click / ESC still exits Lights Off. |
 | `settings.theme` | Settings window | CSS custom properties and extra stylesheets for theming the settings UI. |
 
-**Honest limits.** The `storage` permission is genuinely enforced (plugin data is written through the main process into a folder named after the plugin id). The `net` permission is declared and confirmed on first enable, but because plugin code shares the host page it could call `fetch` directly anyway — treat `net` as an intent declaration, not a hard block. Plugin CSS is global, so prefix your class names. Install only plugins you trust.
+**Hooks decide *where* a plugin runs, permissions decide *what it may touch* there.** To edit what is inside a window, declare the matching UI permission too:
+
+| Permission | Pairs with hook | What it allows |
+|---|---|---|
+| `ui.clock` | `clock.infoBar` | Edit any element in the clock window, overlay your own layer on the whole window |
+| `ui.settings` | `settings.theme` | Edit any element in the settings window, overlay your own layer on the whole window |
+| `ui.lightsOffBg` | `lightsOff.background` | Control the Lights Off board background (colour / gradient / image / opacity / blur) |
+
+**Honest limits.** The `storage` permission is genuinely enforced (plugin data is written through the main process into a folder named after the plugin id). The `net` permission is declared and confirmed on first enable, but because plugin code shares the host page it could call `fetch` directly anyway — treat `net` as an intent declaration, not a hard block. UI permissions work the same way: what they buy you is a **sanctioned API + automatic rollback + user awareness**, not a wall. The exact boundaries:
+
+- **You may change styles / text / attributes / classes, hide elements and append content; you may NOT delete host elements or change host behaviour** (dragging, double-click-to-exit Lights Off, alarms, saving settings…).
+- A few elements are protected and refuse even `hide()`: the Lights Off exit / lock / settings buttons, plus the plugin list and the plugin nav item in Settings — so a broken plugin can never lock you out.
+- Every change made through `dc.ui` is recorded and restored one by one when the plugin is disabled, unloaded, or its settings change.
+- If a plugin does break the UI: **tray menu → "🛡️ Safe Mode (plugins off)"** disables every plugin and restarts, restoring the UI immediately (that menu is drawn by the main process, out of a plugin's reach). The host also enters safe mode automatically after repeated "renderer died during startup" events and shows a banner at the top of Settings → Plugins.
+- Plugin CSS is global, so prefix your class names. Install only plugins you trust.
 
 ## 2. Folder layout
 
@@ -216,9 +230,9 @@ Assets (images, fonts, JSON) may live alongside them; reach them with `dc.assets
 | `author` | string | no | ≤ 64 chars |
 | `description` | string | no | ≤ 200 chars |
 | `homepage` | string | no | must start with `https://`, otherwise dropped |
-| `apiVersion` | number | no | defaults to `1`. A value higher than the host supports makes the plugin load with the error `api-too-new` |
+| `apiVersion` | number | no | defaults to `1`. The host currently supports **2** (UI permissions start at `2`). A value higher than the host supports is rejected with `api-too-new` |
 | `hooks` | string[] | **yes** | at least one of the three hooks; unknown entries are dropped. No usable hook ⇒ rejected (`no-hooks`) |
-| `permissions` | string[] | no | any of `storage`, `net`; unknown entries are dropped |
+| `permissions` | string[] | no | any of `storage`, `net`, `ui.clock`, `ui.settings`, `ui.lightsOffBg`; unknown entries are dropped. On first enable the host lists them all for confirmation |
 | `main` | string | no | relative path inside the plugin folder, defaults to `index.js`; must exist |
 | `style` | string | no | relative path to a CSS file; injected only into windows that host one of the plugin's hooks |
 | `settingsView` | string | no | relative path to an HTML fragment; sanitised before it is inserted (section 7) |
@@ -249,7 +263,7 @@ dc.mount(function (slot, dc) {
 |---|---|
 | `dc.id` / `dc.name` / `dc.version` | Plugin identity |
 | `dc.hook` | Which window this instance is running in |
-| `dc.apiVersion` | Host API version (currently `1`) |
+| `dc.apiVersion` | Host API version (currently `2`). For UI permissions test `>= 2`, or feature-detect with `typeof dc.ui.get === 'function'` |
 | `dc.settings` | Frozen object of the plugin's current setting values |
 | `dc.theme()` | `{ isDark, fg, bg }` computed from what is actually painted — use it instead of hard-coding colours |
 | `dc.mount(fn)` | Registers the mount callback. `fn(slot, dc)` receives the DOM slot; return a cleanup function if you need one |
@@ -270,13 +284,79 @@ dc.mount(function (slot, dc) {
 | `dc.lightsOff.root()` | The plugin's own layer element |
 | `dc.lightsOff.setText(text)` | Writes text into it |
 | `dc.lightsOff.setInteractive(true)` | Opts the layer into mouse events. Off by default — turning it on means that area no longer forwards the double-click that exits Lights Off |
+| `dc.lightsOff.setBackground({ color, gradient, image, size, position, repeat, opacity, blur })` | **Requires `ui.lightsOffBg`**: sets the board background. `gradient` wins over `image`, `image` wins over `color`; `image` must be a `file://` asset inside your own plugin folder or an `https://` URL |
+| `dc.lightsOff.clearBackground()` | **Requires `ui.lightsOffBg`**: back to transparent (the host colour shows through) |
+| `dc.lightsOff.bgLayer()` | The background layer element itself, for fine-grained control (animation, stacking) |
 
-### `dc.ui` — `settings.theme` only
+The background layer sits **above** the host colour and **below** content and controls, so it can never cover the exit / settings / lock buttons. The host keeps broadcasting colour and day-night changes (`onLightsOffBgUpdate`) — listen and re-apply if you want the background to follow, ignore it to pin your own.
+
+### `dc.ui` — editing the UI
+
+**Theming (any window, no UI permission needed)**
 
 | Member | Description |
 |---|---|
-| `dc.ui.applyVars({ '--name': value })` | Sets CSS custom properties on `:root` (restored on unload). The settings UI already uses `--sfz` (base font size), `--accent`-ish blues and so on — overriding them re-themes the whole window |
 | `dc.ui.addStyle(cssText)` | Appends a stylesheet for this window (removed on unload) |
+| `dc.ui.applyVars({ '--name': value })` | Settings window only: sets CSS custom properties on `:root` (restored on unload). The settings UI already uses `--sfz` (base font size) and friends — overriding them re-themes the whole window |
+
+**Editing (requires the UI permission of that window: `ui.clock` or `ui.settings`)**
+
+| Member | Description |
+|---|---|
+| `dc.ui.layer()` | Your own drawing layer in this window: full-bleed, centred, click-through by default |
+| `dc.ui.get(sel)` | A writable handle for a host element, or `null` if nothing matches |
+| `dc.ui.hide(sel)` / `dc.ui.show(sel)` | Hide / restore. Protected elements throw |
+| `dc.ui.setText(sel, text)` | Replace the text |
+| `dc.ui.patch(sel, { style, class, attr })` | Bulk edit. `style` keys may be camelCase or kebab-case; `class` accepts a string / array (to add) or `{ add, remove }` |
+| `dc.ui.push(sel, html)` | **Appends** a sanitised fragment inside the element (same allow-list as section 7) — never replaces existing content |
+| `dc.ui.on(sel, type, cb)` | Binds an event. It calls `stopPropagation` for you (so you do not accidentally trigger host behaviour such as double-click-to-exit) and sets `no-drag` on the element (the clock window is one big drag region — without it, clicks will not land) |
+| `dc.ui.nav({ id, label, icon })` | Adds a page of your own to the settings sidebar and **returns that page's content container** (see below). `id` must match `/^[a-z0-9][a-z0-9._-]{0,31}$/`, `label` ≤ 24 chars, `icon` a single emoji works best |
+
+The handle returned by `dc.ui.get(sel)` exposes the same methods on the element and chains:
+
+```js
+dc.mount(function (slot, dc) {
+  if (dc.hook !== 'clock.infoBar') return;
+  const h = dc.ui.get('#time-display');
+  if (!h) return;
+  h.style('letterSpacing', '0.02em').cls('my-glow').attr('title', 'restyled by a plugin');
+  h.on('click', () => dc.log('clicked'));
+  dc.ui.get('#date-inline').hide();                    // hides the date — restored on unload
+  dc.ui.push('#info-bar', '<span class="my-mark">·</span>');
+});
+```
+
+`h.node()` is for **reading only** (measuring, computed styles); changes made through it are not rolled back.
+
+### Giving yourself a page in Settings (`dc.ui.nav`)
+
+When a plugin grows past a couple of rows, do not pile everything into its card — ask for a nav page of your own:
+
+```js
+dc.mount(function (slot, dc) {
+  if (dc.hook !== 'settings.theme') return;
+  const page = dc.ui.nav({ id: 'stats', label: 'Focus stats', icon: '📊' });
+  if (!page) return;
+  const p = document.createElement('p');
+  p.textContent = '3 hours focused today';
+  page.appendChild(p);
+  dc.ui.push('.plugin-nav-body', '<button type="button" class="my-reset">Reset</button>');
+  dc.ui.on('.my-reset', 'click', () => dc.storage.set('total', 0));
+});
+```
+
+- The nav item is inserted right after "Plugins", uses the **same styling** as built-in items and carries a thin accent bar to mark it as a plugin page. Clicking it switches panels — no routing to write yourself.
+- The returned container is a plain DOM element and you already hold the `ui.settings` permission, so you can fill it and bind events freely; the host also ships a default `.plugin-nav-body button` style.
+- Limits: up to 3 nav pages per plugin, 5 across all plugins (going over throws `too-many-nav-pages`).
+- The nav item and the whole page are removed when the plugin is disabled, unloaded or its settings change; if you were sitting on that page, the host falls back to the "Plugins" page automatically.
+- **Do not add `data-lang`** to your nav label (that is how the host localises built-in items and it would be overwritten). To follow the language switch, observe `document.documentElement.lang` with a `MutationObserver`.
+
+Hard rules:
+
+- **Host elements cannot be removed**: there is no `remove()` and `push()` only appends.
+- **Protected elements** (Lights Off exit / lock / settings buttons, the plugin list and plugin nav item in Settings) cannot be hidden, and `display:none` smuggled through `patch` is rejected too.
+- The Lights Off window exposes no host-element editing at all — only the background path.
+- `sel` is a plain CSS selector and the host simply acts on what it matches; keep your selectors precise.
 
 ### Permissions
 
@@ -286,6 +366,8 @@ dc.mount(function (slot, dc) {
 | `dc.storage.set(key, value)` | `storage` | Write one value (JSON, ≤ 256 KB total) |
 | `dc.storage.all()` | `storage` | Read the whole object |
 | `dc.fetchText(url, { timeout })` | `net` | `https` only, 8 s default timeout, response truncated to 200 000 chars |
+| `dc.ui.get/hide/show/setText/patch/push/on/layer/nav` | `ui.clock` or `ui.settings` | Host-element editing for that window (see section 1); `nav()` only makes sense in the settings window |
+| `dc.lightsOff.setBackground/clearBackground` | `ui.lightsOffBg` | The Lights Off board background |
 
 Calling a permission-gated member without declaring the permission throws, and the error shows up on the plugin's card in the settings window.
 
@@ -330,8 +412,12 @@ Rules enforced on load and on every save:
 ## 6. Hooks in practice
 
 - **Info bar text** — keep it short: the clock window grows to fit the widest line (clock digits or info bar). `setInfoText` is the recommended path because the host owns the element and keeps colour inheritance (auto day/night, alarm flashing) intact.
+- **Clock window content** (needs `ui.clock`) — for restyling the digits use `dc.ui.get('#time-display')`; to place a whole block of your own, use `dc.ui.layer()`. Do not touch `-webkit-app-region` on `#clock`, or the window stops being draggable.
 - **Lights Off board** — this is the place for bigger content (a quote, the date in another calendar, a countdown). Remember the layer is click-through; if you need interaction, enable it explicitly and keep the interactive area small so users can still exit.
-- **Settings theming** — inject variables rather than replacing whole stylesheets where possible; `--sfz` is the settings font size, so `calc()` on it keeps your styles in step with the user's choice.
+- **Lights Off background** (needs `ui.lightsOffBg`) — wallpapers, gradients, ambient glow. If `filter: blur()` on the whole layer also blurs your content, move the blur to a child element of the background layer, or use `opacity` with a translucent colour instead.
+- **Settings theming** — inject variables rather than replacing whole stylesheets where possible; `--sfz` is the settings font size, so `calc()` on it keeps your styles in step with the user's choice. When editing host elements, **never hide the plugins panel** — it is the only way for a user to disable you, and it is protected.
+- **A settings nav page** (needs `ui.settings`) — once a plugin grows, put it behind `dc.ui.nav()` instead of turning its card into a second settings window; 3 pages per plugin max.
+- **In general** — every `dc.ui` call validates the permission and the protected list; a selector that matches nothing simply returns `false`. Protected elements and missing permissions, however, *throw*, and the message shows up on the plugin's error badge — watch that page while developing.
 
 ## 7. Self-drawn settings view (`settingsView`)
 
@@ -386,8 +472,11 @@ Settings → **Plugins**:
 - Each card shows name, version, author, id, hook and permission badges, plus an error badge when something goes wrong
 - **Settings** expands the plugin's declarative form (and its `settingsView`, if any)
 - **Reload** clears the recorded runtime error and re-runs the plugin; **Delete** removes the plugin folder *and* its stored data
-- The enable switch confirms the requested permissions the first time you turn a plugin on
+- The enable switch confirms the requested permissions the first time you turn a plugin on; UI permissions additionally explain the risk and the escape hatch
 - **Open plugins folder** reveals `%APPDATA%/digital-clock/plugins/`
+- A **safe mode** banner appears at the top of the plugins panel if you entered safe mode from the tray — one click brings every plugin back
+
+> **A plugin wrecked the UI — now what?** Right-click the tray icon → "🛡️ Safe Mode (plugins off)": all plugins are disabled and the app restarts, restoring the UI immediately (plugin files and settings stay intact). The host also enters safe mode automatically after repeated "renderer died during startup" events.
 
 ## 10. Example plugin
 
@@ -406,8 +495,12 @@ Settings → **Plugins**:
 | `Illegal path inside the package` / `A file inside the package is too large` | Zip-slip attempt or an oversized entry |
 | `Plugin exceeds the size limit` | Total size over 20 MB |
 | `This build cannot import archives` | `adm-zip` is missing from the build — unzip the plugin and use “Import folder…” |
-| `permission-denied: storage` / `net` | The API was used without declaring the permission |
+| `permission-denied: storage` / `net` / `ui.*` | The API was used without declaring the permission |
 | `only-https` | `dc.fetchText` was called with a non-https URL |
+| Denied, missing permission: edit clock window content | `dc.ui.get/hide/patch…` used without `ui.clock` (same for `ui.settings`) |
+| This element is protected and cannot be hidden or removed | Tried to hide the Lights Off exit / lock button, or the plugin list in Settings |
+| This window does not allow host element editing | `dc.ui.get()` called in the Lights Off window — only `setBackground` is exposed there |
+| `bad-image-url` | `dc.lightsOff.setBackground({ image })` pointed somewhere that is neither inside your plugin folder nor `https://` |
 
 Runtime errors are caught per plugin, reported once, and displayed on the plugin's card — a broken plugin never takes the clock down with it.
 

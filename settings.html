@@ -488,6 +488,12 @@
           <label data-lang="pluginIntro">插件可以给关灯背景板加内容、给时钟日期栏加文字、美化设置界面；每个插件都能带自己的设置项。插件代码在受限沙箱里运行，只能使用宿主提供的接口。</label>
         </div>
 
+        <!-- [v1.0.5.5] 安全模式：停用全部插件时的提示与自救入口 -->
+        <div id="plugin-safe-banner" class="plugin-safe-banner hidden">
+          <span class="plugin-safe-text" data-lang="pluginSafeText">安全模式：全部插件已暂停，时钟与设置界面回到原始状态。确认插件没问题后可退出。</span>
+          <button id="plugin-safe-exit" data-lang="pluginSafeExit">退出安全模式并重启</button>
+        </div>
+
         <div class="plugin-toolbar">
           <button id="plugin-import-btn" class="primary-btn" data-lang="pluginImportBtn">📦 导入插件…</button>
           <button id="plugin-import-folder-btn" class="ghost-btn" data-lang="pluginImportFolderBtn">导入文件夹…</button>
