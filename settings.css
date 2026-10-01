@@ -23,7 +23,8 @@ body {
 }
 
 /* ====== [v1.0.5.1] 横向分栏骨架 ====== */
-.settings-window { display: flex; height: 100vh; width: 100%; }
+/* [v1.0.5.5] 减去自绘标题栏高度 */
+.settings-window { display: flex; height: calc(100vh - var(--win-bar-h)); width: 100%; }
 
 .sidebar {
   width: 176px;
@@ -449,6 +450,58 @@ select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; backgrou
   .tz-add-row { flex-direction: column; }
   .tz-add-row input[type="text"] { width: 100%; }
 }
+
+/* ====== [v1.0.5.5] 自绘标题栏（窗口 frame:false） ====== */
+:root { --win-bar-h: 40px; }
+
+.win-bar {
+  height: var(--win-bar-h);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px 0 14px;
+  background: #1a1a23;
+  border-bottom: 1px solid #26262f;
+  /* 整条是拖动区；按钮容器再单独 no-drag */
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.win-bar-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.win-bar-logo { width: 16px; height: 16px; display: block; object-fit: contain; }
+.win-bar-name { font-size: calc(var(--sfz) - 2px); font-weight: 600; color: #d8d8e2; letter-spacing: 0.4px; white-space: nowrap; }
+.win-bar-sep { width: 1px; height: 12px; background: #33333f; flex-shrink: 0; }
+.win-bar-sub { font-size: calc(var(--sfz) - 3px); color: #7d7d90; letter-spacing: 0.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.win-bar-controls { display: flex; align-items: center; gap: 2px; -webkit-app-region: no-drag; }
+.win-btn {
+  width: 30px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 7px; background: transparent;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.1s ease;
+}
+.win-btn:hover { background: rgba(255, 255, 255, 0.09); }
+.win-btn:active { background: rgba(255, 255, 255, 0.16); transform: scale(0.94); }
+.win-btn-close:hover { background: #e5484d; }
+
+.win-icon { position: relative; display: block; width: 11px; height: 11px; }
+.win-icon::before, .win-icon::after { content: ''; position: absolute; }
+.win-icon-min::before { left: 0; top: 50%; width: 11px; height: 1.5px; margin-top: -0.75px; background: #a9a9b8; border-radius: 1px; }
+.win-icon-max { border: 1.5px solid #a9a9b8; border-radius: 2.5px; }
+/* 最大化后切成「还原」图标：两个错位方框，用边框画，不需要底色 */
+body.is-maximized .win-icon-max { border: none; }
+body.is-maximized .win-icon-max::before { right: 0; bottom: 0; width: 7.5px; height: 7.5px; border: 1.5px solid #a9a9b8; border-radius: 2px; }
+body.is-maximized .win-icon-max::after { left: 0; top: 0; width: 7.5px; height: 7.5px; border-top: 1.5px solid #a9a9b8; border-left: 1.5px solid #a9a9b8; border-radius: 2px 0 0 0; }
+.win-icon-close::before, .win-icon-close::after { left: 0; top: 50%; width: 11px; height: 1.5px; margin-top: -0.75px; background: #a9a9b8; border-radius: 1px; }
+.win-icon-close::before { transform: rotate(45deg); }
+.win-icon-close::after { transform: rotate(-45deg); }
+.win-btn:hover .win-icon::before, .win-btn:hover .win-icon::after { background: #fff; }
+.win-btn:hover .win-icon-max::before, .win-btn:hover .win-icon-max::after { background: transparent; }
+.win-btn:hover .win-icon-max::before { border-color: #fff; }
+.win-btn:hover .win-icon-max::after { border-top-color: #fff; border-left-color: #fff; }
+.win-btn-close:hover .win-icon-close::before, .win-btn-close:hover .win-icon-close::after { background: #fff; }
 
 /* ====== [v1.0.5.5] 插件 ====== */
 .plugin-toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 16px; }

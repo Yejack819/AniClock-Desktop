@@ -1414,11 +1414,14 @@ function openSettingsWindow() {
     return;
   }
   // [v1.0.5.1] 横版布局：左侧导航栏 + 右侧内容区
+  // [v1.0.5.5] frame:false：自绘标题栏（玻璃风格）。原生标题栏与插件的液态玻璃主题无法融合，
+  // 去掉后标题栏也归页面管；Windows 下无边框窗口仍可拖边缩放、双击拖拽区最大化、贴边分屏。
   settingsWindow = new BrowserWindow({
     width: 900, height: 620,
     minWidth: 700, minHeight: 460,
     resizable: true,
-    frame: true,
+    frame: false,
+    roundedCorners: true,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     alwaysOnTop: true,
     autoHideMenuBar: true,
@@ -1430,6 +1433,14 @@ function openSettingsWindow() {
   });
   settingsWindow.loadFile('settings.html');
   settingsWindow.on('show', () => settingsWindow.setAlwaysOnTop(true));
+  // 最大化状态变化 → 通知渲染进程切换按钮图标
+  const pushMaxState = () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send('window-maximized', settingsWindow.isMaximized());
+    }
+  };
+  settingsWindow.on('maximize', pushMaxState);
+  settingsWindow.on('unmaximize', pushMaxState);
   settingsWindow.on('closed', () => { settingsWindow = null; });
 }
 
@@ -1902,6 +1913,19 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
 
 ipcMain.handle('quit-app', () => app.quit());
 ipcMain.handle('open-settings', () => { openSettingsWindow(); return { success: true }; });
+
+// [v1.0.5.5] ====== 无边框窗口的自绘标题栏控制 ======
+// 只作用于发起请求的那个窗口，不跨界操作；maximize 走 toggle 语义，交给渲染进程按键即可。
+ipcMain.handle('window-control', (event, action) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return { success: false, error: 'no-window' };
+  const act = String(action || '');
+  if (act === 'minimize') win.minimize();
+  else if (act === 'toggle-maximize') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+  else if (act === 'close') win.close();
+  else return { success: false, error: 'unknown-action' };
+  return { success: true, maximized: win.isMaximized() };
+});
 
 // [v1.0.5.4] ====== 关于界面：应用信息 + 安全打开外部链接 ======
 // 版本号用四位（1.0.5.4）：package.json 的 version 必须是合法 semver 三段式（electron-builder 校验），

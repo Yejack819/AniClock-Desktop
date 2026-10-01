@@ -67,6 +67,8 @@ const LOCALE = {
     secSettingsUI: '--- 设置界面 ---',
     settingsFontSize: '设置窗口字体大小',
     fontXs: '极小', fontSm: '小', fontMd: '中', fontLg: '大', fontXl: '极大',
+    // [v1.0.5.5] 自绘标题栏按钮
+    winMinimize: '最小化', winMaximize: '最大化', winClose: '关闭',
     // [v1.0.5] 模式切换 + 关灯
     secMode: '--- 模式 ---',
     modeLabel: '模式',
@@ -205,6 +207,8 @@ const LOCALE = {
     secSettingsUI: '--- Settings UI ---',
     settingsFontSize: 'Settings Font Size',
     fontXs: 'XS', fontSm: 'S', fontMd: 'M', fontLg: 'L', fontXl: 'XL',
+    // [v1.0.5.5] Custom titlebar buttons
+    winMinimize: 'Minimize', winMaximize: 'Maximize', winClose: 'Close',
     // [v1.0.5] Mode switch + Lights Off
     secMode: '--- Mode ---',
     modeLabel: 'Mode',
@@ -425,6 +429,11 @@ function applyLanguage(lang) {
   document.querySelectorAll('[data-lang]').forEach(el => {
     const key = el.dataset.lang;
     if (dict[key]) el.textContent = dict[key];
+  });
+  // [v1.0.5.5] 标题栏按钮的 tooltip（文案在 title 而不是文本节点上）
+  document.querySelectorAll('[data-lang-title]').forEach(el => {
+    const key = el.dataset.langTitle;
+    if (dict[key]) el.title = dict[key];
   });
   document.title = dict.settingsTitle;
   syncCalibUI(); // [v1.0.5.4] 校准摘要文案随语言切换
@@ -918,6 +927,23 @@ function refreshNavItems() {
       if (btn && btn.dataset.panel) activatePanel(btn.dataset.panel, true);
     });
   }
+
+  // [v1.0.5.5] 自绘标题栏（窗口 frame:false）：按钮接线 + 最大化状态同步
+  // 双击拖拽区最大化、贴边分屏由 Electron 对 -webkit-app-region: drag 的原生支持负责，这里不重复处理。
+  (function initWinBar() {
+    const api = window.electronAPI;
+    if (!api || typeof api.windowControl !== 'function') return;
+    const bind = (id, action) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', () => api.windowControl(action));
+    };
+    bind('win-min', 'minimize');
+    bind('win-max', 'toggle-maximize');
+    bind('win-close', 'close');
+    if (typeof api.onWindowMaximized === 'function') {
+      api.onWindowMaximized(v => document.body.classList.toggle('is-maximized', !!v));
+    }
+  })();
 
   // [v1.0.5.4] 关于界面：版本（四位）/ 作者 / 仓库地址
   try {

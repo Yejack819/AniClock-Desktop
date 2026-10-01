@@ -255,9 +255,11 @@
       const label = String(s.label || plugin.name || id).slice(0, 24);
       const icon = String(s.icon || '🧩').slice(0, 4);
       const panelId = 'plugin.' + plugin.id + '.' + id;
-      const mine = record.navPanels || (record.navPanels = []);
-      if (mine.length >= NAV_PAGE_MAX_PER_PLUGIN) throw new Error('too-many-nav-pages');
-      if (mine.indexOf(panelId) >= 0) return mine[panelId];
+      // panelId → 该页的内容容器。用映射而不是数组：同一个 id 重复调用要能拿回**同一个容器**
+      // （数组只能存 id 字符串，`arr[panelId]` 恒为 undefined —— 那会让插件拿到 undefined 后静默挂不上内容）
+      const mine = record.navPanels || (record.navPanels = {});
+      if (mine[panelId]) return mine[panelId]; // 先查重复、再查上限：已达上限时也要能取回已有容器
+      if (Object.keys(mine).length >= NAV_PAGE_MAX_PER_PLUGIN) throw new Error('too-many-nav-pages');
       if (document.querySelectorAll('.plugin-nav-item').length >= NAV_PAGE_MAX_TOTAL) throw new Error('too-many-nav-pages');
 
       const nav = document.getElementById('settings-nav');
@@ -299,7 +301,7 @@
       content.appendChild(section);
 
       record.nodes.push(btn, section);
-      mine.push(panelId);
+      mine[panelId] = body;
       refreshHostNav();
       return body;
     }
@@ -483,7 +485,7 @@
   let current = null;
 
   function runPlugin(plugin) {
-    const record = { id: plugin.id, nodes: [], styles: [], vars: [], cleanups: [], mounts: [], edits: [], listeners: [], navPanels: [], bgTouched: false, createdBgLayer: false };
+    const record = { id: plugin.id, nodes: [], styles: [], vars: [], cleanups: [], mounts: [], edits: [], listeners: [], navPanels: {}, bgTouched: false, createdBgLayer: false };
     const slot = createSlot(plugin);
     if (slot) record.nodes.push(slot);
     // 插件自带的样式表：只注入到它声明了钩子的这个窗口
@@ -552,7 +554,7 @@
     if (layer && !layer.childElementCount) layer.remove();
     // 有插件带过导航页 → 让宿主的 navItems/panels 重新抓一遍 DOM
     // （正停在被移除的插件页时，宿主 refreshNavItems 会退回插件页）
-    if (closing.some(rec => (rec.navPanels || []).length)) {
+    if (closing.some(rec => Object.keys(rec.navPanels || {}).length)) {
       try {
         if (window.DCPlugins && typeof window.DCPlugins.refreshNav === 'function') window.DCPlugins.refreshNav();
         else setTimeout(() => {

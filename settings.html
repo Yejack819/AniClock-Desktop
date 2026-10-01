@@ -8,6 +8,29 @@
   <link rel="stylesheet" href="settings.css">
 </head>
 <body data-plugin-hook="settings.theme">
+  <!-- ====== [v1.0.5.5] 自绘标题栏（窗口已改为 frame:false） ======
+       拖拽区靠 -webkit-app-region，按钮再单独置为 no-drag（见 settings.css）。
+       图标一律用 CSS 画，不用 SVG/字体，免得被插件的主题样式带偏。 -->
+  <header class="win-bar" id="win-bar">
+    <div class="win-bar-brand">
+      <img class="win-bar-logo" src="assets/icon.png" alt="">
+      <span class="win-bar-name">Digital Clock</span>
+      <span class="win-bar-sep"></span>
+      <span class="win-bar-sub" data-lang="settingsHeader">时钟设置</span>
+    </div>
+    <div class="win-bar-controls">
+      <button type="button" class="win-btn" id="win-min" data-lang-title="winMinimize" title="最小化">
+        <i class="win-icon win-icon-min"></i>
+      </button>
+      <button type="button" class="win-btn" id="win-max" data-lang-title="winMaximize" title="最大化">
+        <i class="win-icon win-icon-max"></i>
+      </button>
+      <button type="button" class="win-btn win-btn-close" id="win-close" data-lang-title="winClose" title="关闭">
+        <i class="win-icon win-icon-close"></i>
+      </button>
+    </div>
+  </header>
+
   <div class="settings-window">
     <!-- ====== [v1.0.5.1] 左侧导航栏 ====== -->
     <aside class="sidebar">

@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openSettings: () => ipcRenderer.invoke('open-settings'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
+  // ====== [v1.0.5.5] 无边框窗口标题栏（设置窗口） ======
+  windowControl: (action) => ipcRenderer.invoke('window-control', action),
+  onWindowMaximized: (callback) => {
+    ipcRenderer.on('window-maximized', (_event, maximized) => callback(maximized));
+  },
 
   // ====== Alarm IPC ======
   getAllAlarms: () => ipcRenderer.invoke('get-all-alarms'),

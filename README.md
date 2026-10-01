@@ -50,6 +50,7 @@ A beautiful, deeply customizable desktop flip clock built with **Electron**. Smo
 - **Silent auto start** — start at boot without showing the clock window (tray only)
 - **Bilingual UI** — settings window in Chinese or English
 - **Settings window font size** — 5 steps, remembered between sessions
+- **Frameless settings window** — custom glass titlebar (drag region + minimize/maximize/close) so plugins can theme it end to end
 
 ### Alarm
 - **Multiple alarms** — create, edit and delete alarms in the settings panel
@@ -348,6 +349,7 @@ dc.mount(function (slot, dc) {
 - The nav item is inserted right after "Plugins", uses the **same styling** as built-in items and carries a thin accent bar to mark it as a plugin page. Clicking it switches panels — no routing to write yourself.
 - The returned container is a plain DOM element and you already hold the `ui.settings` permission, so you can fill it and bind events freely; the host also ships a default `.plugin-nav-body button` style.
 - Limits: up to 3 nav pages per plugin, 5 across all plugins (going over throws `too-many-nav-pages`).
+- Calling `nav()` again with the **same `id` returns the same container** (idempotent): no second nav item is created and the limit is not consumed, so you do not need to cache the return value — calling it from two code paths both yield the same page.
 - The nav item and the whole page are removed when the plugin is disabled, unloaded or its settings change; if you were sitting on that page, the host falls back to the "Plugins" page automatically.
 - **Do not add `data-lang`** to your nav label (that is how the host localises built-in items and it would be overwritten). To follow the language switch, observe `document.documentElement.lang` with a `MutationObserver`.
 
