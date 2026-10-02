@@ -606,3 +606,99 @@ body.is-maximized .win-icon-max::after { left: 0; top: 0; width: 7.5px; height: 
 .plugin-section-label {
   font-size: calc(var(--sfz) - 2px); color: #777; margin: 2px 0 10px; letter-spacing: 0.4px;
 }
+
+/* ====== [v1.0.5.6] 局域网只读镜像 ====== */
+.setting-row:has(> .lan-port-input) { flex-direction: row; align-items: center; gap: 10px; }
+.lan-port-input {
+  width: 110px; margin-left: auto; padding: 6px 10px; border-radius: 6px;
+  border: 1px solid #555; background: #3a3a4a; color: #eee;
+  font-family: inherit; font-size: var(--sfz); outline: none; text-align: center;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.lan-port-input:focus { border-color: #6C8CFF; }
+.lan-port-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.lan-status {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 9px 12px;
+  border-radius: 8px; background: rgba(108, 140, 255, 0.1); color: #cfd6ff;
+  font-size: calc(var(--sfz) - 2px); line-height: 1.5;
+}
+.lan-status .lan-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: #3ac569; box-shadow: 0 0 8px rgba(58, 197, 105, 0.8);
+}
+.lan-status.off { background: rgba(255, 255, 255, 0.05); color: #9a9aa6; }
+.lan-status.off .lan-dot { background: #6a6a78; box-shadow: none; }
+.lan-status.error { background: rgba(255, 102, 102, 0.12); color: #f99; }
+.lan-status.error .lan-dot { background: #e0685a; box-shadow: 0 0 8px rgba(224, 104, 90, 0.8); }
+
+.lan-body { display: flex; flex-direction: column; gap: 16px; }
+.lan-body.hidden { display: none; }
+
+.lan-qr-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px;
+  border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid #2a2a34;
+}
+.lan-qr {
+  border-radius: 10px; background: #fff; image-rendering: pixelated;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.lan-qr.hidden { display: none; }
+.lan-qr-hint { font-size: calc(var(--sfz) - 3px); color: #888; }
+
+.lan-block { display: flex; flex-direction: column; gap: 8px; }
+.lan-block-title { font-size: calc(var(--sfz) - 2px); color: #777; letter-spacing: 0.4px; }
+.lan-addr-list { display: flex; flex-direction: column; gap: 6px; }
+.lan-addr {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; background: #2b2b36; border: 1px solid #33333f;
+}
+.lan-addr-ip { flex-shrink: 0; min-width: 116px; font-size: calc(var(--sfz) - 2px); color: #9a9aa6; }
+.lan-addr-url {
+  flex: 1; font-family: ui-monospace, Consolas, monospace;
+  font-size: calc(var(--sfz) - 2px); color: #cfd6ff; word-break: break-all;
+}
+/* 小号复制按钮：地址行内与「访问码」行共用一套外观（注意别让访问码行的按钮
+   落进 .lan-addr-copy 选择器 —— 那会让「只有一个地址时不显示行内复制」的规则误判） */
+.lan-addr-copy,
+.lan-code-copy-btn {
+  flex-shrink: 0; padding: 4px 10px; border-radius: 6px; border: 1px solid #3a3a4a;
+  background: #35354a; color: #ddd; font-family: inherit; font-size: calc(var(--sfz) - 3px);
+  cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.lan-addr-copy:hover,
+.lan-code-copy-btn:hover { background: #40405a; border-color: #6C8CFF; color: #fff; }
+
+.lan-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.lan-actions button {
+  padding: 7px 14px; border-radius: 6px; border: 1px solid #3a3a4a; background: #2b2b36;
+  color: #ddd; font-family: inherit; font-size: calc(var(--sfz) - 1px); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+}
+.lan-actions button:hover { background: #35354a; border-color: #6C8CFF; color: #fff; }
+.lan-actions button:active { transform: scale(0.97); }
+.lan-actions button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.lan-actions button.primary-btn { background: #6C8CFF; border-color: #6C8CFF; color: #fff; }
+.lan-actions button.primary-btn:hover { background: #7d99ff; border-color: #7d99ff; }
+.lan-actions button.primary-btn:disabled { background: #4a5a9a; border-color: #4a5a9a; }
+
+/* [v1.0.5.6] 访问方式：自定义访问码输入行 + 当前访问码展示 */
+.lan-code-input {
+  width: 100%; padding: 7px 10px; border-radius: 6px;
+  border: 1px solid #555; background: #3a3a4a; color: #eee;
+  font-family: ui-monospace, Consolas, monospace; font-size: var(--sfz);
+  letter-spacing: 0.5px; outline: none;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.lan-code-input:focus { border-color: #6C8CFF; }
+.lan-code-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.lan-code-line {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-radius: 8px; background: #2b2b36; border: 1px solid #33333f;
+}
+.lan-code-label { flex-shrink: 0; font-size: calc(var(--sfz) - 2px); color: #9a9aa6; }
+.lan-code-value {
+  flex: 1; font-family: ui-monospace, Consolas, monospace; font-size: calc(var(--sfz) + 1px);
+  letter-spacing: 2px; color: #cfd6ff; user-select: all;
+}

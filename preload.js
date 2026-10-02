@@ -72,6 +72,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('lights-off-bg-update', (_event, color) => callback(color));
   },
 
+  // ====== [v1.0.5.6] 局域网只读镜像 ======
+  // 手机能看到的只是时间显示，没有任何写接口；开关/换码都在主进程完成
+  lanMirrorStatus: () => ipcRenderer.invoke('lan-mirror-status'),
+  setLanMirror: (patch) => ipcRenderer.invoke('lan-mirror-set', patch),
+  newLanMirrorToken: () => ipcRenderer.invoke('lan-mirror-new-token'),
+  openLanMirrorUrl: (url) => ipcRenderer.invoke('lan-mirror-open', url),
+
   // ====== [v1.0.5.5] 插件 ======
   // 渲染进程只拿到「要跑什么」和「能改什么」，文件读写、清单校验全在主进程
   getPluginBundle: () => ipcRenderer.invoke('plugin-bundle'),

@@ -3,6 +3,15 @@ const path = require('path');
 const fs = require('fs');
 // [v1.0.5.5] 位置预设/夹取/层级的纯函数（单独文件，便于用 Node 直接单测）
 const { computePresetPosition, clampPositionToDisplays, displayForPoint, shouldRaiseClockAboveBoards } = require('./window-layout');
+// [v1.0.5.6] 局域网只读镜像服务（手机同 Wi-Fi 可看）。只读、无写接口，端口占用会自动顺延。
+const {
+  createLanMirror,
+  randomToken: lanMirrorRandomToken,
+  sanitizeCode: sanitizeLanCode,
+  normalizeAuthMode: normalizeLanAuthMode,
+  resolveToken: resolveLanToken,
+  clampPort: clampLanPort,
+} = require('./lan-mirror');
 
 // ========== 配置路径 ==========
 function getConfigPath() {
@@ -42,6 +51,15 @@ const DEFAULT_CONFIG = {
   mode: 'normal',
   lightsOff: false,
   lightsOffDisplay: 'clock',
+  // [v1.0.5.6] 局域网只读镜像：手机与电脑在同一 Wi-Fi 时，浏览器打开
+  // http://内网IP:端口/访问码/ 即可看到这个时钟。只读（没有任何写接口）。
+  lanMirrorEnabled: false,
+  lanMirrorPort: 8788,
+  // [v1.0.5.6] 访问方式三选一：random = 6 位随机短码（默认）；fixed = 用户自定义码；
+  // none = 不需要访问码（直接开根路径，同网段谁都能看 —— 页面是只读的，风险有限）
+  lanMirrorAuthMode: 'random',
+  lanMirrorFixedCode: '',  // 自定义模式的访问码（写入时自动规整为 a-z0-9-_ 并转小写）
+  lanMirrorToken: '',      // 实际生效的路径段，由主进程独占写入；none 模式为空串（根路径）
 };
 
 // [v1.0.5.4] 动画类型归一化：旧的「上滑翻转 / 下滑翻转 / 缩 / 放」已合并为
@@ -1793,6 +1811,47 @@ function broadcastLightsOffLock(locked) {
   }
 }
 
+// [v1.0.5.6] ========== 局域网只读镜像 ==========
+// 为什么放在主进程：渲染进程（含插件沙箱）没有 Node，无法监听端口；
+// 「让手机连进来」这件事只能在主进程做。服务本身是只读的，手机端改不了任何设置。
+let lanMirrorService = null;
+
+// 这些配置键只允许通过 lan-mirror-set / ensureLanToken 修改。
+// save-config 是渲染进程的「整份回写」入口，一律跳过它们，防止快照里的旧值把新状态冲掉。
+const LAN_OWNED_KEYS = ['lanMirrorEnabled', 'lanMirrorPort', 'lanMirrorAuthMode', 'lanMirrorFixedCode', 'lanMirrorToken'];
+
+function getLanMirrorService() {
+  if (!lanMirrorService) {
+    lanMirrorService = createLanMirror({ getConfig: () => loadConfig() });
+  }
+  return lanMirrorService;
+}
+
+// 把「访问方式 + 自定义码」解析成实际生效的路径段，必要时落盘。
+// 这里是 lanMirrorToken 的**唯一写入点**：服务模块只读、从不生成。
+// 规则本身在 lan-mirror.js 的 resolveToken（纯函数，有单测）：随机→6 位短码、
+// 自定义→规整后的码（不合法退回随机）、无码→空串。存量配置里的旧 32 位码会自动换成新短码。
+function ensureLanToken() {
+  const cfg = loadConfig();
+  const want = resolveLanToken(cfg).token;
+  if (cfg.lanMirrorToken !== want) {
+    cfg.lanMirrorToken = want;
+    saveConfig(cfg);
+  }
+  return want;
+}
+
+// 让「服务状态」与「配置」对齐：开着就保证在跑（端口变了会自动重启），关了就停。
+// 幂等 —— 配置没变时没有任何副作用，所以可以放心挂在每次配置变更之后。
+function syncLanMirror() {
+  const svc = getLanMirrorService();
+  let cfg;
+  try { cfg = loadConfig(); } catch (e) { return Promise.resolve(svc.status()); }
+  if (!cfg.lanMirrorEnabled) return svc.stop();
+  ensureLanToken();
+  return svc.start(cfg.lanMirrorPort);
+}
+
 // ========== IPC 处理 ==========
 
 ipcMain.handle('get-config', () => loadConfig());
@@ -1807,7 +1866,19 @@ ipcMain.handle('get-displays', () => {
 });
 
 ipcMain.handle('save-config', (_event, data) => {
-  saveConfig(data);
+  // [v1.0.5.6] 局域网这几个键由**主进程独占写入**（设置面板统一走 lan-mirror-set）。
+  // 渲染进程持有一份配置快照，它不可能知道主进程刚生成/改写的访问码 —— 若让它整份回写，
+  // 这个字段会被覆盖成快照里的空值或旧值 → 刚换的访问码被静默重置，手机上的链接与二维码
+  // 随之失效（这就是上一轮真机验收抓到的 bug）。所以这里一律沿用磁盘上的值，
+  // 只把渲染进程真正改动的其它字段合并进去。
+  const next = (data && typeof data === 'object') ? { ...data } : {};
+  try {
+    const disk = loadConfig();
+    LAN_OWNED_KEYS.forEach(k => { next[k] = disk[k]; });
+  } catch (e) { /* 读不到就原样写入 */ }
+  saveConfig(next);
+  // 配置变了让镜像服务的状态跟上（幂等：没开就是空操作）
+  syncLanMirror().catch(() => {});
   return { success: true };
 });
 
@@ -1908,6 +1979,8 @@ ipcMain.handle('notify-clock-update', (_event, newConfig) => {
   if (newConfig && (newConfig.bgColor !== undefined || newConfig.autoColor !== undefined)) {
     pushLightsOffBg(true);
   }
+  // [v1.0.5.6] 局域网镜像的开关/端口也可能从设置界面改到，顺势对齐一次
+  syncLanMirror().catch(() => {});
   return { success: true };
 });
 
@@ -1954,6 +2027,50 @@ ipcMain.handle('open-external', async (_event, url) => {
   const target = String(url || '');
   // 只允许 https，避免渲染进程被注入后调用任意协议/本地程序
   if (!/^https:\/\//i.test(target)) return { success: false, error: 'blocked' };
+  try {
+    await shell.openExternal(target);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// [v1.0.5.6] ====== 局域网只读镜像 ======
+ipcMain.handle('lan-mirror-status', () => getLanMirrorService().status());
+
+// 开关 / 端口 / 访问方式：写进配置后立刻对齐服务状态（端口被占用会自动顺延，状态里能看到最终端口）
+ipcMain.handle('lan-mirror-set', async (_event, patch) => {
+  const cfg = loadConfig();
+  const p = patch || {};
+  if (p.enabled !== undefined) cfg.lanMirrorEnabled = p.enabled === true;
+  if (p.port !== undefined) cfg.lanMirrorPort = clampLanPort(p.port);
+  if (p.authMode !== undefined) cfg.lanMirrorAuthMode = normalizeLanAuthMode(p.authMode);
+  // 自定义码：先规整再存（去空白/转小写/剔非法字符）。不合法时不报错也不放开，
+  // 由 ensureLanToken 退回随机码，状态里的 authFallback 让界面明确提示。
+  if (p.fixedCode !== undefined) cfg.lanMirrorFixedCode = sanitizeLanCode(p.fixedCode);
+  saveConfig(cfg);
+  try { await syncLanMirror(); } catch (e) { /* 状态里已带错误信息 */ }
+  return getLanMirrorService().status();
+});
+
+// 换访问码：旧链接立刻失效（手机需重新扫码）。
+// 只在「随机」模式下有意义：自定义模式的码由用户自己管，无码模式压根没有码。
+ipcMain.handle('lan-mirror-new-token', async () => {
+  const cfg = loadConfig();
+  if (normalizeLanAuthMode(cfg.lanMirrorAuthMode) === 'random') {
+    cfg.lanMirrorToken = lanMirrorRandomToken();
+    saveConfig(cfg);
+  }
+  try { await syncLanMirror(); } catch (e) { /* ignore */ }
+  return getLanMirrorService().status();
+});
+
+// 本机预览：只允许打开「当前真实地址列表里的那一条」，
+// 避免渲染进程被注入后拿它当任意网址的打开器（局域网地址是 http，不能走 open-external）
+ipcMain.handle('lan-mirror-open', async (_event, url) => {
+  const target = String(url || '');
+  const allowed = getLanMirrorService().status().urls.some(u => u.url === target);
+  if (!allowed) return { success: false, error: 'blocked' };
   try {
     await shell.openExternal(target);
     return { success: true };
@@ -2359,6 +2476,10 @@ app.whenReady().then(() => {
   alarms = loadAlarms().alarms;
   initAlarms();
 
+  // [v1.0.5.6] 上次退出时开着局域网镜像 → 这次启动自动拉起
+  // （静默启动也照常拉起，手机随时能看到时间；失败了只记录，不影响启动）
+  syncLanMirror().catch(err => console.error('局域网镜像启动失败:', err && err.message));
+
   // [v1.0.5] 首次使用 → 欢迎界面；否则正常启动
   // [v1.0.5.5] 静默自启动：主窗口与关灯窗口都不显示，只留托盘
   const silentLaunch = isSilentLaunch();
@@ -2416,6 +2537,8 @@ app.on('before-quit', () => {
   // Save alarms
   saveAlarmsData({ alarms });
   if (tray) { tray.destroy(); tray = null; }
+  // [v1.0.5.6] 释放局域网镜像占用的端口（不等待：进程马上退出，socket 会随之关闭）
+  try { if (lanMirrorService) lanMirrorService.shutdown().catch(() => {}); } catch (e) { /* ignore */ }
   // [v1.0.5.5] 正常退出即清掉「启动异常」计数，只有连续异常（用户没机会正常退出）才累计到安全模式
   try {
     const st = loadPluginsState();

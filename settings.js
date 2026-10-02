@@ -139,6 +139,48 @@ const LOCALE = {
     autoClamped: '已累计 {delta}（已达上限 {cap}）',
     autoResetAccum: '重置累积量',
     autoHint: '按固定间隔自动叠加提前/延后量，补偿走时误差；改动设置会重新计时，不会跳变',
+    // [v1.0.5.6] 局域网只读镜像
+    navLan: '局域网',
+    lanIntro: '手机和这台电脑连上同一个 Wi-Fi 后，用手机浏览器打开下面的地址，就能看到这块时钟（外观跟随当前设置）。手机端只能看，改不了任何设置，也看不到你的闹钟。',
+    lanEnable: '在局域网上共享时钟',
+    lanEnableHint: '开启后会占用一个本地端口供同一网络内的设备访问；关闭后手机上的地址立刻打不开。',
+    lanPort: '端口',
+    lanPortHint: '被占用时会自动顺延到下一个可用端口。',
+    lanStatusOff: '未开启共享',
+    lanStatusRunning: '正在共享 · 端口 {port} · 访问码已生效',
+    lanStatusRunningShifted: '正在共享 · 端口 {port}（{want} 被占用，已顺延）· 访问码已生效',
+    lanStatusRequests: '已响应 {n} 次请求',
+    lanStatusError: '启动失败：{msg}',
+    lanStatusStarting: '正在启动…',
+    lanErrPortInUse: '端口被占用（已试过后续端口）',
+    lanErrPortDenied: '端口被系统拒绝，换个端口试试',
+    lanErrListenFailed: '无法监听，请检查系统网络设置',
+    lanErrPageMissing: '手机端页面文件缺失，请重新安装应用',
+    lanQrHint: '用手机相机或微信扫一扫',
+    lanAddresses: '访问地址',
+    lanNoAddress: '没检测到可用的内网地址（电脑可能没连 Wi-Fi 或网线）。',
+    lanCopy: '复制地址',
+    lanCopied: '已复制到剪贴板',
+    lanCopyFail: '复制失败，请手动选中地址复制',
+    lanPreview: '在本机浏览器打开',
+    lanNewToken: '更换访问码',
+    lanTokenConfirm: '更换访问码后，之前分享出去的链接会立刻失效（手机需要重新扫码）。确定继续吗？',
+    // [v1.0.5.6] 访问方式三选一
+    lanAuthMode: '访问方式',
+    lanAuthRandom: '随机访问码（推荐）',
+    lanAuthFixed: '自定义访问码',
+    lanAuthNone: '不需要访问码',
+    lanCodeLabel: '自定义访问码',
+    lanCodeHint: '4–32 位，只能用小写字母、数字、- 和 _（会自动转小写）。示例：my-clock、home_2026。',
+    lanCodeInvalid: '这个访问码不合法（需 4–32 位，只能用 a-z 0-9 - _），当前暂时用随机码顶替 —— 先改好它，或切回「随机访问码」。',
+    lanCurrentCode: '访问码',
+    lanCopyCode: '复制访问码',
+    lanHintRandom: '地址里那 6 位短码就是访问码：同一网络下，不知道码就打不开。点「更换访问码」可让旧链接立刻失效。',
+    lanHintFixed: '地址里就是你自己设的访问码。改一次，之前分享出去的链接立刻失效。',
+    lanHintNone: '当前不需要访问码：同一网络下任何设备都能打开这个页面。页面是只读的，不会泄露闹钟、窗口位置或文件路径。',
+    lanWarnNone: '无码模式建议只在可信的家庭 Wi-Fi 下使用。',
+    lanWarnFixed: '自定义码越短越好记，但也越好猜 —— 家用 Wi-Fi 够用，公用网络建议用随机码。',
+    lanFirewallHint: '连不上时先查两件事：① 手机和电脑是否在同一个 Wi-Fi；② Windows 防火墙是否拦住了这个端口（首次开启时若弹出提示，勾选「专用网络」允许即可；被判定为「公用网络」时会默认拦截）。',
   },
   en: {
     settingsTitle: 'Clock Settings', settingsHeader: 'Clock Settings',
@@ -279,6 +321,48 @@ const LOCALE = {
     autoClamped: 'Accumulated {delta} (capped at {cap})',
     autoResetAccum: 'Reset accumulated',
     autoHint: 'Adds a fixed advance/delay every interval to compensate drift. Changing settings re-anchors without jumping.',
+    // [v1.0.5.6] LAN read-only mirror
+    navLan: 'LAN',
+    lanIntro: 'Connect your phone to the same Wi-Fi, then open the address below in the phone browser to see this clock (it follows your current settings). The phone view is read-only: it cannot change anything, and it never sees your alarms.',
+    lanEnable: 'Share the clock on the local network',
+    lanEnableHint: 'Enabling occupies a local port for devices on the same network. Turning it off makes the address stop working immediately.',
+    lanPort: 'Port',
+    lanPortHint: 'If the port is taken, the next free one is used automatically.',
+    lanStatusOff: 'Not sharing',
+    lanStatusRunning: 'Sharing · port {port} · access code active',
+    lanStatusRunningShifted: 'Sharing · port {port} ({want} was taken, shifted) · access code active',
+    lanStatusRequests: '{n} requests served',
+    lanStatusError: 'Failed to start: {msg}',
+    lanStatusStarting: 'Starting…',
+    lanErrPortInUse: 'the port is in use (the following ports were tried too)',
+    lanErrPortDenied: 'the port was refused by the system, try another one',
+    lanErrListenFailed: 'cannot listen, check your system network settings',
+    lanErrPageMissing: 'the phone page file is missing, please reinstall the app',
+    lanQrHint: 'Scan with your phone camera',
+    lanAddresses: 'Addresses',
+    lanNoAddress: 'No usable LAN address detected (this computer may be offline).',
+    lanCopy: 'Copy address',
+    lanCopied: 'Copied to clipboard',
+    lanCopyFail: 'Copy failed, please select the address manually',
+    lanPreview: 'Open in this computer\'s browser',
+    lanNewToken: 'New access code',
+    lanTokenConfirm: 'Generating a new access code invalidates any link you shared before (the phone must scan again). Continue?',
+    // [v1.0.5.6] access mode (three options)
+    lanAuthMode: 'Access',
+    lanAuthRandom: 'Random code (recommended)',
+    lanAuthFixed: 'Custom code',
+    lanAuthNone: 'No access code',
+    lanCodeLabel: 'Custom access code',
+    lanCodeHint: '4-32 characters, lowercase letters, digits, - and _ only (converted to lowercase automatically). e.g. my-clock, home_2026.',
+    lanCodeInvalid: 'That access code is not valid (needs 4-32 chars from a-z 0-9 - _). A random code is being used for now - fix it or switch back to "Random code".',
+    lanCurrentCode: 'Access code',
+    lanCopyCode: 'Copy code',
+    lanHintRandom: 'The 6-character code in the address is the access code: on the same network, nobody can open the clock without it. "New access code" invalidates old links immediately.',
+    lanHintFixed: 'The address contains the access code you chose. Changing it invalidates any link you shared before.',
+    lanHintNone: 'No access code is required: any device on the same network can open this page. It is read-only - alarms, window position and file paths are never exposed.',
+    lanWarnNone: 'Use no-code mode only on a Wi-Fi network you trust.',
+    lanWarnFixed: 'A short custom code is easy to remember but also easy to guess - fine at home, use a random code on public networks.',
+    lanFirewallHint: 'If the phone cannot connect, check two things: (1) the phone and this computer are on the same Wi-Fi; (2) whether Windows Firewall blocks the port (allow it for "Private networks" when prompted; networks classified as "Public" are blocked by default).',
   },
 };
 
@@ -366,6 +450,27 @@ const els = {
   mode_select: document.getElementById('mode-select'),
   lights_off_switch: document.getElementById('lights-off-switch'),
   lights_off_display: document.getElementById('lights-off-display-select'),
+  // [v1.0.5.6] 局域网只读镜像
+  lan_enabled: document.getElementById('lan-enabled'),
+  lan_port: document.getElementById('lan-port'),
+  lan_auth_mode: document.getElementById('lan-auth-mode'),
+  lan_code_row: document.getElementById('lan-code-row'),
+  lan_code: document.getElementById('lan-code'),
+  lan_code_error: document.getElementById('lan-code-error'),
+  lan_auth_note: document.getElementById('lan-auth-note'),
+  lan_auth_warn: document.getElementById('lan-auth-warn'),
+  lan_code_line: document.getElementById('lan-code-line'),
+  lan_code_value: document.getElementById('lan-code-value'),
+  lan_code_copy: document.getElementById('lan-code-copy'),
+  lan_status: document.getElementById('lan-status'),
+  lan_status_text: document.getElementById('lan-status-text'),
+  lan_body: document.getElementById('lan-body'),
+  lan_qr: document.getElementById('lan-qr'),
+  lan_address_list: document.getElementById('lan-address-list'),
+  lan_no_address: document.getElementById('lan-no-address'),
+  lan_copy_btn: document.getElementById('lan-copy-btn'),
+  lan_preview_btn: document.getElementById('lan-preview-btn'),
+  lan_token_btn: document.getElementById('lan-token-btn'),
 };
 
 let config = {};
@@ -438,6 +543,7 @@ function applyLanguage(lang) {
   document.title = dict.settingsTitle;
   syncCalibUI(); // [v1.0.5.4] 校准摘要文案随语言切换
   syncAutoAdjustUI(); // [v1.0.5.4] 自动校准摘要同理
+  renderLanPanel(); // [v1.0.5.6] 局域网状态文案与地址列表也带语言
   renderAlarmList(); // re-render with new locale
 }
 
@@ -670,6 +776,15 @@ function syncUIFromConfig() {
   els.settings_font_size.value = config.settingsFontSize || 'md';
   applySettingsFontSize(config.settingsFontSize || 'md');
   els.passthrough_switch.checked = !!config.passthrough;
+  // [v1.0.5.6] 局域网只读镜像（开关以配置为准：即便上次启动失败，配置仍是「开着」）
+  if (els.lan_enabled) els.lan_enabled.checked = !!config.lanMirrorEnabled;
+  if (els.lan_port) els.lan_port.value = config.lanMirrorPort || 8788;
+  // [v1.0.5.6] 访问方式：白名单外的值一律落回 random（和服务侧的 normalizeAuthMode 一致）
+  if (els.lan_auth_mode) {
+    els.lan_auth_mode.value = ['random', 'fixed', 'none'].indexOf(config.lanMirrorAuthMode) >= 0
+      ? config.lanMirrorAuthMode : 'random';
+  }
+  if (els.lan_code && !els.lan_code.value) els.lan_code.value = config.lanMirrorFixedCode || '';
   // [v1.0.5] 模式 + 关灯
   els.mode_select.value = config.mode || 'normal';
   els.lights_off_switch.checked = !!config.lightsOff;
@@ -892,6 +1007,8 @@ function activatePanel(id, persist) {
   // [v1.0.5.5] 进入插件分区时刷新插件列表（清单以主进程为准，避免显示过期状态）
   // 插件渲染逻辑在文件末尾的 IIFE 里，作用域不互通，这里走显式桥接
   if (btn.dataset.panel === 'plugins' && window.DCPlugins && typeof window.DCPlugins.render === 'function') window.DCPlugins.render();
+  // [v1.0.5.6] 进入局域网分区时拉一次最新状态（端口/地址/二维码都是主进程现算的）
+  if (btn.dataset.panel === 'lan') refreshLanPanel();
   if (persist) saveAndApply({ settingsTab: btn.dataset.panel });
 }
 
@@ -913,6 +1030,351 @@ function refreshNavItems() {
   if (!document.querySelector('.panel.active')) activatePanel('plugins', false);
 }
 
+// [v1.0.5.6] ====== 局域网只读镜像面板 ======
+// 服务本身在主进程（渲染进程没有 Node，开不了端口）；这里只做开关、端口、访问方式、状态与二维码。
+// ⚠️ lanMirror* 这几个键由主进程独占写入（见 main.js 的 LAN_OWNED_KEYS）：
+// 本地 config 快照只是用于回显，绝不能靠整份回写去改它们 —— 一律走 setLanMirror。
+let lanState = null;      // 最近一次从主进程拿到的状态
+let lanBusy = false;      // 正在请求主进程（切开关/换端口/换码/改访问方式）
+let lanFlashTimer = null; // 临时提示（如「已复制」）的清除定时器
+
+const LAN_AUTH_MODES = ['random', 'fixed', 'none'];
+// 与服务侧 lan-mirror.js 的规则保持一致：小写字母/数字/-/_，4–32 位
+const LAN_CODE_RE = /^[a-z0-9_-]{4,32}$/;
+const LAN_RESERVED_CODES = ['api'];
+
+// 和服务侧 sanitizeCode 同规则：去空白、转小写、空白转 -、剔非法字符、合并连续 -、
+// 去掉首尾 - 和 _、截断到 32 位。输入框失焦时立刻回显规整结果，所见即所得。
+function sanitizeLanCode(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-_]+/, '')
+    .replace(/[-_]+$/, '')
+    .slice(0, 32);
+}
+
+function isValidLanCode(value) {
+  const v = String(value || '');
+  return LAN_CODE_RE.test(v) && LAN_RESERVED_CODES.indexOf(v) < 0;
+}
+
+function langLanMode() {
+  if (els.lan_auth_mode && LAN_AUTH_MODES.indexOf(els.lan_auth_mode.value) >= 0) return els.lan_auth_mode.value;
+  return (lanState && LAN_AUTH_MODES.indexOf(lanState.authMode) >= 0) ? lanState.authMode : 'random';
+}
+
+function lanDict() { return LOCALE[currentLang] || LOCALE.zh; }
+
+function lanErrText(code) {
+  const d = lanDict();
+  if (!code) return '';
+  if (code === 'port-in-use') return d.lanErrPortInUse;
+  if (code === 'port-denied') return d.lanErrPortDenied;
+  if (code === 'listen-failed') return d.lanErrListenFailed;
+  return code;
+}
+
+function lanUrls() { return (lanState && lanState.urls) ? lanState.urls : []; }
+
+function lanMainUrl() { const list = lanUrls(); return list.length ? list[0].url : ''; }
+
+// 复制：优先用剪贴板 API；file:// 下若被拒，退回临时 textarea + execCommand
+async function lanCopy(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* 退回兜底方案 */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    const done = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!done;
+  } catch (e) { return false; }
+}
+
+function drawLanQr(text) {
+  const canvas = els.lan_qr;
+  if (!canvas) return;
+  if (!text || !window.DCQR || typeof window.DCQR.toCanvas !== 'function') {
+    canvas.classList.add('hidden');
+    return;
+  }
+  try {
+    const scale = 4;
+    const qr = window.DCQR.toCanvas(text, canvas, { scale: scale, margin: 4, dark: '#141414', light: '#ffffff' });
+    const px = (qr.size + 8) * scale;
+    canvas.style.width = px + 'px';
+    canvas.style.height = px + 'px';
+    canvas.classList.remove('hidden');
+  } catch (e) {
+    canvas.classList.add('hidden'); // 内容超长等极端情况：宁可不显示，也不显示错误二维码
+  }
+}
+
+function lanStatusText() {
+  const d = lanDict();
+  const st = lanState;
+  if (lanBusy) return { cls: 'lan-status off', text: d.lanStatusStarting };
+  if (!st || !st.running) {
+    if (st && st.error) return { cls: 'lan-status error', text: d.lanStatusError.replace('{msg}', lanErrText(st.error)) };
+    return { cls: 'lan-status off', text: d.lanStatusOff };
+  }
+  const want = Number(els.lan_port && els.lan_port.value);
+  const shifted = Number.isFinite(want) && st.port !== want;
+  let text = shifted
+    ? d.lanStatusRunningShifted.replace('{port}', st.port).replace('{want}', want)
+    : d.lanStatusRunning.replace('{port}', st.port);
+  if (st.requests) text += ' · ' + d.lanStatusRequests.replace('{n}', st.requests);
+  if (st.pageAvailable === false) text += ' · ' + d.lanStatusError.replace('{msg}', d.lanErrPageMissing);
+  return { cls: 'lan-status', text: text };
+}
+
+function renderLanPanel() {
+  if (!els.lan_status) return;
+  const d = lanDict();
+  const enabled = !!(els.lan_enabled && els.lan_enabled.checked);
+  const mode = langLanMode();
+  if (els.lan_enabled) els.lan_enabled.disabled = lanBusy;
+  if (els.lan_port) els.lan_port.disabled = !enabled || lanBusy;
+  if (els.lan_auth_mode) els.lan_auth_mode.disabled = lanBusy;
+
+  // 自定义码输入行只在「自定义访问码」下出现
+  const codeEditing = mode === 'fixed';
+  if (els.lan_code_row) els.lan_code_row.classList.toggle('hidden', !codeEditing);
+  if (els.lan_code) els.lan_code.disabled = lanBusy;
+  // 输入框里的内容不合法 → 就地红字提示（主进程此时会退回随机码，见 authFallback）
+  const typed = els.lan_code ? els.lan_code.value : '';
+  const typedBad = codeEditing && !isValidLanCode(sanitizeLanCode(typed));
+  if (els.lan_code_error) els.lan_code_error.classList.toggle('hidden', !typedBad);
+  if (els.lan_auth_note) {
+    els.lan_auth_note.textContent = mode === 'none' ? d.lanHintNone
+      : mode === 'fixed' ? d.lanHintFixed : d.lanHintRandom;
+  }
+  if (els.lan_auth_warn) {
+    // 主进程报「自定义码不合法，已退回随机码」时也必须提示，即使输入框里看着没问题
+    const warnText = mode === 'none' ? d.lanWarnNone
+      : (mode === 'fixed' ? (lanState && lanState.authFallback ? d.lanCodeInvalid : d.lanWarnFixed) : '');
+    els.lan_auth_warn.textContent = warnText;
+    els.lan_auth_warn.classList.toggle('hidden', !warnText);
+  }
+  // 「更换访问码」只在随机模式下有意义（自定义的码由用户自己管，无码模式压根没有码）
+  if (els.lan_token_btn) els.lan_token_btn.classList.toggle('hidden', mode !== 'random');
+
+  const s = lanStatusText();
+  els.lan_status.className = s.cls;
+  els.lan_status_text.textContent = s.text;
+
+  const running = !!(lanState && lanState.running);
+  els.lan_body.classList.toggle('hidden', !running);
+  if (!running) {
+    // 收起时顺手清掉二维码与地址（下次展开一定是新数据，避免闪出旧地址）
+    if (els.lan_qr) els.lan_qr.classList.add('hidden');
+    els.lan_address_list.innerHTML = '';
+    if (els.lan_code_line) els.lan_code_line.classList.add('hidden');
+    return;
+  }
+
+  // 当前访问码：随机模式下单独亮出来，方便手机上手输（地址整串太长，念不清）
+  const token = (lanState && typeof lanState.token === 'string') ? lanState.token : '';
+  const showCode = running && mode === 'random' && !!token;
+  if (els.lan_code_line) els.lan_code_line.classList.toggle('hidden', !showCode);
+  if (showCode && els.lan_code_value) els.lan_code_value.textContent = token;
+
+  const urls = lanUrls();
+  const multi = urls.length > 1;
+  els.lan_address_list.innerHTML = '';
+  urls.forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'lan-addr';
+    const ip = document.createElement('span');
+    ip.className = 'lan-addr-ip';
+    ip.textContent = u.name ? u.name + ' · ' + u.ip : u.ip;
+    const url = document.createElement('span');
+    url.className = 'lan-addr-url';
+    url.textContent = u.url;
+    row.appendChild(ip);
+    row.appendChild(url);
+    if (multi) { // 只有一个地址时用底部的主按钮复制，避免重复
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'lan-addr-copy';
+      btn.textContent = d.lanCopy;
+      btn.addEventListener('click', async () => {
+        const okCopy = await lanCopy(u.url);
+        flashLanStatus(okCopy ? d.lanCopied : d.lanCopyFail, !okCopy);
+      });
+      row.appendChild(btn);
+    }
+    els.lan_address_list.appendChild(row);
+  });
+  els.lan_no_address.classList.toggle('hidden', urls.length > 0);
+  drawLanQr(urls.length ? urls[0].url : '');
+  els.lan_copy_btn.disabled = !urls.length;
+  els.lan_preview_btn.disabled = !urls.length;
+}
+
+// 临时提示（已复制 / 复制失败），2.2 秒后回到正常状态文案
+function flashLanStatus(text, isError) {
+  if (!els.lan_status_text) return;
+  if (lanFlashTimer) clearTimeout(lanFlashTimer);
+  els.lan_status.className = 'lan-status' + (isError ? ' error' : '');
+  els.lan_status_text.textContent = text;
+  lanFlashTimer = setTimeout(() => { lanFlashTimer = null; renderLanPanel(); }, 2200);
+}
+
+// lanMirror* 这几个键由主进程独占写入：本地快照跟着它，避免下次 saveAndApply 时又拿旧值回写
+function adoptLanToken() {
+  if (!config || !lanState) return;
+  if (typeof lanState.token === 'string' && lanState.token) config.lanMirrorToken = lanState.token;
+  if (LAN_AUTH_MODES.indexOf(lanState.authMode) >= 0) config.lanMirrorAuthMode = lanState.authMode;
+  if (typeof lanState.fixedCode === 'string') config.lanMirrorFixedCode = lanState.fixedCode;
+  // 把服务端规整后的自定义码写回输入框（用户可能输入了 "My Clock" → 显示 "my-clock"）。
+  // 正在输入时不打断（避免光标被挪到末尾）。
+  if (els.lan_code && document.activeElement !== els.lan_code) {
+    els.lan_code.value = config.lanMirrorFixedCode || '';
+  }
+}
+
+async function refreshLanPanel() {
+  const api = window.electronAPI;
+  if (!api || typeof api.lanMirrorStatus !== 'function') return;
+  try { lanState = await api.lanMirrorStatus(); } catch (e) { lanState = null; }
+  adoptLanToken();
+  renderLanPanel();
+}
+
+// 统一入口：把开关/端口交给主进程，回来后用真实状态刷新界面
+async function applyLanMirror(patch) {
+  const api = window.electronAPI;
+  if (lanBusy) return;
+  lanBusy = true;
+  renderLanPanel();
+  try {
+    lanState = await api.setLanMirror(patch);
+  } catch (e) {
+    lanState = null;
+    lanBusy = false;
+    renderLanPanel();
+    flashLanStatus(String((e && e.message) || e), true);
+    return;
+  }
+  lanBusy = false;
+  adoptLanToken();
+  renderLanPanel();
+}
+
+function initLanPanel() {
+  if (!els.lan_enabled) return;
+
+  // 访问方式的当前取值（随输入框实时读，避免用户改了输入框却没触发 change 时漏掉）
+  function authPatch() {
+    const mode = langLanMode();
+    const p = { authMode: mode };
+    if (mode === 'fixed') p.fixedCode = sanitizeLanCode(els.lan_code ? els.lan_code.value : '');
+    return p;
+  }
+
+  els.lan_enabled.addEventListener('change', () => {
+    config = { ...config, lanMirrorEnabled: els.lan_enabled.checked };
+    const port = parseInt(els.lan_port.value, 10);
+    const patch = { enabled: els.lan_enabled.checked, ...authPatch() };
+    if (Number.isFinite(port)) patch.port = port;
+    applyLanMirror(patch);
+  });
+
+  els.lan_port.addEventListener('change', () => {
+    let port = parseInt(els.lan_port.value, 10);
+    if (!Number.isFinite(port)) port = config.lanMirrorPort || 8788;
+    port = Math.max(1024, Math.min(65535, Math.round(port)));
+    els.lan_port.value = port;
+    config = { ...config, lanMirrorPort: port };
+    if (els.lan_enabled.checked) applyLanMirror({ port: port });
+    else renderLanPanel();
+  });
+
+  // 访问方式：随机 / 自定义 / 不需要访问码。
+  // 开关关着时也照发 —— 配置要先落盘，否则下次打开开关会按磁盘上的旧值启动。
+  els.lan_auth_mode.addEventListener('change', () => {
+    const mode = langLanMode();
+    config = { ...config, lanMirrorAuthMode: mode };
+    // 切到自定义但没有可用的码：给个合理默认，省得用户对着空/非法输入框发愣。
+    // 优先沿用上次存过的合法码，否则用 my-clock（之前这里会沿用「上一次输错的码」，
+    // 结果一进自定义模式就顶着非法码 + 红字提示）。
+    if (mode === 'fixed' && els.lan_code) {
+      const cur = sanitizeLanCode(els.lan_code.value);
+      if (!isValidLanCode(cur)) {
+        const stored = sanitizeLanCode(config.lanMirrorFixedCode || '');
+        els.lan_code.value = isValidLanCode(stored) ? stored : 'my-clock';
+      }
+    }
+    applyLanMirror(authPatch());
+  });
+
+  // 自定义码：输入时就地校验（不发请求），失焦/回车才真正落到主进程
+  if (els.lan_code) {
+    els.lan_code.addEventListener('input', () => {
+      if (!els.lan_code_error) return;
+      const bad = !isValidLanCode(sanitizeLanCode(els.lan_code.value));
+      els.lan_code_error.classList.toggle('hidden', !bad);
+    });
+    els.lan_code.addEventListener('change', () => {
+      const code = sanitizeLanCode(els.lan_code.value);
+      els.lan_code.value = code; // 回显规整结果（去空白/转小写/剔非法字符）
+      config = { ...config, lanMirrorFixedCode: code };
+      applyLanMirror(authPatch());
+    });
+  }
+
+  els.lan_copy_btn.addEventListener('click', async () => {
+    const d = lanDict();
+    const url = lanMainUrl();
+    if (!url) return;
+    const done = await lanCopy(url);
+    flashLanStatus(done ? d.lanCopied : d.lanCopyFail, !done);
+  });
+
+  els.lan_preview_btn.addEventListener('click', () => {
+    const url = lanMainUrl();
+    if (url && window.electronAPI.openLanMirrorUrl) window.electronAPI.openLanMirrorUrl(url);
+  });
+
+  // 复制「访问码」本身：手机上要手输时念/打这 6 位比整串地址方便
+  if (els.lan_code_copy) {
+    els.lan_code_copy.addEventListener('click', async () => {
+      const d = lanDict();
+      const code = (lanState && lanState.token) ? lanState.token : '';
+      if (!code) return;
+      const done = await lanCopy(code);
+      flashLanStatus(done ? d.lanCopied : d.lanCopyFail, !done);
+    });
+  }
+
+  els.lan_token_btn.addEventListener('click', async () => {
+    const d = lanDict();
+    if (!confirm(d.lanTokenConfirm)) return;
+    const api = window.electronAPI;
+    lanBusy = true;
+    renderLanPanel();
+    try { lanState = await api.newLanMirrorToken(); } catch (e) { lanState = null; }
+    lanBusy = false;
+    adoptLanToken();
+    renderLanPanel();
+  });
+}
+
 (async function init() {
   try { config = await window.electronAPI.getConfig(); } catch (e) { config = {}; }
   syncUIFromConfig();
@@ -927,6 +1389,9 @@ function refreshNavItems() {
       if (btn && btn.dataset.panel) activatePanel(btn.dataset.panel, true);
     });
   }
+
+  // [v1.0.5.6] 局域网只读镜像面板接线（开关/端口/复制/预览/换码）
+  initLanPanel();
 
   // [v1.0.5.5] 自绘标题栏（窗口 frame:false）：按钮接线 + 最大化状态同步
   // 双击拖拽区最大化、贴边分屏由 Electron 对 -webkit-app-region: drag 的原生支持负责，这里不重复处理。

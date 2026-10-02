@@ -57,6 +57,10 @@
         <button class="nav-item" data-panel="system">
           <span class="nav-icon">⚙️</span><span class="nav-text" data-lang="navSystem">系统</span>
         </button>
+        <!-- [v1.0.5.6] 局域网只读镜像 -->
+        <button class="nav-item" data-panel="lan">
+          <span class="nav-icon">📱</span><span class="nav-text" data-lang="navLan">局域网</span>
+        </button>
         <!-- [v1.0.5.5] 插件 -->
         <button class="nav-item" data-panel="plugins">
           <span class="nav-icon">🧩</span><span class="nav-text" data-lang="navPlugins">插件</span>
@@ -503,6 +507,78 @@
         </div>
       </section>
 
+      <!-- ====== [v1.0.5.6] 局域网只读镜像 ====== -->
+      <section class="panel" data-panel="lan">
+        <h2 class="panel-title" data-lang="navLan">局域网</h2>
+
+        <div class="setting-row">
+          <label data-lang="lanIntro">手机和这台电脑连上同一个 Wi-Fi 后，用手机浏览器打开下面的地址，就能看到这块时钟（外观跟随当前设置）。手机端只能看，改不了任何设置，也看不到你的闹钟。</label>
+        </div>
+
+        <div class="setting-row row-col switch-with-note">
+          <label data-lang="lanEnable">在局域网上共享时钟</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lan-enabled">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="setting-note" data-lang="lanEnableHint">开启后会占用一个本地端口供同一网络内的设备访问；关闭后手机上的地址立刻打不开。</div>
+        </div>
+
+        <div class="setting-row">
+          <label data-lang="lanPort">端口</label>
+          <input type="number" id="lan-port" class="lan-port-input" min="1024" max="65535" step="1" inputmode="numeric">
+        </div>
+
+        <!-- [v1.0.5.6] 访问方式三选一：随机短码 / 自定义码 / 无码。
+             原先是硬编码 32 位随机码，只能扫码不能手输、也无法关掉，属于过度设计。 -->
+        <div class="setting-row">
+          <label data-lang="lanAuthMode">访问方式</label>
+          <select id="lan-auth-mode">
+            <option value="random" data-lang="lanAuthRandom">随机访问码</option>
+            <option value="fixed" data-lang="lanAuthFixed">自定义访问码</option>
+            <option value="none" data-lang="lanAuthNone">不需要访问码</option>
+          </select>
+        </div>
+        <div class="setting-row row-col hidden" id="lan-code-row">
+          <label data-lang="lanCodeLabel">自定义访问码</label>
+          <input type="text" id="lan-code" class="lan-code-input" maxlength="32" placeholder="my-clock"
+                 spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off">
+          <div class="setting-note" data-lang="lanCodeHint">4–32 位，只能用小写字母、数字、- 和 _（会自动转小写）。</div>
+          <div id="lan-code-error" class="setting-note warn hidden" data-lang="lanCodeInvalid">这个访问码不合法，当前暂时用随机码顶替。</div>
+        </div>
+
+        <div id="lan-status" class="lan-status off"><span class="lan-dot"></span><span id="lan-status-text"></span></div>
+
+        <div id="lan-body" class="lan-body hidden">
+          <div class="lan-code-line hidden" id="lan-code-line">
+            <span class="lan-code-label" data-lang="lanCurrentCode">访问码</span>
+            <code id="lan-code-value" class="lan-code-value"></code>
+            <button type="button" id="lan-code-copy" class="lan-code-copy-btn" data-lang="lanCopyCode">复制访问码</button>
+          </div>
+
+          <div class="lan-qr-wrap">
+            <canvas id="lan-qr" class="lan-qr" width="172" height="172"></canvas>
+            <div class="lan-qr-hint" data-lang="lanQrHint">用手机相机或微信扫一扫</div>
+          </div>
+
+          <div class="lan-block">
+            <div class="lan-block-title" data-lang="lanAddresses">访问地址</div>
+            <div id="lan-address-list" class="lan-addr-list"></div>
+            <div id="lan-no-address" class="setting-note hidden" data-lang="lanNoAddress">没检测到可用的内网地址（电脑可能没连 Wi-Fi 或网线）。</div>
+          </div>
+
+          <div class="lan-actions">
+            <button id="lan-copy-btn" class="primary-btn" data-lang="lanCopy">复制地址</button>
+            <button id="lan-preview-btn" class="ghost-btn" data-lang="lanPreview">在本机浏览器打开</button>
+            <button id="lan-token-btn" class="ghost-btn" data-lang="lanNewToken">更换访问码</button>
+          </div>
+
+          <div id="lan-auth-note" class="setting-note"></div>
+          <div id="lan-auth-warn" class="setting-note warn hidden"></div>
+          <div class="setting-note warn" data-lang="lanFirewallHint">连不上时先查两件事：① 手机和电脑是否在同一个 Wi-Fi；② Windows 防火墙是否拦住了这个端口（首次开启时若弹出提示，勾选「专用网络」允许即可；被判定为「公用网络」时会默认拦截）。</div>
+        </div>
+      </section>
+
       <!-- ====== [v1.0.5.5] 插件 ====== -->
       <section class="panel" data-panel="plugins">
         <h2 class="panel-title" data-lang="navPlugins">插件</h2>
@@ -588,6 +664,7 @@
 
     </main>
   </div>
+  <script src="qr-code.js"></script>
   <script src="settings.js"></script>
   <script src="plugin-host.js"></script>
 </body>

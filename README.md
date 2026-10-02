@@ -52,6 +52,18 @@ A beautiful, deeply customizable desktop flip clock built with **Electron**. Smo
 - **Settings window font size** — 5 steps, remembered between sessions
 - **Frameless settings window** — custom glass titlebar (drag region + minimize/maximize/close) so plugins can theme it end to end
 
+### LAN sharing (phone view)
+- **Read-only mirror on your local network** — turn it on and any phone on the same Wi-Fi can open the clock in its browser
+- **Access code, three modes** — pick **Random code** (a 6-character short code you can read out or type by hand), **Custom code** (your own, e.g. `my-clock`), or **No access code** (the page opens straight from the root URL). Without the right code every path returns 404
+- **New code any time** — in random mode, generating a new code invalidates previously shared links immediately
+- **QR code** — the settings panel draws a scannable QR code for the current address
+- **Looks like your clock** — the phone page follows your colours, font, 12/24-hour format, AM/PM corner, seconds/date/weekday, timezone list, day/night auto-colouring and animation family + direction (digit flips and all)
+- **Same time as the desktop** — the phone page syncs against the app's clock and applies your manual calibration and scheduled auto-calibration, so both show the same second
+- **Self-contained page** — inline CSS/JS, zero external resources; it opens even with no internet, and it never sees your alarms or settings
+- **Read-only by design** — the service answers `GET`/`HEAD` only (everything else is 405), has no write endpoints, and needs no external dependencies. In "No access code" mode anyone on the same network can open the page, so it is best used on a Wi-Fi you trust
+- **Port handling** — default 8788, configurable; if the port is taken the next free one is used and the panel shows the real one
+- **Firewall hint** — the panel tells you what to check when a phone cannot connect (same Wi-Fi, Windows Firewall private vs public network)
+
 ### Alarm
 - **Multiple alarms** — create, edit and delete alarms in the settings panel
 - **Custom names** — auto-numbered, reusing gaps
@@ -113,6 +125,10 @@ NODE_OPTIONS= \
 ├── renderer.js          # Clock rendering, animation, real-time updates
 ├── styles.css           # Clock styles (animation, blur/scale, plugin info-bar slot)
 ├── plugin-host.js       # Plugin sandbox runtime shared by all three windows
+├── window-layout.js     # Pure helpers: position presets, clamping, clock-over-board layering
+├── lan-mirror.js        # Read-only LAN mirror service (Node http, no dependencies; random/custom/no access code)
+├── lan-mirror-page.html # The self-contained page phones open (inline CSS/JS)
+├── qr-code.js           # Minimal QR encoder (byte mode, EC level M, versions 1–6) for the LAN panel
 ├── settings.html        # Settings window
 ├── settings.js          # Settings logic, i18n, plugin panel
 ├── settings.css         # Settings styles
@@ -151,6 +167,7 @@ All preferences can be changed from the settings window; the table below maps ea
 | **Alarm** | `alarms.json`, plus `alarmSoundDuration`, `alarmFlash`, `alarmAutoShow`, `alarmAutoPassthrough`, `alarmAutoTop` |
 | **Position** | `positionPreset`, `x`, `y`, `layerMode` (alwaysOnTop/normal) |
 | **System** | `autoStart`, `silentStart`, `language` (zh/en), `passthrough` |
+| **LAN** | `lanMirrorEnabled`, `lanMirrorPort` (default 8788), `lanMirrorAuthMode` (random/fixed/none), `lanMirrorFixedCode`, `lanMirrorToken` (effective path segment, written by the main process only) |
 | **Plugins** | `plugins.json` — enable state and per-plugin setting values |
 | **Data** | Export / import / delete everything |
 | **About** | Version, authors, repository links |
