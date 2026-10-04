@@ -702,3 +702,22 @@ body.is-maximized .win-icon-max::after { left: 0; top: 0; width: 7.5px; height: 
   flex: 1; font-family: ui-monospace, Consolas, monospace; font-size: calc(var(--sfz) + 1px);
   letter-spacing: 2px; color: #cfd6ff; user-select: all;
 }
+
+/* ====== [v1.0.5.7] 隔离沙箱插件的宿主侧容器 ======
+   插件（apiVersion>=3）跑在 <iframe sandbox="allow-scripts"> 里，宿主只负责给它们
+   留一块「占位」，尺寸必须由宿主 CSS 撑起来 —— iframe 自身的 width/height:100%
+   在零高度的父节点里会塌成 0，插件就彻底看不见了。 */
+
+/* 主题槽：铺满窗口，落在界面内容之下（玻璃主题的背景层靠它透出来） */
+.plugin-theme-slot {
+  position: fixed; inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.plugin-theme-slot:empty { display: none; }
+
+/* 插件自建导航页：iframe 填满面板正文区 */
+.plugin-nav-body > iframe {
+  display: block; width: 100%; min-height: 320px;
+  border: 0; background: transparent;
+}

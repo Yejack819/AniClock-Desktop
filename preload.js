@@ -82,6 +82,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ====== [v1.0.5.5] 插件 ======
   // 渲染进程只拿到「要跑什么」和「能改什么」，文件读写、清单校验全在主进程
   getPluginBundle: () => ipcRenderer.invoke('plugin-bundle'),
+  // [v1.0.5.7] 插件沙箱运行时代码（宿主自己的可信文件，供 sandbox iframe 使用）
+  getPluginSandboxSource: () => ipcRenderer.invoke('plugin-sandbox-source'),
   getPluginList: () => ipcRenderer.invoke('plugin-list'),
   getPluginSettingsView: (id) => ipcRenderer.invoke('plugin-settings-view', id),
   importPlugin: (kind) => ipcRenderer.invoke('plugin-import', kind),

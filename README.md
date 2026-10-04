@@ -180,7 +180,14 @@ Plugins extend Digital Clock without touching its source: add content to the Lig
 
 ## 1. What a plugin can and cannot do
 
-**Runs sandboxed.** The plugin entry script is executed with `new Function('dc', code)` inside the target window. Those windows are `contextIsolation: true` with no Node integration, so a plugin **cannot** `require()` anything, touch the file system directly, load native modules, or reach Electron APIs. The only capabilities are the `dc` object described below.
+**Runs in a real cross-origin sandbox.** From `apiVersion: 3` the plugin entry script runs inside an `<iframe sandbox="allow-scripts">` — deliberately **without** `allow-same-origin`, so the frame is a different origin from the host page. That means a plugin **cannot**:
+- read `window.parent.document` or any host element (`parent.electronAPI`, host DOM… all throw `SecurityError`);
+- reach `require` / `process` / Node / the file system / Electron APIs;
+- touch another plugin's data or settings.
+
+Its only channel is a `postMessage` RPC to the host. The host identifies the sender by `event.source === iframe.contentWindow` (it never trusts an id a message claims for itself), then validates every call against the plugin's permissions before doing any host-side DOM work. The host performs DOM edits *for* the plugin, so a plugin can still restyle the UI — it just cannot see or touch the host DOM directly.
+
+`apiVersion: 1` / `2` plugins still run in-page the old way for backward compatibility; they are **not** isolated. New plugins should always use `3`.
 
 **Three hooks, one plugin each.** A plugin declares which windows it wants to run in:
 
@@ -188,7 +195,7 @@ Plugins extend Digital Clock without touching its source: add content to the Lig
 |---|---|---|
 | `clock.infoBar` | Clock window | A slot inside the info bar (next to date / weekday / timezone / alarm text). The window auto-resizes to fit your content, and the info bar stays visible while you have content even if date and weekday are off. |
 | `lightsOff.background` | Lights Off fullscreen window | A full-screen, centred content layer on the board. It is click-through by default, so double-click / ESC still exits Lights Off. |
-| `settings.theme` | Settings window | CSS custom properties and extra stylesheets for theming the settings UI. |
+| `settings.theme` | Settings window | CSS custom properties, extra stylesheets and an optional self-drawn nav page for theming the settings UI. |
 
 **Hooks decide *where* a plugin runs, permissions decide *what it may touch* there.** To edit what is inside a window, declare the matching UI permission too:
 
@@ -198,13 +205,14 @@ Plugins extend Digital Clock without touching its source: add content to the Lig
 | `ui.settings` | `settings.theme` | Edit any element in the settings window, overlay your own layer on the whole window |
 | `ui.lightsOffBg` | `lightsOff.background` | Control the Lights Off board background (colour / gradient / image / opacity / blur) |
 
-**Honest limits.** The `storage` permission is genuinely enforced (plugin data is written through the main process into a folder named after the plugin id). The `net` permission is declared and confirmed on first enable, but because plugin code shares the host page it could call `fetch` directly anyway — treat `net` as an intent declaration, not a hard block. UI permissions work the same way: what they buy you is a **sanctioned API + automatic rollback + user awareness**, not a wall. The exact boundaries:
+**Honest limits.** Isolation is real, but it is not a capability moat — the point is that a plugin can never *reach* the host or Node, and everything it can do goes through a validated, logged, auto-rolled-back API. The exact boundaries:
 
 - **You may change styles / text / attributes / classes, hide elements and append content; you may NOT delete host elements or change host behaviour** (dragging, double-click-to-exit Lights Off, alarms, saving settings…).
 - A few elements are protected and refuse even `hide()`: the Lights Off exit / lock / settings buttons, plus the plugin list and the plugin nav item in Settings — so a broken plugin can never lock you out.
 - Every change made through `dc.ui` is recorded and restored one by one when the plugin is disabled, unloaded, or its settings change.
+- The `net` permission gates the only network path a sandboxed plugin has (`dc.fetchText`, HTTPS outbound GET only) — direct `fetch` is impossible from the sandbox origin.
 - If a plugin does break the UI: **tray menu → "🛡️ Safe Mode (plugins off)"** disables every plugin and restarts, restoring the UI immediately (that menu is drawn by the main process, out of a plugin's reach). The host also enters safe mode automatically after repeated "renderer died during startup" events and shows a banner at the top of Settings → Plugins.
-- Plugin CSS is global, so prefix your class names. Install only plugins you trust.
+- Plugin CSS is scoped to the plugin's own sandbox document (plus any CSS you ask the host to apply). Still prefix your class names to avoid collisions inside your own page. Install only plugins you trust.
 
 ## 2. Folder layout
 
@@ -248,7 +256,7 @@ Assets (images, fonts, JSON) may live alongside them; reach them with `dc.assets
 | `author` | string | no | ≤ 64 chars |
 | `description` | string | no | ≤ 200 chars |
 | `homepage` | string | no | must start with `https://`, otherwise dropped |
-| `apiVersion` | number | no | defaults to `1`. The host currently supports **2** (UI permissions start at `2`). A value higher than the host supports is rejected with `api-too-new` |
+| `apiVersion` | number | no | defaults to `1`. The host currently supports **3** (true sandbox isolation starts at `3`; UI permissions start at `2`). A value higher than the host supports is rejected with `api-too-new`. **New plugins should use `3`.** |
 | `hooks` | string[] | **yes** | at least one of the three hooks; unknown entries are dropped. No usable hook ⇒ rejected (`no-hooks`) |
 | `permissions` | string[] | no | any of `storage`, `net`, `ui.clock`, `ui.settings`, `ui.lightsOffBg`; unknown entries are dropped. On first enable the host lists them all for confirmation |
 | `main` | string | no | relative path inside the plugin folder, defaults to `index.js`; must exist |
@@ -281,12 +289,19 @@ dc.mount(function (slot, dc) {
 |---|---|
 | `dc.id` / `dc.name` / `dc.version` | Plugin identity |
 | `dc.hook` | Which window this instance is running in |
-| `dc.apiVersion` | Host API version (currently `2`). For UI permissions test `>= 2`, or feature-detect with `typeof dc.ui.get === 'function'` |
+| `dc.apiVersion` | Host API version (currently `3`). Feature-detect individual methods with `typeof` |
 | `dc.settings` | Frozen object of the plugin's current setting values |
 | `dc.theme()` | `{ isDark, fg, bg }` computed from what is actually painted — use it instead of hard-coding colours |
-| `dc.mount(fn)` | Registers the mount callback. `fn(slot, dc)` receives the DOM slot; return a cleanup function if you need one |
+| `dc.mount(fn)` | Registers the mount callback. `fn(slot, dc)` receives **your sandbox's own `document.body`** (never a host node — you cannot see the host DOM); return a cleanup function if you need one |
+| `dc.root()` / `dc.slot()` | The sandbox body, same as the `slot` argument |
+| `dc.panelId` / `dc.isPanel()` | For `settings.theme`: the nav-page id you are mounted in, or `null` / `false` when you are the theme layer. The hook mounts your script **twice** — once in the theme slot (no panel) and once inside each nav page's own iframe (panel set) |
 | `dc.log(...)` | Prefixed `console.log`, handy while developing |
 | `dc.on(name, cb)` / `dc.emit(name, payload)` | Local event bus for the plugin's own plumbing |
+| `dc.setSetting(key, value)` | Writes one of **your own** setting values (the host pins your plugin id — you cannot write anyone else's) |
+| `dc.getConfig()` | Reads public host config: `{ language, timeFormat, lightsOff, theme }` only |
+| `dc.listPlugins()` | Public metadata for installed plugins; only your own entry carries full `settings` / `values` |
+| `dc.onConfigUpdated(cb)` / `dc.onLightsOffStateChanged(cb)` | Subscribe to host events (replaces the old `window.electronAPI.on*`) |
+| `dc.fetchText(url, opts)` | **Requires `net`**: HTTPS outbound GET, proxied by the host. This is the only network call a sandboxed plugin has |
 
 ### `dc.clock` — `clock.infoBar` only
 
@@ -314,21 +329,35 @@ The background layer sits **above** the host colour and **below** content and co
 
 | Member | Description |
 |---|---|
-| `dc.ui.addStyle(cssText)` | Appends a stylesheet for this window (removed on unload) |
-| `dc.ui.applyVars({ '--name': value })` | Settings window only: sets CSS custom properties on `:root` (restored on unload). The settings UI already uses `--sfz` (base font size) and friends — overriding them re-themes the whole window |
+| `dc.ui.addStyle(cssText)` | Appends a stylesheet **inside your sandbox document**, and asks the host to append it to the target host window too (removed on unload) |
+| `dc.ui.applyVars({ '--name': value })` | Settings window only: sets CSS custom properties on the **host** `:root` **and** on your sandbox `<html>` (restored on unload). The settings UI already uses `--sfz` (base font size) and friends — overriding them re-themes the whole window |
 
 **Editing (requires the UI permission of that window: `ui.clock` or `ui.settings`)**
 
+All of these are **host-side proxies**: you pass a selector, the host resolves it, validates permissions and protected elements, applies the change, then records it for rollback. Your sandbox cannot see the resolved node — handles expose methods only.
+
 | Member | Description |
 |---|---|
-| `dc.ui.layer()` | Your own drawing layer in this window: full-bleed, centred, click-through by default |
+| `dc.ui.layer()` | **Your own sandbox body** — full control, no host validation needed. Build your nav page / overlay UI here |
 | `dc.ui.get(sel)` | A writable handle for a host element, or `null` if nothing matches |
 | `dc.ui.hide(sel)` / `dc.ui.show(sel)` | Hide / restore. Protected elements throw |
 | `dc.ui.setText(sel, text)` | Replace the text |
-| `dc.ui.patch(sel, { style, class, attr })` | Bulk edit. `style` keys may be camelCase or kebab-case; `class` accepts a string / array (to add) or `{ add, remove }` |
-| `dc.ui.push(sel, html)` | **Appends** a sanitised fragment inside the element (same allow-list as section 7) — never replaces existing content |
+| `dc.ui.patch(sel, { style, class, attr })` | Bulk edit. `style` keys may be camelCase or kebab-case; `class` accepts a string / array (to add) or `{ add, remove }`. `patch('html', { attr })` also mirrors onto your sandbox `<html>` (so `html[data-x]` CSS works in both) |
+| `dc.ui.push(sel, html)` | **Appends** a sanitised fragment inside the host element (same allow-list as section 7) — never replaces existing content |
 | `dc.ui.on(sel, type, cb)` | Binds an event. It calls `stopPropagation` for you (so you do not accidentally trigger host behaviour such as double-click-to-exit) and sets `no-drag` on the element (the clock window is one big drag region — without it, clicks will not land) |
-| `dc.ui.nav({ id, label, icon })` | Adds a page of your own to the settings sidebar and **returns that page's content container** (see below). `id` must match `/^[a-z0-9][a-z0-9._-]{0,31}$/`, `label` ≤ 24 chars, `icon` a single emoji works best |
+| `dc.ui.nav({ id, label, icon })` | Adds a page of your own to the settings sidebar. The host creates the nav item **and a dedicated sandbox iframe** for that page; the returned value is truthy, not a DOM node — build the page body inside your own `dc.ui.layer()` when the hook re-mounts with `dc.panelId` set. `id` must match `/^[a-z0-9][a-z0-9._-]{0,31}$/`, `label` ≤ 24 chars, `icon` a single emoji works best |
+
+**Querying / driving the host from inside a sandbox (no direct DOM access)**
+
+| Member | Description |
+|---|---|
+| `dc.ui.navInfo()` | `{ panelId, active, label }` for the nav page you are mounted in |
+| `dc.ui.setNavLabel(text)` | Renames the nav item (used to follow a language switch) |
+| `dc.ui.activatePanel()` | Switches Settings to your nav page |
+| `dc.ui.navActive()` | Geometry of the currently active nav item (`{ any, visible, width, height, offsetX, offsetY, panelId }`) |
+| `dc.ui.alignTo(target, scope)` | Geometry of a host element relative to `scope` — for positioning a UI element you injected into the host |
+| `dc.ui.getHostLang()` / `dc.ui.onHostLangChanged(cb)` | Read / subscribe to the host UI language (`'zh'` / `'en'`) |
+| `dc.ui.onHostLayoutChanged(cb)` | Fires when the host nav / layout changes (replaces watching `#settings-nav` with a `MutationObserver`) |
 
 The handle returned by `dc.ui.get(sel)` exposes the same methods on the element and chains:
 
@@ -344,31 +373,43 @@ dc.mount(function (slot, dc) {
 });
 ```
 
-`h.node()` is for **reading only** (measuring, computed styles); changes made through it are not rolled back.
+The handle's `node` is always `null` under `apiVersion: 3` (there is no host node to expose). To measure a host element, use `dc.ui.alignTo(...)` or the geometry fields returned by `dc.ui.navActive()`.
 
 ### Giving yourself a page in Settings (`dc.ui.nav`)
 
-When a plugin grows past a couple of rows, do not pile everything into its card — ask for a nav page of your own:
+When a plugin grows past a couple of rows, do not pile everything into its card — ask for a nav page of your own. Under `apiVersion: 3` the hook runs **twice**: first as the theme layer (no panel), where you *register* the page, then again inside the page's own sandbox iframe, where you *build* it:
 
 ```js
 dc.mount(function (slot, dc) {
   if (dc.hook !== 'settings.theme') return;
-  const page = dc.ui.nav({ id: 'stats', label: 'Focus stats', icon: '📊' });
-  if (!page) return;
+
+  // Phase 1 — the theme slot: register the nav page. The host creates the nav item
+  // and spins up a dedicated sandbox iframe for the page.
+  if (!dc.isPanel()) {
+    dc.ui.nav({ id: 'stats', label: 'Focus stats', icon: '📊' });
+    return;
+  }
+
+  // Phase 2 — mounted inside the page's own iframe: build the body in dc.ui.layer()
+  const page = dc.ui.layer();
+  page.classList.add('my-stats');
   const p = document.createElement('p');
   p.textContent = '3 hours focused today';
   page.appendChild(p);
-  dc.ui.push('.plugin-nav-body', '<button type="button" class="my-reset">Reset</button>');
-  dc.ui.on('.my-reset', 'click', () => dc.storage.set('total', 0));
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = 'Reset';
+  btn.addEventListener('click', () => dc.storage.set('total', 0));
+  page.appendChild(btn);
 });
 ```
 
 - The nav item is inserted right after "Plugins", uses the **same styling** as built-in items and carries a thin accent bar to mark it as a plugin page. Clicking it switches panels — no routing to write yourself.
-- The returned container is a plain DOM element and you already hold the `ui.settings` permission, so you can fill it and bind events freely; the host also ships a default `.plugin-nav-body button` style.
+- `dc.ui.nav()` returns a **truthy marker, not a DOM node** (you are cross-origin and cannot receive a host element). Build the page body inside your own `dc.ui.layer()`; the host already gave you a full-bleed iframe to draw in, and ships a default `.plugin-nav-body button` style.
 - Limits: up to 3 nav pages per plugin, 5 across all plugins (going over throws `too-many-nav-pages`).
-- Calling `nav()` again with the **same `id` returns the same container** (idempotent): no second nav item is created and the limit is not consumed, so you do not need to cache the return value — calling it from two code paths both yield the same page.
-- The nav item and the whole page are removed when the plugin is disabled, unloaded or its settings change; if you were sitting on that page, the host falls back to the "Plugins" page automatically.
-- **Do not add `data-lang`** to your nav label (that is how the host localises built-in items and it would be overwritten). To follow the language switch, observe `document.documentElement.lang` with a `MutationObserver`.
+- Calling `nav()` again with the **same `id` is idempotent** (no second nav item, the limit is not consumed), so you can safely call it from every mount.
+- The nav item and its iframe are removed when the plugin is disabled, unloaded or its settings change; if you were sitting on that page, the host falls back to the "Plugins" page automatically.
+- To follow the language switch use `dc.ui.getHostLang()` / `dc.ui.onHostLangChanged(cb)` (do **not** rely on reading `document` — you cannot see the host document). Rename your nav item with `dc.ui.setNavLabel(...)`.
 
 Hard rules:
 
@@ -392,7 +433,7 @@ Calling a permission-gated member without declaring the permission throws, and t
 
 ### Assets
 
-`dc.assets.base` is a `file://` URL for the plugin's own folder; `dc.assets.url('pic.png')` joins the two (works in the clock and Lights Off windows and in a sanitised `settingsView`).
+Under `apiVersion: 3` a sandboxed plugin has no direct file access. `dc.assets.url('pic.png')` returns a string the host can resolve for you: use it where the **host** loads the resource (e.g. `dc.lightsOff.setBackground({ image: dc.assets.url('bg.png') })`, which the host validates) or where an `https://` URL would work. Referencing it as an `<img src>` inside your own sandbox document works only for `https://` sources — bundle remote assets or ask the host to apply them.
 
 ## 5. Declarative settings
 
@@ -445,7 +486,7 @@ When a declarative form is not enough, point `settingsView` at an HTML **fragmen
 - **Removed entirely**: `script`, `style`, `iframe`, `object`, `embed`, `link`, `meta`, `form`
 - **Unwrapped** (children kept, tag dropped): anything not in the allow-list below
 - **Allowed tags**: `a b br button code details div em h3 h4 hr i img input label li ol option p pre section select small span strong summary table tbody td th thead tr ul`
-- **Attributes**: only `class id title type value checked disabled placeholder min max step rows cols name href src alt width height role for selected data-key data-role data-plugin-field`. Everything else — including every `on*` handler — is removed
+- **Attributes**: only `class title type value checked disabled placeholder min max step rows cols name href src alt width height role for selected data-key data-role data-plugin-field`. Everything else — including every `on*` handler and `id` — is removed (no `id` means injected markup cannot clobber host element ids)
 - `href` must be `https://`. `src` must be `https://` or a `file://` path **inside your plugin folder**. `style` keeps only safe declarations (`url()`, `expression()`, `@import` and `javascript:` are dropped)
 
 Anything you place there is static markup: no scripts run, and event attributes never fire. For data you need persisted, prefer the declarative settings in section 5.

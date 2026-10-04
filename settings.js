@@ -715,7 +715,8 @@ function getAlarmStatusSuffix(alarm, now, dict) {
 function syncUIFromConfig() {
   els.auto_color.checked = !!config.autoColor;
   els.text_color.value = config.color || '#ffffff';
-  const m = config.bgColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+  // [v1.0.5.7] bgColor 兜底：config.json 被手改 / 极旧配置里可能为 null，直接 .match() 会抛错瘫掉整个设置窗口
+  const m = String(config.bgColor || '').match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
   if (m) { els.bg_color.value = rgbToHex(+m[1],+m[2],+m[3]); els.bg_alpha.value = parseFloat(m[4]); }
   else { els.bg_color.value = '#000000'; els.bg_alpha.value = 0; }
   els.bg_alpha_label.textContent = Math.round(els.bg_alpha.value * 100) + '%';

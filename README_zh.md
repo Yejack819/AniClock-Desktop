@@ -180,7 +180,14 @@ NODE_OPTIONS= \
 
 ## 一、能力边界（先看这段）
 
-**沙箱运行。** 插件入口脚本由宿主用 `new Function('dc', code)` 在目标窗口里执行。这些窗口都是 `contextIsolation: true`、未开启 Node 集成，所以插件**不能** `require()`、不能直接读写文件、不能加载原生模块、也拿不到 Electron 的 API；唯一能用的是下面介绍的 `dc` 对象。
+**跑在真正的跨源沙箱里。** 从 `apiVersion: 3` 起，插件脚本运行在 `<iframe sandbox="allow-scripts">` 内 —— 故意**不给** `allow-same-origin`，所以这个 iframe 与宿主页面是**不同源**的。这意味着插件**不能**：
+- 读取 `window.parent.document` 或任何宿主元素（`parent.electronAPI`、宿主 DOM…… 访问一律抛 `SecurityError`）；
+- 拿到 `require` / `process` / Node / 文件系统 / Electron API；
+- 碰到别的插件的数据或设置。
+
+它唯一的通道是发往宿主的 `postMessage` RPC。宿主用 `event.source === iframe.contentWindow` 反查消息是谁发的（**绝不采信消息里自称的 id**），然后逐条按插件声明的权限校验，再由宿主**代替**插件执行 DOM 改动 —— 所以插件仍然可以给界面换肤，只是改的过程中看不见、也碰不到宿主节点。
+
+`apiVersion: 1` / `2` 的老插件仍按旧方式同页运行，**不受隔离保护**；新插件请一律用 `3`。
 
 **三个钩子，一个插件可以声明多个。** 钩子决定了插件在哪些窗口里运行：
 
@@ -188,7 +195,7 @@ NODE_OPTIONS= \
 |---|---|---|
 | `clock.infoBar` | 时钟窗口 | 信息栏里的一个插槽（跟日期 / 星期 / 时区 / 闹钟文字同一行）。窗口会按内容自动撑宽；只要你有内容，即使日期和星期都关了，信息栏也不会被隐藏。 |
 | `lightsOff.background` | 关灯全屏窗口 | 背景板上一个铺满、居中的内容层。默认**不吃鼠标事件**，所以「双击背景 / ESC 退出关灯」依然有效。 |
-| `settings.theme` | 设置窗口 | 可以用 CSS 变量和附加样式表给设置界面换肤。 |
+| `settings.theme` | 设置窗口 | 可以用 CSS 变量、附加样式表给设置界面换肤，并可开一页属于自己的自绘导航页。 |
 
 **钩子决定「在哪个窗口运行」，权限决定「在那个窗口能碰什么」。** 想改窗口里的内容，还要声明对应的界面编辑权：
 
@@ -198,13 +205,14 @@ NODE_OPTIONS= \
 | `ui.settings` | `settings.theme` | 编辑设置窗口里的任意元素、往整个窗口叠加自己的层 |
 | `ui.lightsOffBg` | `lightsOff.background` | 支配关灯背景板的背景（颜色 / 渐变 / 图片 / 透明度 / 模糊） |
 
-**如实说明边界。** `storage` 权限是真正被强制的（插件数据由主进程写到以插件 id 命名的目录里）；`net` 权限目前是「声明 + 首次启用时向你确认」，因为插件代码与宿主页面同源运行，它本来也能直接调 `fetch` —— 请把 `net` 当作意图声明，而不是硬性拦截。界面编辑权同理：它给的是**正当接口 + 自动还原 + 用户知情**，不是一堵墙。具体边界：
+**如实说明边界。** 隔离是真的，但它不是「能力护城河」—— 它的意义在于：插件永远触及不到宿主与 Node，它能做的一切都必须经过宿主**校验过、有记录、会自动还原**的接口。具体边界：
 
 - **可改样式 / 文字 / 属性 / 类名，可隐藏元素，可往元素里追加内容；但不能删除宿主元素，也不能改宿主行为**（拖动、双击退出关灯、闹钟、保存设置……）。
 - 少数元素受保护，连隐藏都会被拒绝：关灯窗口的退出 / 锁定 / 设置按钮，设置窗口的插件列表与插件导航项 —— 保证任何插件出问题时你都还能自救。
 - 通过 `dc.ui` 做的每一处改动都会被登记，插件被禁用 / 卸载 / 改设置时逐个还原。
+- `net` 权限管住沙箱插件**唯一**的网络通道（`dc.fetchText`，仅 https 出站 GET）—— 在沙箱源下插件无法直接 `fetch`。
 - 万一插件把界面改坏了：**托盘菜单 →「🛡️ 安全模式（停用插件）」**，一键停用全部插件并重启，界面立刻回到原始状态（这个菜单由主进程绘制，插件改不到）。连续多次「启动期渲染进程异常」时宿主也会自动进入安全模式，并在设置 → 插件页顶部显示提示条。
-- 插件样式是全局的，请给自己的类名加前缀。**只安装你信任的插件。**
+- 插件 CSS 只作用于**它自己的沙箱文档**（外加你请宿主代加的那份）。仍然建议给类名加前缀，避免自己页面内部撞名。只安装你信任的插件。
 
 ## 二、目录结构
 
@@ -248,7 +256,7 @@ my-plugin/
 | `author` | string | 否 | ≤ 64 字 |
 | `description` | string | 否 | ≤ 200 字 |
 | `homepage` | string | 否 | 必须以 `https://` 开头，否则丢弃 |
-| `apiVersion` | number | 否 | 缺省 1；当前宿主支持 **2**（`2` 起才有界面编辑权）。填高于宿主的版本会以 `api-too-new` 拒绝加载 |
+| `apiVersion` | number | 否 | 缺省 1；当前宿主支持 **3**（真正的沙箱隔离从 `3` 起；界面编辑权从 `2` 起）。填高于宿主的版本会以 `api-too-new` 拒绝加载。**新插件请用 `3`。** |
 | `hooks` | string[] | **是** | 至少包含一个已知钩子，未知项会被丢弃；一个可用钩子都没有则拒绝加载（`no-hooks`） |
 | `permissions` | string[] | 否 | 可填 `storage`、`net`、`ui.clock`、`ui.settings`、`ui.lightsOffBg`，未知项丢弃；首次启用时宿主会把这些逐条列出来让你确认 |
 | `main` | string | 否 | 插件目录内的相对路径，缺省 `index.js`；文件必须存在 |
@@ -281,12 +289,19 @@ dc.mount(function (slot, dc) {
 |---|---|
 | `dc.id` / `dc.name` / `dc.version` | 插件身份信息 |
 | `dc.hook` | 当前实例运行在哪个窗口 |
-| `dc.apiVersion` | 宿主 API 版本（当前为 `2`）。需要界面编辑权时判定 `>= 2`，或用 `typeof dc.ui.get === 'function'` 探测 |
+| `dc.apiVersion` | 宿主 API 版本（当前为 `3`）。用 `typeof` 探测具体方法是否可用 |
 | `dc.settings` | 插件当前设置值的只读副本（对象已冻结） |
 | `dc.theme()` | 返回 `{ isDark, fg, bg }`，按实际渲染出来的底色计算。**请用它来判断明暗，不要写死颜色。** |
-| `dc.mount(fn)` | 注册挂载回调。`fn(slot, dc)` 会拿到 DOM 插槽；需要收尾就返回一个清理函数 |
+| `dc.mount(fn)` | 注册挂载回调。`fn(slot, dc)` 拿到的 `slot` 是**你沙箱自己的 `document.body`**（绝不是宿主节点 —— 你看不到宿主 DOM）；需要收尾就返回一个清理函数 |
+| `dc.root()` / `dc.slot()` | 沙箱 body，等价于 `slot` 参数 |
+| `dc.panelId` / `dc.isPanel()` | 仅 `settings.theme`：你所在导航页的 id，或在你就是主题层时为 `null` / `false`。这个钩子会把脚本挂载**两次** —— 一次在主题槽（无 panel），一次在每个导航页各自的 iframe 内（有 panel） |
 | `dc.log(...)` | 带插件名前缀的 `console.log`，开发时方便 |
 | `dc.on(name, cb)` / `dc.emit(name, payload)` | 插件自己的事件总线 |
+| `dc.setSetting(key, value)` | 写一项**你自己的**设置值（宿主钉死你的插件 id，改不了别人的） |
+| `dc.getConfig()` | 读宿主公开配置：只有 `{ language, timeFormat, lightsOff, theme }` |
+| `dc.listPlugins()` | 读已装插件的公共元数据；只有你自己那条带完整 `settings` / `values` |
+| `dc.onConfigUpdated(cb)` / `dc.onLightsOffStateChanged(cb)` | 订阅宿主事件（替代旧的 `window.electronAPI.on*`） |
+| `dc.fetchText(url, opts)` | **需 `net`**：https 出站 GET，由宿主代理。这是沙箱插件唯一的网络调用 |
 
 ### `dc.clock` —— 仅 `clock.infoBar`
 
@@ -314,21 +329,35 @@ dc.mount(function (slot, dc) {
 
 | 成员 | 说明 |
 |---|---|
-| `dc.ui.addStyle(cssText)` | 为该窗口追加一段样式表（卸载时移除） |
-| `dc.ui.applyVars({ '--名字': 值 })` | 仅设置窗口：在 `:root` 上设置 CSS 自定义属性（卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
+| `dc.ui.addStyle(cssText)` | 把样式表追加进**你的沙箱文档**，同时请宿主把它也追加到目标宿主窗口（卸载时移除） |
+| `dc.ui.applyVars({ '--名字': 值 })` | 仅设置窗口：在**宿主** `:root` **以及**你沙箱的 `<html>` 上设置 CSS 自定义属性（卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
 
 **编辑类（需要该窗口的界面编辑权：时钟 `ui.clock`、设置 `ui.settings`）**
 
+以下全部是**宿主侧代理**：你给选择器，宿主解析它、校验权限与受保护元素、执行改动并登记以便还原。你的沙箱看不到解析后的节点 —— 句柄只暴露方法。
+
 | 成员 | 说明 |
 |---|---|
-| `dc.ui.layer()` | 该窗口里属于你的自绘层：铺满、居中、默认不吃鼠标事件，可以自由往里画 |
+| `dc.ui.layer()` | **你自己沙箱的 body** —— 完全掌控，无需宿主校验。导航页 / 叠加层 UI 画在这里 |
 | `dc.ui.get(sel)` | 取宿主元素的可写句柄（见下）；找不到返回 `null` |
 | `dc.ui.hide(sel)` / `dc.ui.show(sel)` | 隐藏 / 恢复。受保护元素会抛错 |
 | `dc.ui.setText(sel, text)` | 改文字 |
-| `dc.ui.patch(sel, { style, class, attr })` | 批量改。`style` 键驼峰或短横线都行；`class` 可给字符串 / 数组（添加），或 `{ add, remove }` |
-| `dc.ui.push(sel, html)` | 往元素**里追加**一段清洗过的片段（白名单同第七节），不替换原有内容 |
+| `dc.ui.patch(sel, { style, class, attr })` | 批量改。`style` 键驼峰或短横线都行；`class` 可给字符串 / 数组（添加），或 `{ add, remove }`。`patch('html', { attr })` 也会镜像到沙箱 `<html>`（这样 `html[data-x]` 选择器在两边都命中） |
+| `dc.ui.push(sel, html)` | 往宿主元素**里追加**一段清洗过的片段（白名单同第七节），不替换原有内容 |
 | `dc.ui.on(sel, type, cb)` | 绑定事件。会自动 `stopPropagation`（避免误触发宿主行为，例如「双击退出关灯」），并给元素加上 `no-drag`（时钟窗口整块是拖动区，不加就点不动） |
-| `dc.ui.nav({ id, label, icon })` | 在设置窗口左侧导航新增一个属于你的页面，**返回该页的内容容器**（见下）。`id` 需匹配 `/^[a-z0-9][a-z0-9._-]{0,31}$/`，`label` ≤ 24 字，`icon` 建议单个 emoji |
+| `dc.ui.nav({ id, label, icon })` | 在设置窗口左侧导航新增一个属于你的页面。宿主会建好导航项**和该页专属的沙箱 iframe**；返回值是真值而非 DOM 节点 —— 当钩子带着 `dc.panelId` 重新挂载时，在 `dc.ui.layer()` 里构建页面主体。`id` 需匹配 `/^[a-z0-9][a-z0-9._-]{0,31}$/`，`label` ≤ 24 字，`icon` 建议单个 emoji |
+
+**隔离后的宿主查询 / 驱动（沙箱内拿不到宿主 DOM）**
+
+| 成员 | 说明 |
+|---|---|
+| `dc.ui.navInfo()` | 你所在导航页的 `{ panelId, active, label }` |
+| `dc.ui.setNavLabel(text)` | 改导航项文字（用来跟随语言切换） |
+| `dc.ui.activatePanel()` | 把设置窗口切到你的导航页 |
+| `dc.ui.navActive()` | 当前激活导航项的几何量（`{ any, visible, width, height, offsetX, offsetY, panelId }`） |
+| `dc.ui.alignTo(target, scope)` | 某宿主元素相对 `scope` 的几何量 —— 用来给「你注入到宿主」的元素定位 |
+| `dc.ui.getHostLang()` / `dc.ui.onHostLangChanged(cb)` | 读 / 订阅宿主界面语言（`'zh'` / `'en'`） |
+| `dc.ui.onHostLayoutChanged(cb)` | 宿主导航 / 布局变化时触发（替代旧版用 `MutationObserver` 盯 `#settings-nav`） |
 
 `dc.ui.get(sel)` 返回的句柄把上面这些方法挂在元素上，可链式调用：
 
@@ -344,31 +373,42 @@ dc.mount(function (slot, dc) {
 });
 ```
 
-`h.node()` 只用于**读**（量尺寸、读计算样式）；直接改它不会被自动还原。
+在 `apiVersion: 3` 下句柄的 `node` 恒为 `null`（没有可暴露的宿主节点）。要量宿主元素的尺寸，用 `dc.ui.alignTo(...)` 或 `dc.ui.navActive()` 返回的几何量。
 
 ### 在设置界面里给自己开一页（`dc.ui.nav`）
 
-设置窗口里页面很多时，别把东西全塞进插件卡片 —— 可以申请一个自己的导航页：
+设置窗口里页面很多时，别把东西全塞进插件卡片 —— 可以申请一个自己的导航页。在 `apiVersion: 3` 下这个钩子会跑**两次**：先是主题层（无 panel），在这里**注册**页面；然后在该页专属的沙箱 iframe 内再跑一次，在这里**构建**它：
 
 ```js
 dc.mount(function (slot, dc) {
   if (dc.hook !== 'settings.theme') return;
-  const page = dc.ui.nav({ id: 'stats', label: '专注统计', icon: '📊' });
-  if (!page) return;
+
+  // 第一相 —— 主题槽：注册导航页。宿主会建好导航项，并为该页新起一个沙箱 iframe。
+  if (!dc.isPanel()) {
+    dc.ui.nav({ id: 'stats', label: '专注统计', icon: '📊' });
+    return;
+  }
+
+  // 第二相 —— 已挂载在该页自己的 iframe 内：在 dc.ui.layer() 里构建页面主体
+  const page = dc.ui.layer();
+  page.classList.add('my-stats');
   const p = document.createElement('p');
   p.textContent = '今天已专注 3 小时';
   page.appendChild(p);
-  dc.ui.push('.plugin-nav-body', '<button type="button" class="my-reset">重置</button>');
-  dc.ui.on('.my-reset', 'click', () => dc.storage.set('total', 0));
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '重置';
+  btn.addEventListener('click', () => dc.storage.set('total', 0));
+  page.appendChild(btn);
 });
 ```
 
 - 导航项插在「插件」项之后，与内置项**同款样式**，左侧多一条细色条表示这是插件页；点击即切换，不需要自己做路由。
-- 返回的容器是普通 DOM 元素，你已经持有 `ui.settings` 权限，可以自由往里写内容、绑事件；宿主也提供了 `.plugin-nav-body button` 的兜底按钮样式。
+- `dc.ui.nav()` 返回的是**真值标记，不是 DOM 节点**（你跨源、拿不到宿主元素）。页面主体画在 `dc.ui.layer()` 里；宿主已经给了你一块铺满的 iframe 可画，并提供 `.plugin-nav-body button` 的兜底按钮样式。
 - 上限：单个插件最多 3 个导航页，所有插件合计最多 5 个（超了会抛 `too-many-nav-pages`）。
-- **同一个 `id` 重复调用会返回同一个容器**（幂等）：不会多建导航项、也不会消耗上限，所以不必自己缓存返回值 —— 在两个代码分支里各调一次都能拿到同一页。
-- 插件被禁用/卸载/改设置时，导航项与该页面整块移除；如果你当时正停在这一页，宿主会自动退回「插件」页。
-- 导航文案**不要加 `data-lang`**（那是宿主切换语言用的，会被覆盖）；要跟随中英切换请用 `MutationObserver` 观察 `document.documentElement.lang` 自己换。
+- **同一个 `id` 重复调用是幂等的**（不会多建导航项、也不消耗上限），所以每次挂载都放心调用。
+- 插件被禁用/卸载/改设置时，导航项与它的 iframe 整块移除；如果你当时正停在这一页，宿主会自动退回「插件」页。
+- 要跟随中英切换，用 `dc.ui.getHostLang()` / `dc.ui.onHostLangChanged(cb)`（**别**去读 `document` —— 你看不到宿主文档）。改导航文字用 `dc.ui.setNavLabel(...)`。
 
 几条硬性规则：
 
@@ -392,7 +432,7 @@ dc.mount(function (slot, dc) {
 
 ### 资源
 
-`dc.assets.base` 是插件自身目录的 `file://` 地址，`dc.assets.url('pic.png')` 用于拼路径（在时钟窗口、关灯窗口与清洗后的 `settingsView` 里都可用）。
+在 `apiVersion: 3` 下，沙箱插件没有直接的文件访问。`dc.assets.url('pic.png')` 返回一个宿主能替你解析的字符串：用在需要**宿主**加载资源的地方（例如 `dc.lightsOff.setBackground({ image: dc.assets.url('bg.png') })`，由宿主校验），或本来就能用 `https://` 的地方。在你自己的沙箱文档里用 `<img src>` 引用它，只对 `https://` 源有效 —— 需要本地图片就请宿主代加或改用远程资源。
 
 ## 五、声明式设置项
 
@@ -435,7 +475,7 @@ dc.mount(function (slot, dc) {
 - **关灯背景板** — 适合放信息量大的内容（一句话、农历、倒计时）。记得这一层默认不吃鼠标事件；确实需要交互时再显式开启，并且把可交互区域做小，避免用户无法退出。
 - **关灯背景**（需 `ui.lightsOffBg`）— 适合壁纸、渐变、氛围光。整层被 `filter: blur()` 会连内容一起糊掉时，把模糊放在背景层的子元素上，或直接用 `opacity` + 半透明色。
 - **设置界面美化** — 尽量只注入变量而不是整段覆盖样式；`--sfz` 是设置界面的基准字号，用 `calc()` 基于它计算，能跟随用户选择自动缩放。改宿主元素时**别隐藏插件面板**（那是用户停用你的唯一入口，受保护）。
-- **设置界面导航页**（需 `ui.settings`）— 功能一多就用 `dc.ui.nav()` 开自己的页，别把插件卡片撑成第二个设置界面；一个插件最多 3 页，超额会抛错。
+- **设置界面导航页**（需 `ui.settings`）— 功能一多就用 `dc.ui.nav()` 开自己的页，别把插件卡片撑成第二个设置界面；一个插件最多 3 页，超额会抛错。隔离后记得分两相：主题层（`!dc.isPanel()`）只 `nav()` 注册，页面相（`dc.isPanel()`）在 `dc.ui.layer()` 里构建。
 - **通用** — `dc.ui` 的每一次调用都会校验权限与保护名单，写错选择器只会返回 `false`（不抛错）；但**受保护元素**和**越权调用**会抛错并显示在该插件的错误徽章上，开发时留意设置页面。
 
 ## 七、自绘设置视图（`settingsView`）
@@ -445,7 +485,7 @@ dc.mount(function (slot, dc) {
 - **整段删除**：`script`、`style`、`iframe`、`object`、`embed`、`link`、`meta`、`form`
 - **解包**（去掉标签、保留子内容）：不在下面白名单里的标签
 - **允许的标签**：`a b br button code details div em h3 h4 hr i img input label li ol option p pre section select small span strong summary table tbody td th thead tr ul`
-- **允许的属性**：仅 `class id title type value checked disabled placeholder min max step rows cols name href src alt width height role for selected data-key data-role data-plugin-field`；其余（包括所有 `on*` 事件属性）一律删除
+- **允许的属性**：仅 `class title type value checked disabled placeholder min max step rows cols name href src alt width height role for selected data-key data-role data-plugin-field`；其余（包括所有 `on*` 事件属性与 `id`）一律删除（不给 `id`，注入的标记就无法顶掉宿主元素 id）
 - `href` 必须 `https://`；`src` 必须 `https://`，或者是**本插件目录内**的 `file://` 路径；`style` 只保留安全声明（`url()`、`expression()`、`@import`、`javascript:` 会被丢掉）
 
 这里的内容是静态标记：不会执行脚本，事件属性也不会触发。需要持久化的数据请优先用第五节的声明式设置项。

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, dialog, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 // [v1.0.5.5] 位置预设/夹取/层级的纯函数（单独文件，便于用 Node 直接单测）
@@ -158,7 +158,8 @@ function formatClockTime(hour24, minute, cfg) {
 }
 
 // ========== Alarm Engine ==========
-let alarms = []; // in-memory alarm arraylet alarmCheckInterval = null;
+let alarms = []; // in-memory alarm array
+let alarmCheckInterval = null;
 let alarmEditorWindow = null;
 
 // Ringing state
@@ -249,6 +250,7 @@ function broadcastAlarmState() {
   let inlineType = 'none';
   let inlineText = '';
   let inlineText2 = '';
+  let inlineTime = ''; // [v1.0.5.7] 显式声明：此前靠 sloppy 模式隐式全局，加 use strict / 重构即会抛 ReferenceError
 
   // 1. Check ringing alarm → "单击关闭闹钟" ↔ alarm name
   if (ringingAlarm) {
@@ -496,45 +498,78 @@ function checkAlarms() {
   alarms.forEach(a => {
     if (!a.enabled || !a.nextTrigger) return;
     const t = new Date(a.nextTrigger);
-    if (t <= now && nowMs - t.getTime() < 2000) {
-      // Only trigger if within the past 2 seconds (avoids double-triggering)
-      // Check if this alarm should be auto-skipped due to 7-min window
-      let skip = false;
-      triggerWindows.forEach((win, triggeringAlarmId) => {
-        if (triggeringAlarmId === a.id || win.dismissed) return;
-        const windowEnd = win.triggerTime.getTime() + 7 * 60 * 1000;
-        if (t.getTime() >= win.triggerTime.getTime() && t.getTime() <= windowEnd) {
-          skip = true;
-        }
-      });
-      // Also check ringing alarm (if not in triggerWindows for some reason)
-      if (!skip && ringingAlarm && ringingAlarm.id !== a.id) {
-        const ringTime = ringingAlarm.triggeredAt;
-        const windowEnd = ringTime.getTime() + 7 * 60 * 1000;
-        if (t.getTime() >= ringTime.getTime() && t.getTime() <= windowEnd) {
-          skip = true;
-        }
-      }
+    if (!(t <= now)) return;
 
-      if (skip) {
-        // Auto-dismiss
+    const lateMs = nowMs - t.getTime();
+    if (lateMs >= 2000) {
+      // [v1.0.5.6] 迟到的闹钟（睡眠唤醒 / 主进程阻塞 / 导入过期备份）：
+      // 原逻辑只处理"迟到 < 2 秒"，超时后既不响也不重算 → nextTrigger 永久停在过去，
+      // 重复闹钟从此再不触发，直到重启。这里补上兜底。
+      // 2s ~ GRACE 内视为"刚错过"，照常补响一次；更早的直接跳过并重算。
+      const GRACE_MS = 5 * 60 * 1000;
+      if (lateMs > GRACE_MS) {
+        // 错过太久：重复闹钟跳到下一个周期，单次闹钟补到明天的同一时刻
         if (a.repeat && a.weekdays && a.weekdays.length > 0) {
           recalcAlarmNextTrigger(a);
         } else {
-          a.enabled = false;
-          a.nextTrigger = null;
+          const nd = new Date();
+          nd.setHours(a.hour, a.minute, 0, 0);
+          if (nd <= now) nd.setDate(nd.getDate() + 1);
+          a.nextTrigger = nd.toISOString();
         }
         saveAlarmsData({ alarms });
-      } else if (!ringingAlarm) {
-        // No active ringing alarm → start ringing
-        startRinging(a);
+        return;
       }
-      // If already ringing, this alarm will be picked up in next check
+      // 补响本应属于这个时刻的闹钟（复用同一套 7 分钟窗口跳过规则）
+      handleAlarmTrigger(a, t);
+      return;
     }
+
+    // 准时（迟到 < 2 秒）
+    handleAlarmTrigger(a, t);
   });
 
   broadcastAlarmState();
   cleanupTriggerWindows();
+}
+
+// 判断某次触发是否应被"7 分钟窗口"跳过（另一闹钟已在响或刚响过）
+function isAlarmTriggerSkipped(a, t) {
+  let skip = false;
+  triggerWindows.forEach((win, triggeringAlarmId) => {
+    if (triggeringAlarmId === a.id || win.dismissed) return;
+    const windowEnd = win.triggerTime.getTime() + 7 * 60 * 1000;
+    if (t.getTime() >= win.triggerTime.getTime() && t.getTime() <= windowEnd) {
+      skip = true;
+    }
+  });
+  // Also check ringing alarm (if not in triggerWindows for some reason)
+  if (!skip && ringingAlarm && ringingAlarm.id !== a.id) {
+    const ringTime = ringingAlarm.triggeredAt;
+    const windowEnd = ringTime.getTime() + 7 * 60 * 1000;
+    if (t.getTime() >= ringTime.getTime() && t.getTime() <= windowEnd) {
+      skip = true;
+    }
+  }
+  return skip;
+}
+
+// 触发 / 自动跳过某次到点（准时与迟到补响共用）
+function handleAlarmTrigger(a, t) {
+  if (isAlarmTriggerSkipped(a, t)) {
+    // Auto-dismiss
+    if (a.repeat && a.weekdays && a.weekdays.length > 0) {
+      recalcAlarmNextTrigger(a);
+    } else {
+      a.enabled = false;
+      a.nextTrigger = null;
+    }
+    saveAlarmsData({ alarms });
+  } else if (!ringingAlarm) {
+    // No active ringing alarm → start ringing
+    startRinging(a);
+  }
+  // If already ringing, this alarm will be picked up in next check
 }
 
 // ========== [v1.0.5.5] 插件系统 ==========
@@ -544,8 +579,9 @@ function checkAlarms() {
 // - 主进程 = 插件管理器：扫描目录、校验清单、记录启用状态与设置值、下发代码与数据。
 // - 插件状态单独存 plugins.json，不混进 config.json（避免污染偏好导入导出的白名单）。
 // apiVersion 2 起新增三个界面编辑权（ui.clock / ui.settings / ui.lightsOffBg）与 dc.ui 选择器 API；
-// 声明 apiVersion:1 的老插件行为完全不变，声明 2 的插件可以据此判定宿主能力（老宿主会拒载 api-too-new）。
-const PLUGIN_API_VERSION = 2;
+// [v1.0.5.7] apiVersion 3 起插件在独立 sandbox iframe 中执行（真隔离，见 plugin-sandbox.js）；
+// 声明 apiVersion:1/2 的老插件仍按「同页面」方式运行，但会被标注「未加固（旧版）」提示作者升级。
+const PLUGIN_API_VERSION = 3;
 const PLUGIN_HOOKS = ['lightsOff.background', 'clock.infoBar', 'settings.theme'];
 // [v1.0.5.5] 除 storage / net 外新增三个「界面编辑权」。
 // 分工：hooks 决定插件在哪个窗口运行，permissions 决定它在该窗口能碰到什么 ——
@@ -829,7 +865,12 @@ function getPluginBundle() {
       return {
         id: m.id, name: m.name, version: m.version, author: m.author,
         hooks: m.hooks, permissions: m.permissions, values: r.values,
-        // 宿主支持的插件 API 版本：插件用 dc.apiVersion 判定能否使用界面编辑权
+        // [v1.0.5.7] 插件**自己声明**的 apiVersion —— 它决定插件走沙箱隔离还是旧版同页执行。
+        // ⚠️ 绝不能拿 hostApiVersion 做这个判定：宿主版本恒为最新，会把声明 apiVersion:1/2 的
+        //    老插件也强行塞进 sandbox，那些按「同页面 DOM + window.electronAPI」写的老代码
+        //    在跨源 iframe 里整体失效（实测：装着的旧插件全部挂掉）。
+        apiVersion: m.apiVersion,
+        // 宿主**支持的最高**插件 API 版本（插件可据此判断哪些能力可用，与隔离无关）
         hostApiVersion: PLUGIN_API_VERSION,
         code: readTextCapped(safeResolve(r.dir, m.main)),
         style: m.style ? readTextCapped(safeResolve(r.dir, m.style), PLUGIN_LIMITS.assetBytes) : null,
@@ -953,10 +994,64 @@ function cleanupStaging(stageId) {
   }
 }
 
+// [v1.0.5.7] 启动清扫遗留的导入暂存目录。staging 目录只在「弹覆盖确认框、用户不选就关设置窗口」
+// 或「导入中途崩溃/被强杀」时泄漏；这两种情况下本次进程都不可能再 commit 它。
+// 用 mtime 阈值（1 小时）兜底：本轮正在用的暂存目录一定很新，不会被误删。
+function sweepStalePluginStaging(maxAgeMs = 60 * 60 * 1000) {
+  const dir = getPluginStagingDir();
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return 0; }
+  const now = Date.now();
+  let removed = 0;
+  for (const ent of entries) {
+    if (!ent.isDirectory() || !/^stage-/.test(ent.name)) continue;
+    const full = path.join(dir, ent.name);
+    try {
+      const st = fs.statSync(full);
+      if (now - st.mtimeMs < maxAgeMs) continue;
+    } catch (e) { continue; }
+    if (removeDirSafe(full, getPluginsDir())) removed++;
+  }
+  return removed;
+}
+
 function getPluginDataFile(id) {
   if (!PLUGIN_ID_RE.test(String(id))) throw new Error('bad-id');
   return path.join(getPluginDataDir(id), 'data.json');
 }
+
+// [v1.0.5.7] 插件 IPC 的「调用方归属」校验。
+// 背景：v1.0.5.7 起插件在 sandbox iframe 里执行，越权路径已被切断；但宿主页面本身
+// 仍暴露着 preload 的全量 API，为防止「同窗口脚本冒充插件 id 读写他人数据」，
+// 这里按 webContents 绑定：只要这个渲染进程此前为插件 X 取过 bundle，
+// 就只允许它按 X 的身份访问插件数据；从未取过 bundle 的（宿主自身 UI）不限制。
+const pluginSenderOwners = new Map(); // webContents.id -> Set(pluginId)
+
+function rememberPluginSender(event, ids) {
+  try {
+    const wc = event && event.sender;
+    if (!wc || wc.isDestroyed()) return;
+    const set = pluginSenderOwners.get(wc.id) || new Set();
+    ids.forEach(id => set.add(id));
+    pluginSenderOwners.set(wc.id, set);
+    if (!wc.__dcOwnerCleanupHooked) {
+      wc.__dcOwnerCleanupHooked = true;
+      wc.once('destroyed', () => pluginSenderOwners.delete(wc.id));
+    }
+  } catch (e) {}
+}
+
+// 返回 true = 允许；false = 该 sender 已绑定到别的插件，拒绝冒充
+function senderOwnsPlugin(event, id) {
+  try {
+    const wc = event && event.sender;
+    if (!wc) return true;
+    const set = pluginSenderOwners.get(wc.id);
+    if (!set || set.size === 0) return true;  // 宿主自身 UI（设置页等），不受限
+    return set.has(String(id).toLowerCase());
+  } catch (e) { return true; }
+}
+
 function readPluginData(id) {
   const file = getPluginDataFile(id); // 非法 id 直接抛，不吞掉
   if (!fs.existsSync(file)) return {};
@@ -974,7 +1069,25 @@ function writePluginData(id, data) {
 
 ipcMain.handle('plugin-list', () => scanPlugins().map(pluginSummary));
 
-ipcMain.handle('plugin-bundle', () => getPluginBundle());
+ipcMain.handle('plugin-bundle', (event) => {
+  const bundle = getPluginBundle();
+  // 记录「这个渲染进程承载了哪些插件」→ 后续它的插件数据访问只能限定在这些 id 内
+  rememberPluginSender(event, bundle.map(p => p.id));
+  return bundle;
+});
+
+// [v1.0.5.7] 沙箱运行时源码：插件在 sandbox iframe 里需要它作为桥接层。
+// 与插件代码不同，这是宿主自己的可信文件，按需下发（缓存一次）。
+let pluginSandboxSourceCache = null;
+ipcMain.handle('plugin-sandbox-source', () => {
+  if (pluginSandboxSourceCache !== null) return pluginSandboxSourceCache;
+  try {
+    pluginSandboxSourceCache = readTextCapped(safeResolve(__dirname, 'plugin-sandbox.js'), 256 * 1024);
+  } catch (e) {
+    pluginSandboxSourceCache = '';
+  }
+  return pluginSandboxSourceCache;
+});
 
 // 插件自绘的设置视图（只在用户展开该插件的设置时才取，渲染前由渲染进程做白名单清洗）
 ipcMain.handle('plugin-settings-view', (_event, id) => {
@@ -1071,9 +1184,12 @@ ipcMain.handle('plugin-reload', (_event, id) => {
   return { success: true };
 });
 
-ipcMain.handle('plugin-set-setting', (_event, id, key, value) => {
+ipcMain.handle('plugin-set-setting', (event, id, key, value) => {
   const key2 = String(id || '').toLowerCase();
   if (!PLUGIN_ID_RE.test(key2)) return { success: false, error: 'bad-id' };
+  // [v1.0.5.7] 纵深防御：即便宿主层已把 id 钉死成调用者自己，这里再校验一次发送方归属，
+  // 避免任何直连 IPC 的路径能改到别人的设置。
+  if (!senderOwnsPlugin(event, key2)) return { success: false, error: 'not-owner' };
   const record = scanPlugins().find(r => r.manifest && r.manifest.id === key2);
   if (!record) return { success: false, error: 'not-found' };
   const field = (record.manifest.settings || []).find(f => f.key === key);
@@ -1097,12 +1213,14 @@ ipcMain.handle('plugin-error', (_event, id, message) => {
   return { success: true };
 });
 
-ipcMain.handle('plugin-data-get', (_event, id, key) => {
+ipcMain.handle('plugin-data-get', (event, id, key) => {
+  if (!senderOwnsPlugin(event, id)) return { success: false, error: 'not-owner' };
   const data = readPluginData(id);
   return { success: true, value: key === undefined ? data : data[String(key)] };
 });
 
-ipcMain.handle('plugin-data-set', (_event, id, key, value) => {
+ipcMain.handle('plugin-data-set', (event, id, key, value) => {
+  if (!senderOwnsPlugin(event, id)) return { success: false, error: 'not-owner' };
   const data = readPluginData(id);
   if (key === undefined) return writePluginData(id, value && typeof value === 'object' ? value : {});
   if (key === null || value === undefined) delete data[String(key)];
@@ -2476,6 +2594,12 @@ app.whenReady().then(() => {
   alarms = loadAlarms().alarms;
   initAlarms();
 
+  // [v1.0.5.7] 清扫上次异常退出/未确认覆盖时遗留的插件导入暂存目录（无副作用，失败只记录）
+  try {
+    const swept = sweepStalePluginStaging();
+    if (swept) console.log('已清理插件导入暂存目录:', swept);
+  } catch (e) { console.error('清理插件暂存目录失败:', e.message); }
+
   // [v1.0.5.6] 上次退出时开着局域网镜像 → 这次启动自动拉起
   // （静默启动也照常拉起，手机随时能看到时间；失败了只记录，不影响启动）
   syncLanMirror().catch(err => console.error('局域网镜像启动失败:', err && err.message));
@@ -2496,6 +2620,18 @@ app.whenReady().then(() => {
 
   // Start alarm checking interval (every 1 second)
   alarmCheckInterval = setInterval(checkAlarms, 1000);
+
+  // [v1.0.5.6] 睡眠唤醒后立即补一次检查：睡眠期间 setInterval 不执行，
+  // 唤醒后第一次 tick 可能已错过触发点（现在由 checkAlarms 的迟到分支兜底，
+  // 这里再主动推一把，保证唤醒瞬间就开始处理而不是等下一个 1s tick）。
+  try {
+    powerMonitor.on('resume', () => {
+      try { checkAlarms(); } catch (e) { console.error('唤醒后闹钟检查失败:', e && e.message); }
+    });
+    powerMonitor.on('unlock-screen', () => {
+      try { checkAlarms(); } catch (e) { /* ignore */ }
+    });
+  } catch (e) { console.error('powerMonitor 注册失败:', e && e.message); }
 
   // [v1.0.5.2] 昼夜自动配色会在 6:00 / 18:00 切换，到点把新背景同步给关灯窗口
   scheduleAutoColorSync();
