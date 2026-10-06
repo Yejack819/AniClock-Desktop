@@ -34,6 +34,9 @@ function getCountdownsPath() {
 const DEFAULT_CONFIG = {
   color: '#000000', bgColor: 'rgba(255,255,255,0.2)', fontFamily: 'Arial',
   fontSize: 200, animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', positionPreset: 'center', x: 0, y: 0,
+  // [v1.0.5.7] 数字动画的「节奏」（缓动曲线）：default = 保留各动画各自的原有曲线（弹性），
+  // 其余四档统一覆盖主数字的位移/透明度曲线（附加效果：模糊 / 由小放大 / 3D 旋转不受影响）
+  animEase: 'default',
   // [v1.0.5.5] 上次退出时的窗口尺寸：启动时按它创建，位置预设才能一次算对（否则先按 800×400 定位、被字号撑开后就走偏）
   winW: 800, winH: 400,
   showSeconds: true, showDate: true, showWeekday: true, datePosition: 'below', autoColor: false,
@@ -79,6 +82,9 @@ const DEFAULT_CONFIG = {
 // [v1.0.5.4] 动画类型归一化：旧的「上滑翻转 / 下滑翻转 / 缩 / 放」已合并为
 // 「翻转（带方向）」与「缩放（带方向）」，这里把老配置迁移过来并兜底非法值
 const ANIM_TYPES = ['flip', 'scale', 'fade', 'flip-3d', 'none'];
+// [v1.0.5.7] 数字动画节奏。默认档 'default' 表示「不写 CSS 变量」——由 CSS 用各自的原曲线兜底，
+// 这样老用户升级后观感完全不变；其余四档对应标准缓动关键字。
+const ANIM_EASES = ['default', 'linear', 'ease-in', 'ease-out', 'ease-in-out'];
 const ANIM_LEGACY = {
   'slide-up': ['flip', 'up'],
   'slide-down': ['flip', 'down'],
@@ -95,6 +101,7 @@ function normalizeAnimConfig(cfg) {
   if (ANIM_TYPES.indexOf(cfg.animType) < 0) cfg.animType = 'flip';
   if (cfg.animFlipDir !== 'up' && cfg.animFlipDir !== 'down') cfg.animFlipDir = 'up';
   if (cfg.animScaleDir !== 'shrink' && cfg.animScaleDir !== 'grow') cfg.animScaleDir = 'shrink';
+  if (ANIM_EASES.indexOf(cfg.animEase) < 0) cfg.animEase = 'default';
   return cfg;
 }
 

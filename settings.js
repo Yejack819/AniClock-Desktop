@@ -14,6 +14,9 @@ const LOCALE = {
     animFlipDir: '翻转方向', animScaleDir: '缩放方向',
     flipDirUp: '向上滑入（旧数字向上移出）', flipDirDown: '向下滑入（旧数字向下移出）',
     scaleDirShrink: '缩小（旧数字变小消失）', scaleDirGrow: '放大（旧数字变大消失）',
+    // [v1.0.5.7] 数字动画节奏（缓动曲线）
+    animEase: '动画节奏', easeDefault: '弹性（默认）', easeLinear: '匀速',
+    easeIn: '慢起', easeOut: '慢停', easeInOut: '两头慢',
     staggerDelay: '错峰延迟', staggerDir: '错峰方向', staggerLTR: '从左到右', staggerRTL: '从右到左',
     blurEnabled: '添加模糊', blurDuration: '模糊持续', blurStrength: '模糊强度',
     scaleInEnabled: '由小放大滑入', scaleInFactor: '初始大小',
@@ -214,6 +217,9 @@ const LOCALE = {
     animFlipDir: 'Flip Direction', animScaleDir: 'Scale Direction',
     flipDirUp: 'Slide up (old digit exits upward)', flipDirDown: 'Slide down (old digit exits downward)',
     scaleDirShrink: 'Shrink (old digit shrinks away)', scaleDirGrow: 'Grow (old digit grows away)',
+    // [v1.0.5.7] Digit animation easing
+    animEase: 'Easing', easeDefault: 'Spring (default)', easeLinear: 'Linear',
+    easeIn: 'Ease In', easeOut: 'Ease Out', easeInOut: 'Ease In-Out',
     staggerDelay: 'Stagger Delay', staggerDir: 'Stagger Direction', staggerLTR: 'Left to Right', staggerRTL: 'Right to Left',
     blurEnabled: 'Add Blur', blurDuration: 'Blur Duration', blurStrength: 'Blur Strength',
     scaleInEnabled: 'Scale-in', scaleInFactor: 'Start Size',
@@ -411,6 +417,7 @@ const els = {
   info_scale: $('info-scale'), info_scale_label: $('info-scale-label'),
   anim_speed: $('anim-speed'), anim_speed_label: $('anim-speed-label'),
   anim_type: $('anim-type'),
+  anim_ease: $('anim-ease'), // [v1.0.5.7] 动画节奏
   // [v1.0.5.4] 翻转/缩放 方向选择
   anim_flip_dir: $('anim-flip-dir'),
   anim_flip_dir_row: document.getElementById('anim-flip-dir-row'),
@@ -525,6 +532,8 @@ let activeAlarmIds = { ringingId: null, retryIds: [] };
 // [v1.0.5.4] 动画家族归一化：旧的 slide-up/slide-down/shrink/expand → 翻转/缩放 + 方向
 const ANIM_LEGACY_MAP = { 'slide-up': ['flip', 'up'], 'slide-down': ['flip', 'down'], 'shrink': ['scale', 'shrink'], 'expand': ['scale', 'grow'] };
 const ANIM_TYPES = ['flip', 'scale', 'fade', 'flip-3d', 'none'];
+// [v1.0.5.7] 数字动画节奏。'default' = 不写 --anim-ease，各动画用自己的原曲线（老配置的迁移态）
+const ANIM_EASES = ['default', 'linear', 'ease-in', 'ease-out', 'ease-in-out'];
 function normalizeAnimConfig(c) {
   const hit = ANIM_LEGACY_MAP[c.animType];
   if (hit) {
@@ -535,12 +544,14 @@ function normalizeAnimConfig(c) {
   if (ANIM_TYPES.indexOf(c.animType) < 0) c.animType = 'flip';
   if (c.animFlipDir !== 'up' && c.animFlipDir !== 'down') c.animFlipDir = 'up';
   if (c.animScaleDir !== 'shrink' && c.animScaleDir !== 'grow') c.animScaleDir = 'shrink';
+  if (ANIM_EASES.indexOf(c.animEase) < 0) c.animEase = 'default';
   return c;
 }
 
 function syncAnimUI(){
   const at = els.anim_type.value;
   els.anim_speed.disabled = at === 'none';
+  els.anim_ease.disabled = at === 'none'; // [v1.0.5.7] 没有动画时节奏无从谈起
   // 方向选择只在对应动画家族下出现
   if (els.anim_flip_dir_row) els.anim_flip_dir_row.classList.toggle('hidden', at !== 'flip');
   if (els.anim_scale_dir_row) els.anim_scale_dir_row.classList.toggle('hidden', at !== 'scale');
@@ -935,6 +946,7 @@ function syncUIFromConfig() {
   els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
   normalizeAnimConfig(config);
   els.anim_type.value = config.animType;
+  els.anim_ease.value = config.animEase; // [v1.0.5.7] normalizeAnimConfig 已兜底成合法档
   els.anim_flip_dir.value = config.animFlipDir;
   els.anim_scale_dir.value = config.animScaleDir;
   els.stagger_delay.value = config.staggerDelay || 0; els.stagger_delay_label.textContent = config.staggerDelay || 0;
@@ -1710,6 +1722,8 @@ function initLanPanel() {
   });
   els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); syncAnimUI(); });
   els.anim_type.addEventListener('change', function() { saveAndApply({ animType: els.anim_type.value }); syncAnimUI(); });
+  // [v1.0.5.7] 动画节奏（匀速 / 慢起 / 慢停 / 两头慢 / 弹性）
+  els.anim_ease.addEventListener('change', function() { saveAndApply({ animEase: els.anim_ease.value }); syncAnimUI(); });
   // [v1.0.5.4] 翻转 / 缩放 的方向
   els.anim_flip_dir.addEventListener('change', function() { saveAndApply({ animFlipDir: els.anim_flip_dir.value }); });
   els.anim_scale_dir.addEventListener('change', function() { saveAndApply({ animScaleDir: els.anim_scale_dir.value }); });

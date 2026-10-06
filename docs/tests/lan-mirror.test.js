@@ -52,6 +52,7 @@ function baseConfig(over) {
     animFlipDir: 'up',
     animScaleDir: 'shrink',
     animDuration: 350,
+    animEase: 'default',
     timeOffsetMs: 0,
     autoAdjustEnabled: false,
     autoAdjustIntervalSec: 3600,
@@ -256,14 +257,19 @@ async function main() {
   ok('快照: 白名单字段齐全',
     ['language', 'color', 'bgColor', 'fontFamily', 'infoScale', 'hourFormat', 'ampmCorner',
       'showSeconds', 'showDate', 'showWeekday', 'datePosition', 'autoColor', 'extraTimezones',
-      'animType', 'animFlipDir', 'animScaleDir', 'animDuration', 'staggerDelay', 'staggerDirection',
+      'animType', 'animFlipDir', 'animScaleDir', 'animDuration', 'animEase', 'staggerDelay', 'staggerDirection',
       'timeOffsetMs', 'autoAdjustEnabled', 'autoAdjustIntervalSec', 'autoAdjustAmountMs',
       'autoAdjustBaseMs', 'autoAdjustAnchor'].every(k => Object.prototype.hasOwnProperty.call(snap.cfg, k)));
 
   // 非法动画家族被归一化
-  cfg = baseConfig({ animType: 'bogus', hourFormat: 'weird', extraTimezones: 'nope' });
+  cfg = baseConfig({ animType: 'bogus', hourFormat: 'weird', extraTimezones: 'nope', animEase: 'bogus' });
   const snap2 = await (await get(base + '/' + TOKEN + '/api/state')).json();
   eq('快照: 非法 animType 归一化', snap2.cfg.animType, 'flip');
+  eq('快照: 非法 animEase 归一化为 default', snap2.cfg.animEase, 'default');
+  // 合法节奏原样下发（手机端据此决定「跟随电脑」时的曲线）
+  cfg = baseConfig({ animEase: 'ease-in-out' });
+  const snap2b = await (await get(base + '/' + TOKEN + '/api/state')).json();
+  eq('快照: 合法 animEase 原样下发', snap2b.cfg.animEase, 'ease-in-out');
   eq('快照: 非法 hourFormat 归一化', snap2.cfg.hourFormat, 'auto');
   eq('快照: 非法 extraTimezones 归一化为空', snap2.cfg.extraTimezones.length, 0);
 

@@ -82,6 +82,12 @@ const api = new Proxy({}, {
   get(_, prop) {
     switch (prop) {
       case 'getConfig': return async () => JSON.parse(JSON.stringify(config));
+      // [v1.0.5.7] 设置窗口「改了就落盘」：镜像进来，好断言 animEase 这类新项真的传给了主进程
+      case 'saveConfig': return async (cfg) => {
+        if (cfg && typeof cfg === 'object') Object.assign(config, cfg);
+        return { success: true };
+      };
+      case 'notifyClockUpdate': return async () => ({ success: true });
       case 'lanMirrorStatus': return async () => status();
       case 'setLanMirror': return async (patch) => {
         if (patch && patch.enabled !== undefined) { running = patch.enabled === true; config.lanMirrorEnabled = running; }
@@ -342,6 +348,41 @@ const api = new Proxy({}, {
   check('切到自定义：输入框里是可用码（不沿用垃圾值）', $('lan-code').value === 'my-clock', $('lan-code').value);
   check('切到自定义：没有红字提示', $('lan-code-error').classList.contains('hidden'));
   check('切到自定义：地址用可用码', (q('.lan-addr-url') || {}).textContent.indexOf('/my-clock/') > 0, (q('.lan-addr-url') || {}).textContent);
+
+  // 13) [v1.0.5.7] 数字动画「节奏」（匀速 / 慢起 / 慢停 / 两头慢 / 弹性）
+  const easeSel = $('anim-ease');
+  check('动画面板里有「节奏」下拉', !!easeSel);
+  const easeOpts = easeSel ? Array.prototype.map.call(easeSel.options, o => o.value) : [];
+  check('节奏共 5 档，顺序为 弹性/匀速/慢起/慢停/两头慢',
+    easeOpts.join(',') === 'default,linear,ease-in,ease-out,ease-in-out', easeOpts.join(','));
+  check('每档都有可读中文文案',
+    !!easeSel && Array.prototype.every.call(easeSel.options, o => !!o.textContent.trim()),
+    easeSel && Array.prototype.map.call(easeSel.options, o => o.textContent).join('/'));
+  check('初始值来自配置（animEase=default）', !!easeSel && easeSel.value === 'default', easeSel && easeSel.value);
+
+  if (easeSel) {
+    easeSel.value = 'linear';
+    easeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await wait(200);
+    check('选「匀速」→ 落盘 animEase=linear', config.animEase === 'linear', String(config.animEase));
+
+    easeSel.value = 'ease-in-out';
+    easeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await wait(200);
+    check('选「两头慢」→ 落盘 animEase=ease-in-out', config.animEase === 'ease-in-out', String(config.animEase));
+  }
+
+  // 与「无动画」联动：没有动画时节奏无从谈起，跟速度一起置灰
+  $('anim-type').value = 'none';
+  $('anim-type').dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(200);
+  check('选「无动画」→ 落盘 animType=none', config.animType === 'none', String(config.animType));
+  check('选「无动画」→ 速度置灰', $('anim-speed').disabled === true);
+  check('选「无动画」→ 节奏也置灰', !!easeSel && easeSel.disabled === true);
+  $('anim-type').value = 'flip';
+  $('anim-type').dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(200);
+  check('切回「翻转」→ 节奏恢复可用', !!easeSel && easeSel.disabled === false);
 
   console.log(log.join('\n'));
   console.log('\nsettings-panel(jsdom)：pass=' + pass + ' fail=' + fail);

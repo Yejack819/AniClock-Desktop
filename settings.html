@@ -201,6 +201,18 @@
           <input type="range" id="anim-speed" min="50" max="1000" step="10" value="350">
         </div>
 
+        <!-- [v1.0.5.7] 数字动画节奏（缓动曲线）。「弹性」= 各动画各自的原有曲线，仅改位移/透明度 -->
+        <div class="setting-row edu-hide">
+          <label data-lang="animEase">动画节奏</label>
+          <select id="anim-ease">
+            <option value="default" data-lang="easeDefault">弹性（默认）</option>
+            <option value="linear" data-lang="easeLinear">匀速</option>
+            <option value="ease-in" data-lang="easeIn">慢起</option>
+            <option value="ease-out" data-lang="easeOut">慢停</option>
+            <option value="ease-in-out" data-lang="easeInOut">两头慢</option>
+          </select>
+        </div>
+
         <div class="setting-row edu-hide">
           <label><span data-lang="staggerDelay">错峰延迟</span> <span id="stagger-delay-label">0</span>ms</label>
           <input type="range" id="stagger-delay" min="0" max="300" step="10" value="0">

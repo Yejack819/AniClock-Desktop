@@ -1,3 +1,12 @@
+/* ====== [v1.0.5.7] 数字动画「节奏」：--anim-ease ======
+   由 JS 写在 #clock 上（renderer.js 的 applyAnimEase），取值为标准缓动关键字
+   linear / ease-in / ease-out / ease-in-out。
+   · 「弹性」档（默认）时 JS 会 **removeProperty**，于是下列各条 transition 的 var() 落到
+     各自的原曲线（翻转/缩放 = cubic-bezier(.34,1.56,.64,1)，淡入淡出 = ease）→ 老配置零回归；
+   · ⚠️ 绝不能写空串：var() 取到空值会让整条 transition 声明失效 → 数字直接跳变、没有动画；
+   · 只覆盖「主数字」的位移 / 透明度曲线；3D 旋转（出场 ease-in、入场 ease-out）与模糊的
+     filter 曲线（ease-out）属于该动画自身的节奏，不跟随本变量。 */
+
 /* ====== 全局重置 ====== */
 * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
@@ -59,7 +68,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 .digit-current { display: block; line-height: 1.1em; height: 1.1em; text-align: center; will-change: transform, opacity; }
 .digit-current.animate-out {
   transform: translateY(-100%); opacity: 0;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .digit-next {
   position: absolute; top: 0; left: 0; width: 100%; height: 1.1em; line-height: 1.1em;
@@ -67,7 +76,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 }
 .digit-next.animate-in {
   transform: translateY(0); opacity: 1;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 
 /* ====== 动画：翻转（方向：上 / 下）====== */
@@ -76,43 +85,43 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 .anim-flip.dir-down .digit-next { transform: translateY(-100%); }
 .anim-flip.dir-down .digit-current.animate-out {
   transform: translateY(100%); opacity: 0;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .anim-flip.dir-down .digit-next.animate-in {
   transform: translateY(0); opacity: 1;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 
 /* ====== 动画：淡入淡出 Fade ====== */
 .anim-fade .digit-next { transform: none; }
 .anim-fade .digit-current.animate-out {
   transform: none; opacity: 0;
-  transition: opacity var(--anim-duration, 350ms) ease;
+  transition: opacity var(--anim-duration, 350ms) var(--anim-ease, ease);
 }
 .anim-fade .digit-next.animate-in {
   transform: none; opacity: 1;
-  transition: opacity var(--anim-duration, 350ms) ease;
+  transition: opacity var(--anim-duration, 350ms) var(--anim-ease, ease);
 }
 
 /* ====== 动画：缩放（方向：旧数字缩小 / 放大）====== */
 .anim-scale.dir-shrink .digit-current.animate-out {
   transform: scale(0.3); opacity: 0;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .anim-scale.dir-shrink .digit-next { transform: none; }
 .anim-scale.dir-shrink .digit-next.animate-in {
   transform: none; opacity: 1;
-  transition: opacity var(--anim-duration, 350ms) ease;
+  transition: opacity var(--anim-duration, 350ms) var(--anim-ease, ease);
 }
 
 .anim-scale.dir-grow .digit-current.animate-out {
   transform: scale(1.5); opacity: 0;
-  transition: transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1), opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)), opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 .anim-scale.dir-grow .digit-next { transform: none; }
 .anim-scale.dir-grow .digit-next.animate-in {
   transform: none; opacity: 1;
-  transition: opacity var(--anim-duration, 350ms) ease;
+  transition: opacity var(--anim-duration, 350ms) var(--anim-ease, ease);
 }
 
 /* ====== 动画：3D翻转 Flip 3D ====== */
@@ -130,12 +139,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
 
 /* ====== 附加效果：模糊（勾选 blurEnabled 时激活）======
    [v1.0.5.4] 追加 .anim-flip 限定：模糊是「翻转」的可选附加项，
-   必须只在翻转下生效，否则切到淡入淡出/缩放等动画时会残留（原 bug）*/
+   必须只在翻转下生效，否则切到淡入淡出/缩放等动画时会残留（原 bug）
+   [v1.0.5.7] transform / opacity 走 --anim-ease：勾了模糊时这条 transition 会覆盖
+   .digit-current.animate-out 的基础声明，若这里不读变量，「节奏」就对旧数字出场失效了。
+   filter 的曲线属于模糊这个附加效果本身，固定 ease-out，不跟随节奏。 */
 .blur-enabled.anim-flip .digit-current.animate-out {
   filter: blur(var(--blur-strength, 15px));
   transition:
-    transform var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity var(--anim-duration, 350ms) cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)),
+    opacity var(--anim-duration, 350ms) var(--anim-ease, cubic-bezier(0.34, 1.56, 0.64, 1)),
     filter var(--blur-duration, 300ms) ease-out;
 }
 

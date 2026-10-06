@@ -341,6 +341,8 @@ function createLanMirror(options) {
         animFlipDir: c.animFlipDir === 'down' ? 'down' : 'up',
         animScaleDir: c.animScaleDir === 'grow' ? 'grow' : 'shrink',
         animDuration: Math.max(0, Math.min(3000, num(c.animDuration, 350))),
+        // [v1.0.5.7] 数字动画节奏（'default' = 各动画各自的原有曲线）
+        animEase: ['default', 'linear', 'ease-in', 'ease-out', 'ease-in-out'].indexOf(c.animEase) >= 0 ? c.animEase : 'default',
         staggerDelay: Math.max(0, Math.min(3000, num(c.staggerDelay, 0))),
         staggerDirection: c.staggerDirection === 'rtl' ? 'rtl' : 'ltr',
         timeOffsetMs: num(c.timeOffsetMs, 0),

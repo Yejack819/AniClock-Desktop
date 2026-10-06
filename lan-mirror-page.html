@@ -10,6 +10,9 @@
   /* 手机端镜像页：完全自包含（内联样式与脚本、零外部资源），断网也能打开。
      颜色 / 字号 / 12-24 小时制 / 时区 / 昼夜自动配色 / 动画家族与方向都跟随桌面配置；
      访问码来自地址栏路径，页面自身不拼任何外部地址。 */
+  /* ⚠️ 这里**不要**给 --anim-ease 写兜底值：节奏走的是「元素上没有该变量 → 各条 transition
+     用自己的原曲线」这套 fallback 机制（见 renderer.js / 页面里 applyAnimVars 的注释），
+     在 :root 上写一个值会被继承下去，等于把「弹性」档变成写死某一个曲线。 */
   :root { --anim-duration: 350ms; --dim: rgba(255,255,255,.45); --page: #0a0c11; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; overflow: hidden; }
@@ -33,6 +36,10 @@
     position: relative; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: clamp(4px, 1.4vh, 14px); max-width: 100%;
+    /* 双击时钟 = 打开显示设置：touch-action:manipulation 关掉「双击缩放」，
+       免得系统把第二下当成缩放手势吞掉；user-select 关掉双击选词 */
+    touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
   }
   #clock.date-above { flex-direction: column-reverse; }
 
@@ -51,7 +58,7 @@
   .digit-current { display: block; line-height: 1.1em; height: 1.1em; text-align: center; will-change: transform, opacity; }
   .digit-current.animate-out {
     transform: translateY(-100%); opacity: 0;
-    transition: transform var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1), opacity var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1);
+    transition: transform var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1)), opacity var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1));
   }
   .digit-next {
     position: absolute; top: 0; left: 0; width: 100%; height: 1.1em; line-height: 1.1em;
@@ -59,29 +66,29 @@
   }
   .digit-next.animate-in {
     transform: translateY(0); opacity: 1;
-    transition: transform var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1), opacity var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1);
+    transition: transform var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1)), opacity var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1));
   }
   .anim-flip.dir-down .digit-next { transform: translateY(-100%); }
   .anim-flip.dir-down .digit-current.animate-out {
     transform: translateY(100%); opacity: 0;
-    transition: transform var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1), opacity var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1);
+    transition: transform var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1)), opacity var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1));
   }
   .anim-flip.dir-down .digit-next.animate-in { transform: translateY(0); opacity: 1; }
   .anim-fade .digit-next { transform: none; }
-  .anim-fade .digit-current.animate-out { transform: none; opacity: 0; transition: opacity var(--anim-duration,350ms) ease; }
-  .anim-fade .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) ease; }
+  .anim-fade .digit-current.animate-out { transform: none; opacity: 0; transition: opacity var(--anim-duration,350ms) var(--anim-ease, ease); }
+  .anim-fade .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) var(--anim-ease, ease); }
   .anim-scale.dir-shrink .digit-current.animate-out {
     transform: scale(.3); opacity: 0;
-    transition: transform var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1), opacity var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1);
+    transition: transform var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1)), opacity var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1));
   }
   .anim-scale.dir-shrink .digit-next { transform: none; }
-  .anim-scale.dir-shrink .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) ease; }
+  .anim-scale.dir-shrink .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) var(--anim-ease, ease); }
   .anim-scale.dir-grow .digit-current.animate-out {
     transform: scale(1.5); opacity: 0;
-    transition: transform var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1), opacity var(--anim-duration,350ms) cubic-bezier(.34,1.56,.64,1);
+    transition: transform var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1)), opacity var(--anim-duration,350ms) var(--anim-ease, cubic-bezier(.34,1.56,.64,1));
   }
   .anim-scale.dir-grow .digit-next { transform: none; }
-  .anim-scale.dir-grow .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) ease; }
+  .anim-scale.dir-grow .digit-next.animate-in { transform: none; opacity: 1; transition: opacity var(--anim-duration,350ms) var(--anim-ease, ease); }
   .anim-flip-3d .digit-group { perspective: 400px; }
   .anim-flip-3d .digit-current { transform-origin: bottom center; backface-visibility: hidden; }
   .anim-flip-3d .digit-next { transform-origin: top center; backface-visibility: hidden; transform: rotateX(-90deg); opacity: 0; }
@@ -154,9 +161,12 @@
     --accent: #6a55e0;
     --danger: #d64545;
   }
+  /* [v1.0.5.7] 位置与全屏里的时钟胶囊（#fs-pill）**完全一致**：顶部居中。
+     两处同位 → 「点胶囊放大进全屏 / 再点缩回时钟」的形变动画首尾相接，
+     看起来就是同一颗玻璃在长大、缩小（见 #fs-morph）。 */
   #cd-fab {
     position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(30px + env(safe-area-inset-bottom));
+    top: calc(14px + env(safe-area-inset-top));
     display: flex; align-items: center; gap: 7px;
     min-height: 44px; padding: 0 18px;
     border-radius: 999px; border: 1px solid var(--line);
@@ -165,9 +175,44 @@
     font-size: 14px; font-weight: 500; letter-spacing: .2px;
     font-variant-numeric: tabular-nums;
     cursor: pointer; touch-action: manipulation;
+    /* ⚠️ --fab-pct 的过渡必须写在**元素自己**身上：值是在 #cd-fab 上被改写的，
+       伪元素只是「读」它（继承来的），在伪元素上写 transition 是无效的。
+       注册成 @property 之后它才可插值 → 断点位置也能 1s 线性地退。 */
     transition: transform .18s cubic-bezier(.34,1.4,.64,1), background .2s ease,
-                opacity .26s ease;
+                opacity .26s ease, --fab-pct 1s linear;
+    /* [v1.0.5.7] 胶囊上「按剩余比例上色」那条色块的两个端点（夜 / 昼）：
+       用户调背景色时由 fsApplyAccent() 按同一色相写成 hsla() 覆盖。
+       默认跟水位条的默认橙同源。 */
+    --fab-a: hsla(25, 85%, 60%, .20);
+    --fab-da: hsla(25, 80%, 45%, .14);
   }
+  /* [v1.0.5.7] 有倒计时**在跑**、又没进全屏时：胶囊也做成「一部分有色 + 一部分无色玻璃」，
+     与全屏水位条是同一套语言 —— **有色部分的宽度 = 剩余时间比例**（每秒跟着退），
+     不是固定一半。颜色压得很淡（~1/5）：只当状态提示，不抢读数。
+     用伪元素 + @property 注册 --fab-pct：渐变的断点位置也能 1s 线性过渡，像水位在退
+     （CSS 变量默认不可过渡，注册成 <percentage> 之后才行；老浏览器忽略 @property 只是
+     断点会跳变，仍然能用）。
+     ⚠️⚠️ inherits 必须是 true：伪元素是**靠继承**拿父元素自定义属性的，
+     写成 false 时 #cd-fab::before 只能取到 initial-value(0%) → 色块宽度归 0 → 颜色整个看不见
+     （实测踩过：真机上「淡淡的颜色」突然没了，而测试仍全绿）。 */
+  @property --fab-pct {
+    syntax: '<percentage>'; inherits: true; initial-value: 0%;
+  }
+  #cd-fab::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(90deg,
+      var(--fab-a) 0 var(--fab-pct), transparent var(--fab-pct) 100%);
+    opacity: 0; pointer-events: none;
+    /* 只过渡「点亮」这一步；断点的 1s 退色由元素自身的 --fab-pct 过渡提供（见上） */
+    transition: opacity .24s ease;
+  }
+  #cd-fab.fab-live::before { opacity: 1; }
+  body.is-day #cd-fab::before {
+    background: linear-gradient(90deg,
+      var(--fab-da) 0 var(--fab-pct), transparent var(--fab-pct) 100%);
+  }
+  /* 伪元素是绝对定位、盖在内容之上 → 文本要抬到它上面 */
+  #cd-fab > * { position: relative; z-index: 1; }
   #cd-fab:active { transform: translateX(-50%) scale(.94); }
   #cd-fab.has { background: var(--glass-2); }
   #cd-fab.paused { opacity: .75; }
@@ -176,10 +221,11 @@
   #cd-fab.empty > span[aria-hidden="true"] { display: none; }
   #cd-fab .cd-fab-empty { font-size: 14px; font-weight: 600; }
   #cd-fab .cd-fab-more { font-size: 12px; color: var(--ink-dim); }
-  /* 3 秒没操作 → 自动淡出；屏幕上任何一次操作都会立刻唤回来 */
+  /* 3 秒没操作 → 自动淡出；屏幕上任何一次操作都会立刻唤回来。
+     胶囊在顶部 → 藏的方向是**向上**收（与 #fs-pill.idle 一致）。 */
   #cd-fab.idle {
     opacity: 0; visibility: hidden; pointer-events: none;
-    transform: translateX(-50%) translateY(140%) scale(.96);
+    transform: translateX(-50%) translateY(-140%) scale(.96);
     transition: opacity .3s ease, visibility .3s, transform .34s cubic-bezier(.4,0,.2,1);
   }
 
@@ -243,7 +289,63 @@
   .ui-acts button:active { transform: scale(.97); }
   .ui-acts button[hidden] { display: none !important; }
 
-  /* 首次进页面的一次性提示（长按的发现性靠它） */
+  /* ====== [v1.0.5.7] 全屏倒计时专属的两项设置（模糊秒数 + 水位条配色）======
+     只在「双击全屏大数字」进来的面板里出现；双击主界面时钟的面板保持原样。 */
+  .ui-block[hidden] { display: none !important; }
+  .ui-block { margin-top: 6px; border-top: 1px solid var(--line); }
+
+  /* 开关：只用 aria-checked 当唯一事实来源，样式全从它派生 */
+  .ui-switch {
+    position: relative; flex: 0 0 auto; width: 52px; height: 32px; padding: 0;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--glass);
+    cursor: pointer; touch-action: manipulation;
+    transition: background .18s ease, border-color .18s ease;
+  }
+  .ui-switch .ui-knob {
+    position: absolute; top: 50%; left: 3px; width: 24px; height: 24px; margin-top: -12px;
+    border-radius: 50%; background: var(--ink); opacity: .78;
+    transition: transform .24s cubic-bezier(.34,1.4,.64,1), background .18s ease, opacity .18s ease;
+  }
+  .ui-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .ui-switch[aria-checked="true"] .ui-knob { transform: translateX(20px); background: #fff; opacity: 1; }
+  .ui-switch:active .ui-knob { transform: scale(.92); }
+  .ui-switch[aria-checked="true"]:active .ui-knob { transform: translateX(20px) scale(.92); }
+
+  .ui-mini {
+    flex: 0 0 auto; min-height: 36px; padding: 0 14px; border-radius: 11px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+    font-size: 12px; font-weight: 500; touch-action: manipulation;
+  }
+  .ui-mini:active { transform: scale(.94); }
+
+  /* 自定义字体名的输入行（只在点开「自定义…」后出现） */
+  .ui-font-custom { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+  .ui-font-custom[hidden] { display: none !important; }
+  .ui-font-custom input {
+    flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 12px;
+    border-radius: 12px; border: 1px solid var(--line); box-sizing: border-box;
+    background: var(--glass); color: var(--ink); font-size: 14px; outline: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  .ui-font-custom input:focus { border-color: var(--accent); }
+
+  /* 色相滑块：轨道是一整圈彩虹，圆点显示当前色。自己画（不用原生 range），
+     触控拖动与视觉风格都更可控；touch-action:none 防止拖动时把抽屉带着滚。 */
+  .ui-hue { position: relative; height: 40px; margin-top: 8px; touch-action: none; cursor: pointer; outline: none; }
+  .ui-hue:focus-visible .ui-hue-knob { box-shadow: 0 0 0 3px var(--accent), 0 2px 8px rgba(0,0,0,.4); }
+  .ui-hue-track {
+    position: absolute; left: 0; right: 0; top: 50%; height: 12px; margin-top: -6px;
+    border-radius: 6px; border: 1px solid var(--line); box-sizing: border-box;
+    background: linear-gradient(90deg,#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000);
+  }
+  .ui-hue-knob {
+    position: absolute; top: 50%; left: 6.7%; width: 26px; height: 26px;
+    margin-top: -13px; margin-left: -13px; border-radius: 50%;
+    border: 3px solid #fff; background: #f97316; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.22);
+  }
+
+  /* 首次进页面的一次性提示（手势的发现性靠它） */
   #hint {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(54px + env(safe-area-inset-bottom));
@@ -326,6 +428,9 @@
   }
   .cd-input:focus { border-color: var(--accent); }
   .cd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+  /* .cd-chips 声明了 display:flex，会盖掉 UA 的 [hidden]{display:none} —— 必须显式兜底
+     （「方向」那一行在「淡入 / 无」这类没有方向的家族下要整行收起来） */
+  .cd-chips[hidden] { display: none !important; }
   .cd-chips button {
     min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--line); background: var(--glass); color: var(--ink);
@@ -375,7 +480,11 @@
   /* ---- 到点提醒条：给「响一小段 + 持续震动」一个看得见的落点 ---- */
   #cd-alert {
     position: fixed; z-index: 60;
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    /* ⚠️ 必须让开顶部那颗倒计时胶囊（top:14 + 44 高 = 14~58）。
+       提醒条是左右 12px 的整条横幅，盖在胶囊上 → 「提醒中」的 90 秒里用户点不到胶囊、
+       进不了全屏，也就看不到全屏专属的「到点掠屏」（实机探针踩到过）。
+       66px = 14 + 44 + 8 的间隙：两者上下叠着，都看得见、都点得到。 */
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
     left: 12px; right: 12px;
     display: flex; align-items: center; gap: 10px;
     padding: 8px 8px 8px 16px; border-radius: 16px;
@@ -404,14 +513,18 @@
   #cd-alert button:active { transform: scale(.96); }
 
   #cd-fab.hidden-fab { display: none; }
+  /* 出全屏的形变动画期间：胶囊先隐身（无过渡，立刻让位），
+     等形变层缩到它头上再淡入 —— 否则会「目标位置已经站着一颗胶囊，另一颗缩小过来重叠」。 */
+  #cd-fab.fab-veil { opacity: 0; transition: none; }
   /* 抓手 / 标题栏用于下滑关闭，必须吃掉浏览器的滚动与回弹手势；内容区照常滚动 */
   #cd-grab, #cd-sheet .cd-head, .ui-grab, #ui-sheet .cd-head { touch-action: none; }
   /* hidden 属性兜底（这里几条规则声明了 flex，会盖掉 UA 的 [hidden]{display:none}） */
   #cd-form[hidden], #cd-empty[hidden], #cd-readonly[hidden] { display: none !important; }
 
   /* ====== [v1.0.5.7] 全屏倒计时（仅手机端）======
-     左右两半：左边橙色、右边白/黑，橙色宽度 = 剩余比例（LTR 铺开）；
-     中间大字显示剩余时间，底部再给一个显示「当前时间」的胶囊（点它回时钟）。
+     左右两半：左边橙色、右边白/黑，橙色宽度 = 剩余比例（LTR 铺开）。
+     底部一行两端对齐：左端大数字（与桌面时钟同一套动画）、右端两个大按钮（暂停/继续 · 取消）；
+     顶部居中是显示「当前时间」的胶囊（点它回时钟）。
      z-index 40：盖住时钟与倒计时胶囊，但仍低于到点提醒条（60）。 */
   #fs-view {
     position: fixed; inset: 0; z-index: 40;
@@ -419,52 +532,178 @@
     overflow: hidden; touch-action: manipulation;
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity .22s ease, visibility .22s;
+    /* 水位条的渐变两端（夜/昼各一套）默认给橙色；用户调色时由 fsApplyAccent()
+       按色相重新算成 hsl() 写到行内，覆盖这里的默认值 */
+    --fs-a: #ea580c; --fs-b: #f97316;
+    --fs-da: #fb923c; --fs-db: #fdba74;
   }
   body.is-day #fs-view { color: #14161c; }
   #fs-view.show { opacity: 1; visibility: visible; pointer-events: auto; }
 
-  /* 橙色那一半：宽度由 JS 每秒推进一次，transition 线性 → 像水位在退。
-     夜间用偏深的橙（白字才压得住），日间用亮橙（深字对比更足）。 */
+  /* 水位条那一半：宽度由 JS 每秒推进一次，transition 线性 → 像水位在退。
+     颜色不再是写死的橙：夜间用深一档、日间用亮一档（两套都由同一个色相算出来），
+     CSS 只认 --fs-a/--fs-b（夜）与 --fs-da/--fs-db（昼）四个变量。 */
   #fs-fill {
     position: absolute; left: 0; top: 0; bottom: 0; width: 0;
-    background: linear-gradient(90deg, #ea580c, #f97316);
+    background: linear-gradient(90deg, var(--fs-a), var(--fs-b));
     transition: width 1s linear;
   }
-  body.is-day #fs-fill { background: linear-gradient(90deg, #fb923c, #fdba74); }
+  body.is-day #fs-fill { background: linear-gradient(90deg, var(--fs-da), var(--fs-db)); }
   #fs-fill.snap { transition: none; } /* 打开 / 切换对象时直接就位，别从 0 长出来 */
 
-  .fs-stage {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; padding: 0 16px; text-align: center;
-    pointer-events: none; /* 别挡住底部胶囊的点击 */
+  /* [v1.0.5.7] 到点扫描：一条竖直的「浅—深—浅」色块，从左往右不断掠过整屏
+     （单向 x 递增：移出右边界后立刻从左边重新开始），直到这条倒计时被关掉。
+     颜色由 fsApplySweep() 写行内 —— 默认红；若用户把水位条本身调成了红，
+     就换成反差色绿，否则会和背景糊成一片。宽度 = 屏宽的 26%（JS 侧的 FS_SWEEP_W）。 */
+  #fs-sweep {
+    position: absolute; top: 0; bottom: 0; left: 0; width: 26%;
+    pointer-events: none; opacity: 0; will-change: transform;
   }
+  #fs-view.rung #fs-sweep { opacity: 1; animation: fsSweep 1.7s linear infinite; }
+  @keyframes fsSweep {
+    from { transform: translateX(-100%); } /* 整个色块在屏幕左边界之外 */
+    to   { transform: translateX(100vw); } /* 左边缘推到右边界之外 → 完全离开视野 */
+  }
+
+  /* [v1.0.5.7] 形变层：点胶囊进 / 出全屏时，一块「和背景一模一样」的画面从「胶囊矩形」
+     长大到「整屏」（反过来就是缩回胶囊），像在手机上点开一个 app 图标。
+     注意：它**不是纯色块**，而是真实背景的预览 —— 底色（var(--page)）+ 同一条水位条
+     （同一个百分比、同一套 --fs-* 变量）。所以长到整屏时与 #fs-view 的画面**逐像素一致**，
+     可以直接切过去（不必淡出；「淡出一个白块」正是看起来假的原因）。
+     形状用 left/top/width/height/border-radius 过渡：元素只有一个、一辈子动两次，
+     这点主线程开销换来的「圆角胶囊 → 直角整屏」比 transform 更自然。
+     z-index 45：盖住全屏（40），但低于字号面板（50）与到点提醒条（60）。 */
+  #fs-morph {
+    position: fixed; z-index: 45; left: 0; top: 0; width: 0; height: 0;
+    border-radius: 999px; overflow: hidden; /* 圆角期间水位条不能溢出 */
+    background: var(--page);
+    opacity: 0; visibility: hidden; pointer-events: none;
+  }
+  /* 水位条：与 #fs-view 里那条同源（同百分比、同变量），出全屏时也是从这里开始缩 */
+  #fs-morph-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: linear-gradient(90deg, var(--fs-a), var(--fs-b));
+  }
+  body.is-day #fs-morph-fill { background: linear-gradient(90deg, var(--fs-da), var(--fs-db)); }
+  /* 进全屏时 #fs-view **整层**都还没 .show（opacity:0 + visibility:hidden）→ 内容自然看不见，
+     不必再单独藏一遍。「形变铺满 → 空等 0.8s（时钟原样露着）→ 切换界面（整层淡入）」由 JS 驱动。 */
+
+  /* 底部一行：左端大数字、右端两个大按钮 —— 两端对齐，谁都不会越界。
+     容器本身不吃事件（pointer-events:none），只有数字与按钮各自吃，免得挡住整条底边。 */
+  .fs-bottom {
+    position: absolute; left: 0; right: 0;
+    /* 28px 起算：离屏幕底边太近会被 Android 手势导航/上滑返回抢触摸，
+       留出安全距离后按钮的按下手势能完整落到页面上。 */
+    bottom: calc(28px + env(safe-area-inset-bottom) + var(--fs-lift, 0px));
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 12px; padding: 0 16px;
+    pointer-events: none;
+    /* --fs-lift：全屏里弹出字号面板时，把整条底边上抬「面板高度」，让用户边调边看。
+       opacity / transform 的过渡留给内容的淡入与位移用。 */
+    transition: bottom .24s cubic-bezier(.32,1.02,.4,1),
+                opacity .26s ease,
+                transform .32s cubic-bezier(.32,1.02,.4,1);
+  }
+  .fs-left {
+    flex: 0 1 auto; min-width: 0;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  }
+  /* 大数字：DOM 结构与「动画类」都跟桌面 #clock 同源（.digit-group/.digit-current/.digit-next
+     + anim-<家族> dir-<方向>），所以电脑上选的动画在手机上完全一致。
+     字号不写死 —— 由 fsFit() 按「可用宽度」（已扣掉右侧按钮）算出来，保证不超出边界。 */
   #fs-time {
-    font-size: clamp(56px, 15vw, 170px);
+    display: inline-flex; align-items: center; gap: .06em;
+    font-size: 96px; /* 占位值，JS 会覆盖；写小一点免得首帧闪一下 */
     font-weight: 700; line-height: 1; letter-spacing: .01em;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
     text-shadow: 0 2px 20px rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.22);
+    pointer-events: auto; /* 长按数字也要能调字号 */
+    touch-action: manipulation;
   }
-  #fs-time.long { font-size: clamp(44px, 11.5vw, 132px); } /* 带小时（h:mm:ss）时收一档 */
   body.is-day #fs-time { text-shadow: 0 2px 18px rgba(255,255,255,.55); }
-  #fs-time .fs-d { display: inline-block; }
-  #fs-time .fs-d.flip { animation: fsFlip .34s cubic-bezier(.2,.9,.3,1); }
-  #fs-time .fs-colon { display: inline-block; opacity: .7; }
-  @keyframes fsFlip {
-    from { transform: translateY(-.38em); opacity: 0; }
-    to   { transform: none; opacity: 1; }
+  #fs-time .colon { opacity: .85; }
+  /* 操作失败时的一行小字（成功路径不打扰） */
+  #fs-msg {
+    font-size: 13px; font-weight: 500; color: #fecaca;
+    opacity: 0; transition: opacity .2s ease; pointer-events: none;
   }
+  body.is-day #fs-msg { color: #b91c1c; }
+  #fs-msg.show { opacity: 1; }
+  /* 右下角两个大按钮：左 = 暂停/继续，右 = 取消（二次确认）。按钮里**不放文字**，
+     图形全部用纯 CSS 画（不依赖字体/图标库），颜色跟 currentColor 走 → 昼夜自动适配。 */
+  #fs-acts { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; pointer-events: auto; }
+  #fs-acts[hidden] { display: none !important; }
+  #fs-acts button {
+    position: relative; z-index: 1; /* 稳稳压在最上层：命中测试里不能被同层元素抢走 */
+    width: 68px; height: 68px; padding: 0; border-radius: 22px; border: 1px solid var(--line);
+    background: rgba(10,12,17,.5); color: #fff;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; touch-action: manipulation;
+    transition: transform .16s cubic-bezier(.34,1.4,.64,1), background .16s ease, opacity .16s ease;
+  }
+  body.is-day #fs-acts button { background: rgba(255,255,255,.78); color: #14161c; border-color: rgba(0,0,0,.12); }
+  #fs-acts button:active { transform: scale(.93); }
+  #fs-acts button[disabled] { opacity: .45; pointer-events: none; }
+  #fs-acts button.armed { background: #dc2626; color: #fff; border-color: transparent; }
+
+  /* ---- 纯 CSS 图形：默认都不画，由按钮状态决定显示哪一个 ---- */
+  .ico { box-sizing: border-box; pointer-events: none; } /* 纯装饰：不吃指针事件，落点永远落在按钮上 */
+  /* 暂停 = 两条竖条 */
+  .ico-pause { display: none; width: 21px; height: 26px; gap: 6px; }
+  .ico-pause::before, .ico-pause::after { content: ''; flex: 1 1 auto; border-radius: 2.5px; background: currentColor; }
+  /* 继续 = 一个实心三角（clip-path 比 border 三角更好控形状，移动端全支持） */
+  .ico-play {
+    display: none; width: 22px; height: 26px; margin-left: 3px;
+    background: currentColor; border-radius: 3px;
+    clip-path: polygon(8% 0%, 100% 50%, 8% 100%);
+  }
+  /* 取消 = 一个 ✕（两条 45° 斜线） */
+  .ico-x { display: none; position: relative; width: 23px; height: 23px; }
+  .ico-x::before, .ico-x::after {
+    content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 3px;
+    border-radius: 2px; background: currentColor;
+  }
+  .ico-x::before { transform: translateY(-50%) rotate(45deg); }
+  .ico-x::after { transform: translateY(-50%) rotate(-45deg); }
+  /* 确认态 = 一个「?」（同样纯 CSS 画）：取消按第一下不是「打勾确认了」，
+     而是在**问你**要不要删（再点一下才真删）—— 问号才符合这个语义。
+     问号 = 缺左下角的圆环（钩）+ 一竖 + 底下一点。 */
+  .ico-q { display: none; position: relative; width: 24px; height: 27px; }
+  .ico-q::before {
+    content: ''; position: absolute; left: 5px; top: 0;
+    width: 14px; height: 14px; box-sizing: border-box;
+    border: 3px solid currentColor; border-radius: 50%;
+    /* 只留上、右两条边 → 从 9 点经 12 点到 6 点的那段弧，正是问号的钩 */
+    border-left-color: transparent; border-bottom-color: transparent;
+  }
+  .ico-q::after { /* 竖干（钩的末端往下延） */
+    content: ''; position: absolute; left: 50%; top: 13px;
+    width: 3.6px; height: 7px; margin-left: -1.8px;
+    border-radius: 2px; background: currentColor;
+  }
+  .ico-q .ico-q-dot { /* 底下那一点 */
+    position: absolute; left: 50%; top: 23px;
+    width: 4px; height: 4px; margin-left: -2px;
+    border-radius: 50%; background: currentColor;
+  }
+  /* 状态 → 图形 的唯一映射（data-act / .armed 是唯一事实来源，都只由 fsPaintActs 维护） */
+  #fs-toggle[data-act="pause"] .ico-pause { display: flex; }
+  #fs-toggle[data-act="resume"] .ico-play { display: block; }
+  #fs-cancel:not(.armed) .ico-x { display: block; }
+  #fs-cancel.armed .ico-q { display: block; }
 
   #fs-name {
     font-size: 15px; font-weight: 500; letter-spacing: .3px; opacity: .82;
-    max-width: 84vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   body.is-day #fs-name { opacity: .66; }
 
-  /* 全屏里显示「当前时间」的胶囊：点一下回时钟。没有动画（跟随桌面设置决定带不带秒）。 */
+  /* 全屏里显示「当前时间」的胶囊：点一下回时钟。没有动画（跟随桌面设置决定带不带秒）。
+     放在**顶部居中**，把整条底边让给左端数字与右端按钮，三者互不打架。 */
   #fs-pill {
     position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(30px + env(safe-area-inset-bottom));
+    top: calc(14px + env(safe-area-inset-top));
     display: flex; align-items: center;
     min-height: 44px; padding: 0 18px;
     border-radius: 999px; border: 1px solid var(--line);
@@ -482,13 +721,17 @@
      屏幕上任何一次操作立刻唤回来。规则与底部倒计时胶囊一致，只是作用对象不同。 */
   #fs-pill.idle {
     opacity: 0; visibility: hidden; pointer-events: none;
-    transform: translateX(-50%) translateY(140%) scale(.96);
+    transform: translateX(-50%) translateY(-140%) scale(.96);
     transition: opacity .3s ease, visibility .3s, transform .34s cubic-bezier(.4,0,.2,1);
   }
 
+  /* 全屏里长按数字要能弹出字号面板 → 面板必须压在全屏（40）之上、提醒条（60）之下 */
+  #ui-sheet, #ui-scrim { z-index: 50; }
+
   @media (prefers-reduced-motion: reduce) {
     #cd-sheet, #cd-scrim, #ui-sheet, #ui-scrim, #hint, #cd-fab, #cd-alert, #fs-view, #fs-fill,
-    #fs-pill, #fs-time .fs-d,
+    #fs-pill, #fs-time .digit-current, #fs-time .digit-next, #fs-acts button,
+    #fs-sweep, #fs-morph, .fs-bottom,
     .cd-card, .cd-card .cd-acts button,
     .cd-chips button, .cd-unit-btns button, .cd-form-acts button,
     .ui-stepper button, .ui-acts button { transition: none !important; animation: none !important; }
@@ -508,12 +751,12 @@
   <span aria-hidden="true">⏳</span><span id="cd-fab-text">倒计时</span>
 </button>
 
-<!-- 长按的发现性：首次进页面提示一次，8 秒后自己消失 -->
-<div id="hint" hidden>长按时钟可调整字号</div>
+<!-- 手势的发现性：首次进页面提示一次，8 秒后自己消失 -->
+<div id="hint" hidden>双击时钟可调整字号</div>
 
 <div id="ui-scrim"></div>
 
-<!-- 长按时钟弹出的面板：手机端自己的显示设置 + 倒计时入口 -->
+<!-- 双击时钟 / 双击全屏大数字弹出的面板：手机端自己的显示设置 + 倒计时入口 -->
 <!-- ⚠️ 没有倒计时时胶囊会完全隐藏，所以「新建倒计时」必须在这里留一个入口 -->
 <section id="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="ui-title">
   <div class="cd-grab" aria-hidden="true"></div>
@@ -532,6 +775,63 @@
     </div>
     <div class="ui-scale-bar"><div class="ui-track"><div class="ui-fill" id="ui-fill"></div></div></div>
     <div class="ui-hint" id="ui-scale-hint">只影响这台手机，与电脑上的显示设置无关。</div>
+
+    <!-- 主界面时钟专属：字体与数字动画都存**这台手机**
+         （与电脑端设置相互独立；面板里两处都点了「跟随电脑」才回到跟电脑一致） -->
+    <div class="ui-block" id="ui-clock-block">
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-font-label">字体</span>
+      </div>
+      <div class="cd-chips" id="ui-font-chips"></div>
+      <div class="ui-font-custom" id="ui-font-custom" hidden>
+        <input id="ui-font-input" type="text" maxlength="40" autocomplete="off" spellcheck="false"
+               placeholder="字体名，如 微软雅黑" aria-label="自定义字体名" />
+        <button type="button" id="ui-font-ok" class="ui-mini">确定</button>
+      </div>
+
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-anim-label">数字动画</span>
+      </div>
+      <div class="cd-chips" id="ui-anim-chips"></div>
+      <div class="cd-chips" id="ui-dir-chips"></div>
+
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-ease-label">动画节奏</span>
+      </div>
+      <!-- [v1.0.5.7] 缓动曲线（匀速 / 慢起 / 慢停 / 两头慢）；「弹性」= 各动画各自的原有曲线 -->
+      <div class="cd-chips" id="ui-ease-chips"></div>
+
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-dur-label">动画时长</span>
+        <div class="ui-stepper">
+          <button type="button" id="ui-dur-minus" aria-label="缩短">−</button>
+          <span class="ui-val" id="ui-dur-val">350ms</span>
+          <button type="button" id="ui-dur-plus" aria-label="延长">+</button>
+        </div>
+      </div>
+      <div class="ui-hint" id="ui-anim-hint">只影响这台手机，与电脑上的设置无关。</div>
+    </div>
+
+    <!-- [v1.0.5.7] 全屏倒计时专属：只在双击「全屏大数字」进来的面板里出现 -->
+    <div class="ui-block" id="ui-fs-block" hidden>
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-blur-label">模糊数字</span>
+        <button type="button" id="ui-blur" class="ui-switch" role="switch" aria-checked="false"
+                aria-label="模糊数字"><span class="ui-knob" aria-hidden="true"></span></button>
+      </div>
+      <div class="ui-hint" id="ui-blur-hint">5 秒无操作、且剩余时间超过 1 分钟时，秒数显示为 --</div>
+
+      <div class="ui-row">
+        <span class="ui-row-label" id="ui-accent-label">背景色</span>
+        <button type="button" id="ui-accent-reset" class="ui-mini">默认</button>
+      </div>
+      <div class="ui-hue" id="ui-hue" role="slider" tabindex="0"
+           aria-valuemin="0" aria-valuemax="359" aria-valuenow="24" aria-label="背景色">
+        <div class="ui-hue-track" id="ui-hue-track" aria-hidden="true"></div>
+        <div class="ui-hue-knob" id="ui-hue-knob" aria-hidden="true"></div>
+      </div>
+    </div>
+
     <div class="ui-acts">
       <button type="button" id="ui-reset">恢复默认</button>
       <button type="button" class="primary" id="ui-new-cd">新建倒计时</button>
@@ -544,14 +844,36 @@
 <!-- ====== [v1.0.5.7] 全屏倒计时（仅手机端）：单击胶囊进入，点底部时钟胶囊返回 ====== -->
 <section id="fs-view" role="dialog" aria-modal="true" aria-labelledby="fs-name" aria-hidden="true">
   <div id="fs-fill" aria-hidden="true"></div>
-  <div class="fs-stage">
-    <div id="fs-time">00:00</div>
-    <div id="fs-name">倒计时</div>
-  </div>
+  <div id="fs-sweep" aria-hidden="true"></div>
   <button id="fs-pill" type="button" aria-label="返回时钟">
     <span id="fs-pill-time">00:00</span>
   </button>
+  <div class="fs-bottom">
+    <div class="fs-left">
+      <div id="fs-name">倒计时</div>
+      <div id="fs-time" class="anim-flip dir-up">00:00</div>
+      <div id="fs-msg" role="status" aria-live="polite"></div>
+    </div>
+    <div id="fs-acts">
+      <!-- 图形用纯 CSS 画（见下方 .ico-* 规则），不写文字：
+           data-act 决定显示哪个图形（pause → 两条竖条；resume → 三角），
+           语义交给 aria-label，语言切换时由 fsPaintActs 跟着换。 -->
+      <button id="fs-toggle" type="button" data-act="pause" aria-label="暂停">
+        <span class="ico ico-pause" aria-hidden="true"></span>
+        <span class="ico ico-play" aria-hidden="true"></span>
+      </button>
+      <button id="fs-cancel" type="button" aria-label="取消">
+        <span class="ico ico-x" aria-hidden="true"></span>
+        <span class="ico ico-q" aria-hidden="true"><span class="ico-q-dot"></span></span>
+      </button>
+    </div>
+  </div>
 </section>
+
+<!-- [v1.0.5.7] 进出全屏的形变层：从胶囊矩形长大到整屏（反向就是缩回胶囊）。
+     里面是「底色 + 同比例水位条」——与真背景逐像素一致，所以长到头可以直接切过去。
+     纯装饰，事件一律穿透；样式见 #fs-morph / #fs-morph-fill。 -->
+<div id="fs-morph" aria-hidden="true"><div id="fs-morph-fill" aria-hidden="true"></div></div>
 
 <!-- 到点提醒条：声音只响一小段，震动持续到用户处理（或 90 秒后自动收起） -->
 <div id="cd-alert" class="hidden" role="alert" aria-live="assertive">
@@ -638,10 +960,42 @@
   var FAB_LONG_MS = 500; // 长按胶囊 = 打开抽屉（单击 = 进全屏）
 
   // 手机端本机偏好：只存在这台设备的浏览器里，与宿主配置 / 桌面端完全无关
-  var LS_SCALE = 'dc.clockScale';   // 时钟字号倍率（百分比整数）
-  var LS_HINT = 'dc.hintSeen';      // 「长按可调字号」提示是否已展示过
+  var LS_SCALE = 'dc.clockScale';   // 时钟（主界面）字号倍率（百分比整数）
+  var LS_FS_SCALE = 'dc.fsScale';   // 全屏倒计时大字倍率（与上面那个相互独立）
+  var LS_FS_BLUR = 'dc.fsBlur';     // 全屏倒计时：静止 5 秒后把秒数显示成 --
+  var LS_FS_HUE = 'dc.fsHue';       // 全屏水位条色相（0–359），默认 24 ≈ 橙
+  // [v1.0.5.7] 主界面时钟的「字体 / 数字动画」本机偏好：与电脑端设置相互独立。
+  // 面板里选了「跟随电脑」，该项才回到跟电脑一致（默认就是跟随电脑）。
+  var LS_FONT = 'dc.clockFont';      // 'auto'（跟随电脑）| 预设 key | 'custom:<字体名>'
+  var LS_ANIM_TYPE = 'dc.animType';  // 'auto' | flip | scale | fade | flip-3d | none
+  var LS_ANIM_DIR = 'dc.animDir';    // flip: up|down  ·  scale: shrink|grow
+  var LS_ANIM_DUR = 'dc.animDur';    // 动画时长（ms）；空 = 跟随电脑
+  // [v1.0.5.7] 数字动画「节奏」（缓动曲线）：'auto' = 跟随电脑，其余同上表
+  var LS_ANIM_EASE = 'dc.animEase';  // 'auto' | default | linear | ease-in | ease-out | ease-in-out
+  var ANIM_DUR_MIN = 150, ANIM_DUR_MAX = 800, ANIM_DUR_STEP = 50;
+  // 节奏档 → CSS 缓动关键字。'default'（弹性）**故意不在表里**：它表示「不写 --anim-ease」，
+  // 由 CSS 里各条 transition 的 var() 落到各自的原曲线（翻转/缩放回弹、淡入淡出 ease）。
+  // ⚠️ 「不写」必须用 removeProperty 实现：setProperty('--anim-ease','') 会让 var() 取到空值
+  //    → 整条 transition 声明失效 → 数字直接跳变、完全没有动画。
+  var ANIM_EASE_CSS = {
+    'linear': 'linear', 'ease-in': 'ease-in', 'ease-out': 'ease-out', 'ease-in-out': 'ease-in-out'
+  };
+  var ANIM_EASE_ALL = ['auto', 'default', 'linear', 'ease-in', 'ease-out', 'ease-in-out'];
+  // 字体预设：全部是系统自带字体（零外链、零下载），最后一项靠系统里已装的字体名
+  var FONT_PRESETS = {
+    system: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif',
+    sans: '"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif',
+    serif: 'Georgia,"Times New Roman","Songti SC","SimSun",serif',
+    mono: '"SF Mono",Menlo,Consolas,"Courier New",monospace',
+    round: 'ui-rounded,"SF Pro Rounded","PingFang SC","Hiragino Sans GB",system-ui,sans-serif'
+  };
+  // ⚠️ 手势从「长按」改成「双击」→ 换一个记忆键，让老用户再看一次提示
+  //    （否则他们捏着旧手势，永远不知道要双击）
+  var LS_HINT = 'dc.hintSeen.tap';  // 「双击可调字号」提示是否已展示过
   var SCALE_MIN = 60, SCALE_MAX = 150, SCALE_STEP = 10;
-  var LONG_PRESS_MS = 520;
+  // 双击判定：两次「按下」的间隔与位移上限。判定放在**第二次按下**的瞬间 →
+  // 不等抬手，也就不会碰上真机 click 被吞掉那类问题。
+  var DOUBLE_TAP_MS = 320, DOUBLE_TAP_DIST = 40;
 
   // 拿不到快照时的兜底配置：保证页面一打开就有钟走，而不是空白
   var FALLBACK = {
@@ -650,6 +1004,7 @@
     showSeconds: true, showDate: true, showWeekday: true, datePosition: 'below',
     autoColor: false, extraTimezones: [],
     animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', animDuration: 350,
+    animEase: 'default',
     staggerDelay: 0, staggerDirection: 'ltr',
     timeOffsetMs: 0, autoAdjustEnabled: false, autoAdjustIntervalSec: 3600,
     autoAdjustAmountMs: 0, autoAdjustBaseMs: 0, autoAdjustAnchor: 0,
@@ -661,7 +1016,8 @@
   var haveRemote = false;
   var online = false, fails = 0;
   var lastKey = null, lastLen = 0, lastInfo = '', colorKey = '', lastAmpm = null;
-  var ed = [], tickTimer = null;
+  // [v1.0.5.7] 数字渲染状态：时钟与全屏大字共用同一套 buildInto/swapIn，各持一份状态
+  var clockSt = { ed: [], key: null, len: 0 }, tickTimer = null;
 
   function el(id) { return document.getElementById(id); }
   function nm(v, d) { var n = Number(v); return isFinite(n) ? n : d; }
@@ -733,12 +1089,17 @@
   }
 
   // ====== 渲染 ======
-  function build(dg) {
-    var box = el('digits');
+  // [v1.0.5.7] 时钟与全屏大字共用这一套「逐位」渲染：容器挂 anim-<家族> dir-<方向>，
+  // 每个数字位是 .digit-group（内含 .digit-current / .digit-next 两层），换位时给两层
+  // 分别加 .animate-out / .animate-in → 由 CSS 决定具体的动画家族与方向。两边完全同源。
+  function buildInto(box, st, dg) {
     box.innerHTML = '';
-    var cc = Math.floor((dg.length - 1) / 2), ci = 0;
+    // 冒号插在哪儿：偶数长度（mmss / hhmmss）插在 2、4；**奇数长度**（h:mm:ss 的 5 位）
+    // 插在 1、3。原来只按「i % 2 === 0」插 → 5 位会被插成 10:1:01（全屏倒计时
+    // 超过 1 小时后走的就是这条分支）。最多两个冒号。
+    var odd = dg.length % 2 === 1, ci = 0;
     for (var i = 0; i < dg.length; i++) {
-      if (i > 0 && i % 2 === 0 && ci < cc) {
+      if (i > 0 && ci < 2 && (odd ? i % 2 === 1 : i % 2 === 0)) {
         var co = document.createElement('span');
         co.className = 'colon'; co.textContent = ':';
         box.appendChild(co); ci++;
@@ -748,7 +1109,7 @@
       var b = document.createElement('span'); b.className = 'digit-next'; b.textContent = dg[i];
       g.appendChild(a); g.appendChild(b); box.appendChild(g);
     }
-    ed = dg.slice();
+    st.ed = dg.slice();
   }
 
   function resetPair(c, n) {
@@ -759,17 +1120,17 @@
     c.style.transition = n.style.transition = '';
   }
 
-  function swap(dg) {
-    var groups = el('digits').querySelectorAll('.digit-group');
+  function swapIn(box, st, dg) {
+    var groups = box.querySelectorAll('.digit-group');
     var sd = nm(CFG.staggerDelay, 0), rtl = CFG.staggerDirection === 'rtl';
-    var AD = nm(CFG.animDuration, 350);
+    var AD = animDur();
     for (var i = 0; i < dg.length; i++) {
-      if (ed[i] === dg[i]) continue;
+      if (st.ed[i] === dg[i]) continue;
       var g = groups[i]; if (!g) continue;
       var ce = g.querySelector('.digit-current'), ne = g.querySelector('.digit-next');
       if (!ce || !ne) continue;
       var next = dg[i];
-      ed[i] = next;
+      st.ed[i] = next;
       var delay = sd > 0 ? sd * (rtl ? dg.length - 1 - i : i) : 0;
       if (CFG.animType === 'none') {
         (function (target, val, dl) {
@@ -790,6 +1151,9 @@
       })(ce, ne, next, delay);
     }
   }
+  // 时钟用的薄包装
+  function build(dg) { buildInto(el('digits'), clockSt, dg); }
+  function swap(dg) { swapIn(el('digits'), clockSt, dg); }
 
   function renderInfo(now) {
     var bar = el('info-bar'), out = [];
@@ -874,20 +1238,112 @@
     // 信息栏跟着一起缩放 —— 它的 38px 硬上限也要按倍率放宽，不然放大了信息栏纹丝不动
     var ibMax = Math.round(38 * sc / 100);
     el('info-bar').style.fontSize = Math.max(10, Math.min(ibMax, Math.round(px * nm(CFG.infoScale, 0.3)))) + 'px';
-    el('time-display').style.setProperty('--anim-duration', nm(CFG.animDuration, 350) + 'ms');
+    applyAnimVars(el('time-display'));
+  }
+
+  // 「当前动画家族 + 方向」的唯一出处：时钟与全屏大字都从这里取，保证永远一致。
+  // [v1.0.5.7] 手机端可以**独立**选动画：本机选了家族就用本机的，选「跟随电脑」才用宿主的。
+  var ANIM_AT_ALL = ['auto', 'flip', 'scale', 'fade', 'flip-3d', 'none'];
+  var ANIM_AT_DESKTOP = ['flip', 'scale', 'fade', 'flip-3d', 'none'];
+  function localAnimType() {
+    var v = lsGet(LS_ANIM_TYPE);
+    return ANIM_AT_ALL.indexOf(v) >= 0 ? v : 'auto';
+  }
+  function localAnimDir() {
+    var v = lsGet(LS_ANIM_DIR);
+    return (v === 'up' || v === 'down' || v === 'shrink' || v === 'grow') ? v : '';
+  }
+  // 动画时长：本机没设过就跟随电脑。
+  // ⚠️ 必须先挡 null / 空串 —— Number(null) === 0（不是 NaN），不挡的话「没设过」
+  //    会被读成 0ms（数字直接跳变、完全没有动画）。
+  function animDur() {
+    var raw = lsGet(LS_ANIM_DUR);
+    if (raw === null || raw === '') return nm(CFG.animDuration, 350);
+    var n = Number(raw);
+    if (!isFinite(n)) return nm(CFG.animDuration, 350);
+    return Math.round(Math.max(ANIM_DUR_MIN, Math.min(ANIM_DUR_MAX, n)));
+  }
+  function setAnimDur(v) {
+    var n = Math.round(Number(v) / ANIM_DUR_STEP) * ANIM_DUR_STEP;
+    n = Math.max(ANIM_DUR_MIN, Math.min(ANIM_DUR_MAX, n));
+    lsSet(LS_ANIM_DUR, String(n));
+    return n;
+  }
+  function animFamily() {
+    var at = localAnimType(), ld = localAnimDir();
+    if (at === 'auto') { // 跟随电脑
+      at = ANIM_AT_DESKTOP.indexOf(CFG.animType) >= 0 ? CFG.animType : 'flip';
+      ld = at === 'flip' ? (CFG.animFlipDir === 'down' ? 'down' : 'up')
+        : at === 'scale' ? (CFG.animScaleDir === 'grow' ? 'grow' : 'shrink') : '';
+    }
+    var dir = at === 'flip' ? (ld === 'down' ? 'dir-down' : 'dir-up')
+      : at === 'scale' ? (ld === 'grow' ? 'dir-grow' : 'dir-shrink') : '';
+    return { at: at, dir: dir };
+  }
+  // [v1.0.5.7] 动画节奏：本机设过就用本机的；「跟随电脑」或没设过则用宿主下发的
+  function localAnimEase() {
+    var v = lsGet(LS_ANIM_EASE);
+    return ANIM_EASE_ALL.indexOf(v) >= 0 ? v : 'auto';
+  }
+  function animEase() {
+    var v = localAnimEase();
+    if (v === 'auto') return ANIM_EASE_CSS[CFG.animEase] ? CFG.animEase : 'default';
+    return v;
+  }
+  // 动画时长 + 节奏一起写到容器上：时钟（#time-display）与全屏大字（#fs-time）各持一份。
+  // 节奏为「弹性」时删掉变量（而不是写空串）—— 见 ANIM_EASE_CSS 处的说明。
+  function applyAnimVars(node) {
+    if (!node) return;
+    node.style.setProperty('--anim-duration', animDur() + 'ms');
+    var c = ANIM_EASE_CSS[animEase()];
+    if (c) node.style.setProperty('--anim-ease', c);
+    else node.style.removeProperty('--anim-ease');
+  }
+  // ---- 字体：本机可选（预设 / 自定义名字），选「跟随电脑」才用宿主下发的 fontFamily ----
+  function sanitizeFontName(s) {
+    // 只剔危险字符（引号 / 反斜杠 / 分号…），**保留中文等非 ASCII** ——
+    // 写成 [^A-Za-z0-9 _-] 会把「微软雅黑」剥成空串，字体设置永远不生效（老 bug）。
+    return String(s == null ? '' : s).replace(/["'`\\;{}<>\/]/g, '').trim().slice(0, 40);
+  }
+  function localFont() {
+    var v = lsGet(LS_FONT);
+    return (v === null || v === '') ? 'auto' : v;
+  }
+  function fontStack() {
+    var v = localFont();
+    if (v.indexOf('custom:') === 0) {
+      var cn = sanitizeFontName(v.slice(7));
+      return (cn ? '"' + cn + '",' : '') + FONT_PRESETS.system;
+    }
+    if (v !== 'auto' && FONT_PRESETS[v]) return FONT_PRESETS[v];
+    var ff = sanitizeFontName(CFG.fontFamily); // auto = 跟随电脑
+    return (ff ? '"' + ff + '",' : '') + FONT_PRESETS.system;
+  }
+  function applyFont() { document.body.style.fontFamily = fontStack(); }
+  function setLocalFont(v) { lsSet(LS_FONT, String(v == null ? 'auto' : v)); applyFont(); }
+
+  // 全屏大字挂上与桌面时钟**同一套**动画类 —— 这就是「动画保持一致」的全部机制：
+  // 同一份 CSS、同一族类名（anim-<家族> dir-<方向>），配置变了跟着变。
+  function applyFsAnim(a) {
+    var node = el('fs-time'); if (!node) return;
+    a = a || animFamily();
+    applyAnimVars(node);
+    var cls = 'anim-' + a.at + (a.dir ? ' ' + a.dir : '');
+    if (node.className !== cls) { node.className = cls; fsSt.key = null; } // 家族变了 → 下一拍整份重画
   }
 
   function applyStatic() {
     var clock = el('clock');
-    var AT = ['flip', 'scale', 'fade', 'flip-3d', 'none'].indexOf(CFG.animType) >= 0 ? CFG.animType : 'flip';
-    var dir = AT === 'flip' ? (CFG.animFlipDir === 'down' ? 'dir-down' : 'dir-up')
-      : AT === 'scale' ? (CFG.animScaleDir === 'grow' ? 'dir-grow' : 'dir-shrink') : '';
-    clock.className = 'anim-' + AT + (dir ? ' ' + dir : '') + (CFG.datePosition === 'above' ? ' date-above' : '');
-    // [v1.0.5.7] 只剔危险字符（引号/反斜杠/分号等），保留中文等非 ASCII 字体名 ——
-    // 原来 [^A-Za-z0-9 _-] 会把「微软雅黑」剥成空串，字体设置在手机端永远不生效
-    var ff = String(CFG.fontFamily || '').replace(/["'`\\;{}<>\/]/g, '').trim();
-    document.body.style.fontFamily = (ff ? '"' + ff + '",' : '') +
-      '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif';
+    var a = animFamily();
+    // 只在真的变了才赋值：反复赋同一个字符串虽无害，但改 className 有可能打断
+    // 正在播放的 CSS 动画（用户连点 chips 时尤其明显），能免则免。
+    var cls = 'anim-' + a.at + (a.dir ? ' ' + a.dir : '')
+      + (CFG.datePosition === 'above' ? ' date-above' : '');
+    if (clock.className !== cls) clock.className = cls;
+    // 时钟数字的时长与节奏：这里也要写一遍（fit() 只在字号重算时才写，宿主改配置走的是本路径）
+    applyAnimVars(el('time-display'));
+    applyFsAnim(a);
+    applyFont();
     cdLangRefresh(); // 语言 / 字号等配置变了，倒计时面板的文案一起跟上
   }
 
@@ -970,8 +1426,8 @@
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) { pull(); schedule(); }
   });
-  window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', function () { setTimeout(fit, 120); });
+  window.addEventListener('resize', function () { fit(); if (fsOpen) fsFit(); });
+  window.addEventListener('orientationchange', function () { setTimeout(function () { fit(); if (fsOpen) fsFit(); }, 120); });
 
   // ==================== [v1.0.5.7] 倒计时（手机端） ====================
   // 设计要点：
@@ -985,7 +1441,22 @@
   var cdArmDelete = null, cdArmTimer = null, cdNodes = {}, cdSig = '', cdFabSig = '';
   var cdIdleTimer = null; // 胶囊自动隐藏的定时器
   var fsOpen = false, fsId = null, fsSnap = false, fsPillTxt = ''; // 全屏倒计时状态
+  var fsRung = false;      // 当前这条倒计时是否已到点（驱动 #fs-sweep 掠屏）
+  var fsMorphing = false, fsMorphTimer = null, fsOpenTimer = null; // 进出全屏的形变动画
+  // 进全屏 = 形变（0.8s）铺满 → **立刻**切界面：
+  //   ① FS_MORPH_OPEN_MS —— 形变：玻璃从胶囊长满整屏；
+  //   ② 切界面 —— #fs-view 自己 .22s 淡入盖过时钟（＝「时钟淡出 / 全屏淡入」），
+  //      数字 / 按钮这时才浮上来。
+  //   FS_MORPH_HOLD_MS 是「形变放完再停一拍」的空等，曾试过 0.8s / 0.3s，用户反馈都嫌停顿 → **归 0**。
+  // 出全屏只有一拍 FS_MORPH_MS（缩回胶囊）：回时钟要干脆。
+  var FS_MORPH_MS = 320;
+  var FS_MORPH_OPEN_MS = 800;
+  var FS_MORPH_HOLD_MS = 0; // 0 = 形变放完立刻切界面（不再空等）
+  var fsSt = { ed: [], key: null, len: 0 }; // 全屏大字的逐位渲染状态（与 clockSt 同构）
   var fsIdleTimer = null; // 全屏里那颗时钟胶囊的淡出计时
+  var fsBusy = false, fsArmed = false, fsArmTimer = null, fsActsSig = ''; // 右下角两个按钮的状态
+  var fsMsgTimer = null;  // 「操作失败」小字的自动收起计时
+  var FS_PAD = 16, FS_GAP = 12; // 全屏底部左右内边距 / 数字与按钮之间的间距（fsFit 要用）
   var CD_MIN_MS = 1000, CD_MAX_MS = 24 * 3600 * 1000;
   var CD_CHIPS = [60, 180, 300, 600, 900, 1800, 3600];
 
@@ -1060,6 +1531,7 @@
     var dm = Math.max(1, Math.min(1440, Math.round(nm(CFG.countdownDefaultMinutes, 5))));
     if (!cdEditId && !cdTouched && !el('cd-name').value && dm !== cdAppliedDefault) cdResetForm();
     cdSyncFab();
+    fsActsSig = ''; if (fsOpen) fsPaintActs(); // 权限刚到手 → 全屏里按钮要立刻现身
     if (cdSheetOpen) renderCdList();
   }
 
@@ -1143,6 +1615,12 @@
       return;
     }
     var p = cdPick();
+    // [v1.0.5.7] 有倒计时**在跑**（能走到这里 → 必然没在全屏）→ 胶囊按**剩余比例**上色：
+    // 有色部分的宽度 = 剩余 / 总时长，和全屏水位条同一条曲线，每秒跟着退。
+    // 全暂停 / 一条都没有 = 未激活 → 不上色（`.paused` 那半透明的样子就够表达「歇着」了）。
+    var live = !!p.anyRunning && !fsOpen;
+    fab.classList.toggle('fab-live', live);
+    if (live) fab.style.setProperty('--fab-pct', (fsRatio(p.item) * 100).toFixed(2) + '%');
     if (p.anyRunning) {
       // 激活中 → 常驻：清掉淡出计时；正处在 idle（比如刚由「全暂停」转运行）就立刻唤回来，
       // 否则胶囊会一直藏着 → 读数看不见、也点不进全屏
@@ -1183,21 +1661,179 @@
     if (!isFinite(left)) left = nm(it.remainingMs, 0);
     return Math.max(0, Math.min(1, left / dur));
   }
-  // 大数字：逐位对比，只给真的变了的位加动画（翻转感），没变的不动
-  function fsSetTime(txt) {
+  // 大数字：与桌面时钟**共用** buildInto/swapIn（逐位、只动真的变了的位）。
+  // 动画家族来自 #fs-time 上的 anim-<家族> dir-<方向> —— 也就是电脑里设置的那一套，
+  // 所以「全屏前时钟是翻转，全屏后倒计时也是翻转」，方向/时长/错峰全都一致。
+  function fsRender(txt) {
     var node = el('fs-time');
-    if (node.getAttribute('data-t') === txt) return;
-    var old = node.getAttribute('data-t') || '';
-    var same = old.length === txt.length;
-    var html = '', i, ch;
-    for (i = 0; i < txt.length; i++) {
-      ch = txt.charAt(i);
-      if (ch === ':') { html += '<span class="fs-colon">:</span>'; continue; }
-      html += '<span class="fs-d' + ((!same || old.charAt(i) !== ch) ? ' flip' : '') + '">' + ch + '</span>';
+    var dg = txt.replace(/:/g, '').split('');
+    var key = dg.join('');
+    if (fsSt.key === null || fsSt.len !== dg.length) {
+      buildInto(node, fsSt, dg);
+      fsSt.key = key; fsSt.len = dg.length;
+      node.setAttribute('data-t', txt);
+      fsFit(); // 位数变了（mm:ss ↔ h:mm:ss）→ 字号要重算
+      return;
     }
-    node.className = txt.split(':').length > 2 ? 'long' : ''; // 带小时就收一档字号
+    if (fsSt.key !== key) { swapIn(node, fsSt, dg); fsSt.key = key; }
     node.setAttribute('data-t', txt);
-    node.innerHTML = html;
+  }
+
+  // ---- 全屏字号的「本机倍率」（与主界面时钟的 dc.clockScale 相互独立）----
+  function fsScale() {
+    var v = Number(lsGet(LS_FS_SCALE));
+    if (!isFinite(v) || v <= 0) return 100;
+    return Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.round(v / SCALE_STEP) * SCALE_STEP));
+  }
+  function setFsScale(v) {
+    var n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.round(Number(v) / SCALE_STEP) * SCALE_STEP));
+    lsSet(LS_FS_SCALE, String(n));
+    return n;
+  }
+
+  // ---- 全屏「模糊数字」：5 秒无操作 + 剩余 ≥1 分钟 → 秒的那两位显示成 -- ----
+  // 任何操作（触摸 / 点击 / 按键 / 滚动）都算「有交互」，那一刻起重新计时；
+  // 剩余不足 1 分钟一律不模糊（最后一分钟必须看得见秒）。fsIdleAt = 最后一次操作的时间戳。
+  var FS_BLUR_IDLE_MS = 5000, FS_BLUR_MIN_SEC = 60;
+  var fsIdleAt = 0, fsBlurred = false;
+  function fsBlurOn() { return lsGet(LS_FS_BLUR) === '1'; }
+  function setFsBlur(on) { lsSet(LS_FS_BLUR, on ? '1' : '0'); return !!on; }
+  function fsPokeBlur() { fsIdleAt = Date.now(); }
+  function fsShouldBlur(it, sec) {
+    if (!fsBlurOn() || !it) return false;
+    if (sec < FS_BLUR_MIN_SEC) return false;        // 最后一分钟：秒必须看得见
+    return (Date.now() - fsIdleAt) >= FS_BLUR_IDLE_MS;
+  }
+  // 把 mm:ss / h:mm:ss 的**最后两位**（秒）换成 --，时与分原样保留
+  function fsBlurText(txt) { return txt.replace(/\d\d$/, '--'); }
+
+  // ---- 全屏水位条的配色：存一个色相（0–359），夜/昼各生成一套渐变端点 ----
+  var FS_HUE_DEFAULT = 24; // ≈ 原来的橙
+  function fsHue() {
+    // ⚠️ Number(null) === 0（不是 NaN）：不特判 null 的话「从没设过」会被读成色相 0（纯红），
+    //    而不是默认的橙。所以必须先挡掉 null / 空串。
+    var raw = lsGet(LS_FS_HUE);
+    if (raw === null || raw === '') return FS_HUE_DEFAULT;
+    var v = Number(raw);
+    if (!isFinite(v)) return FS_HUE_DEFAULT;
+    return ((Math.round(v) % 360) + 360) % 360;
+  }
+  function setFsHue(v) {
+    var n = ((Math.round(Number(v)) % 360) + 360) % 360;
+    lsSet(LS_FS_HUE, String(n));
+    return n;
+  }
+  // 只写 CSS 变量（四个端点），日间/夜间用哪一套由 CSS 的 body.is-day 决定。
+  // 形变层（#fs-morph）也要写同一套 —— 它就是「背景的预览」，颜色必须跟全屏完全一致，
+  // 长到整屏时才能无缝切过去（差一点点就会看出「换了一幅画面」）。
+  function fsApplyAccent() {
+    var v = el('fs-view');
+    if (!v) return;
+    var h = fsHue();
+    var dark = ['hsl(' + h + ', 82%, 45%)', 'hsl(' + h + ', 88%, 55%)'];
+    var day = ['hsl(' + h + ', 88%, 62%)', 'hsl(' + h + ', 90%, 76%)'];
+    var m = el('fs-morph');
+    [v, m].forEach(function (node) {
+      if (!node) return;
+      node.style.setProperty('--fs-a', dark[0]);
+      node.style.setProperty('--fs-b', dark[1]);
+      node.style.setProperty('--fs-da', day[0]);
+      node.style.setProperty('--fs-db', day[1]);
+    });
+    // 顶部胶囊的「半边淡色」也跟同一色相，但压到 ~1/5 透明度 ——
+    // 它只是个「有倒计时在跑」的提示，不能抢了读数。
+    var fab = el('cd-fab');
+    if (fab) {
+      fab.style.setProperty('--fab-a', 'hsla(' + h + ', 85%, 60%, .20)');
+      fab.style.setProperty('--fab-da', 'hsla(' + h + ', 80%, 45%, .14)');
+    }
+    fsApplySweep(); // 到点扫描块的配色跟着水位条走
+  }
+  // ---- 到点扫描：一条竖直色块从左往右不断掠过（见 CSS 的 #fs-sweep / @keyframes fsSweep）----
+  // 宽度 = 屏宽的比例（CSS 里的 26% 必须与这里同值）。宽度越大越醒目、掠过越慢。
+  var FS_SWEEP_W = 26;
+  // 配色规则：默认红；**用户把水位条本身调成红色时改用反差色绿** —— 否则红压红、完全看不出来。
+  function fsApplySweep() {
+    var n = el('fs-sweep'); if (!n) return;
+    var h = fsHue();
+    var isRed = (h <= 20 || h >= 340); // 色相 ±20° 内都算「红」
+    var rgb = isRed ? '34,197,94' : '220,38,38';
+    n.style.background = 'linear-gradient(90deg,'
+      + ' rgba(' + rgb + ',0), rgba(' + rgb + ',.66) 50%, rgba(' + rgb + ',0))';
+  }
+  // 字号自适应：按「可用宽度」（视口宽 − 左右内边距 − 右侧按钮 − 间距）算，
+  // 保证大数字永远待在左下角、不会越过右边界。
+  // 倍率标定：150% 恰好用满可用宽度（上限），100%（默认）是上限的 2/3 —— 这样
+  // 「放大 / 缩小」两档都有真实效果，且任何倍率下都不会溢出。
+  function fsFit() {
+    if (!fsOpen) return;
+    var node = el('fs-time');
+    var acts = el('fs-acts');
+    var actsW = (acts && !acts.hidden) ? acts.getBoundingClientRect().width : 0;
+    var probe = 100;
+    node.style.fontSize = probe + 'px'; // ⚠️ 测量必须用基准字号，倍率不掺进来
+    var w = node.getBoundingClientRect().width || 1;
+    var avail = Math.max(120, window.innerWidth - FS_PAD * 2 - (actsW ? actsW + FS_GAP : 0));
+    var fitMax = probe * (avail / w);            // 物理上限：刚好占满可用宽度
+    var px = fitMax * fsScale() / SCALE_MAX;     // 150% 用满；100% = 上限的 2/3
+    px = Math.max(20, Math.min(px, fitMax, Math.round(window.innerHeight * 0.42)));
+    node.style.fontSize = Math.round(px) + 'px';
+    applyAnimVars(node);
+  }
+
+  // ---- 右下角两个大按钮：左 = 暂停/继续，右 = 取消（二次确认后删除并退出全屏）----
+  // 只读宿主（没开放手机端改倒计时）→ 没有可执行的动作，整组收起来，别给假按钮。
+  function fsPaintActs(p) {
+    var acts = el('fs-acts'); if (!acts) return;
+    p = p || cdPick();
+    var it = p.item;
+    acts.hidden = !CDS.canEdit;
+    if (!CDS.canEdit) { fsActsSig = ''; return; }
+    var paused = !it || it.state === 'paused';
+    var sig = (paused ? 'r' : 'p') + '|' + (fsBusy ? 1 : 0) + '|' + (fsArmed ? 1 : 0);
+    if (sig === fsActsSig) return;
+    fsActsSig = sig;
+    var tg = el('fs-toggle');
+    // 按钮里没有文字：图标由 data-act 决定（pause → 两条竖条 / resume → 三角），
+    // 无障碍语义与语言切换都走 aria-label。
+    tg.setAttribute('data-act', paused ? 'resume' : 'pause');
+    tg.setAttribute('aria-label', paused ? T('继续', 'Resume') : T('暂停', 'Pause'));
+    tg.disabled = fsBusy || !it;
+    var cx = el('fs-cancel');
+    // 第一下之后：变红 + 图形从 ✕ 换成 ✓（「再点一次才真删」必须有视觉信号）
+    cx.setAttribute('aria-label', fsArmed ? T('确认取消', 'Confirm cancel') : T('取消', 'Cancel'));
+    cx.classList.toggle('armed', !!fsArmed);
+    cx.disabled = fsBusy || !it;
+  }
+  function fsMsg(txt) {
+    var n = el('fs-msg'); if (!n) return;
+    n.textContent = txt || '';
+    n.classList.toggle('show', !!txt);
+    if (fsMsgTimer) { clearTimeout(fsMsgTimer); fsMsgTimer = null; }
+    if (txt) fsMsgTimer = setTimeout(function () { n.classList.remove('show'); }, 2600);
+  }
+  function fsArmCancel() {
+    fsArmed = true;
+    cdVibrate(14);
+    fsPaintActs();
+    if (fsArmTimer) clearTimeout(fsArmTimer);
+    fsArmTimer = setTimeout(function () { fsArmed = false; fsPaintActs(); }, 3500);
+  }
+  // 写入口和抽屉完全一样：先领一次性令牌，再 POST。唯一写入口仍是 /api/countdowns/<id>/<act>
+  function fsDo(act) {
+    var p = cdPick();
+    if (fsBusy || !p.item) return;
+    var id = p.item.id;
+    fsBusy = true; fsMsg(''); fsPaintActs(p);
+    cdWrite('POST', 'countdowns/' + encodeURIComponent(id) + '/' + act, {})
+      .then(function (j) {
+        cdApply(j);
+        cdVibrate(10);
+        if (act === 'cancel') { closeFs(); return; } // 删掉当前这条 → 收起全屏
+        fsTick(); // 暂停/继续 → 立刻按新状态刷新大字与按钮
+      })
+      .catch(function (e) { fsMsg(cdErrText(e)); cdVibrate(60); })
+      .then(function () { fsBusy = false; if (fsOpen) fsPaintActs(cdPick()); });
   }
   // 全屏里那颗胶囊显示「当前时间」：不做动画；带不带秒跟电脑上的设置走
   function fsClockText() {
@@ -1212,10 +1848,16 @@
     if (fsId !== p.item.id) { // 换了对象：橙区直接就位，别从上一条的宽度滑过去
       fsId = p.item.id;
       fsSnap = true;
-      el('fs-time').setAttribute('data-t', ''); // 清空旧串 → 整份重画，不留上一条的残影
+      fsArmed = false;
+      fsBlurred = false;
+      fsSt.key = null; // 清空旧串 → 整份重画，不留上一条的残影
       el('fs-name').textContent = p.item.name || T('倒计时', 'Countdown');
     }
-    el('fs-fill').style.width = (fsRatio(p.item) * 100).toFixed(2) + '%';
+    var pct = (fsRatio(p.item) * 100).toFixed(2) + '%';
+    el('fs-fill').style.width = pct;
+    // 形变层里的那条水位条也要同步：它整段动画都在「预览背景」，
+    // 少同步一次就会出现「长到整屏时水位比真背景少一截」，切换时露馅。
+    var mf = el('fs-morph-fill'); if (mf) mf.style.width = pct;
     if (fsSnap) {
       fsSnap = false;
       var f = el('fs-fill');
@@ -1223,32 +1865,240 @@
       void f.offsetWidth; // 强制重排：让刚设的宽度以「无过渡」生效
       f.classList.remove('snap');
     }
-    fsSetTime(cdClock(p.sec));
+    fsPaintActs(p); // 先定好按钮显隐（fsFit 要按「有没有按钮」算可用宽度）
+    // 模糊秒数：静止 5 秒 + 剩余 ≥1 分钟 → 秒那两位换成 --。
+    // 模糊状态**翻转的那一拍整份重画**（fsSt.key=null → buildInto，不走动画），
+    // 所以 -- 出现/消失都是瞬间到位，不会播放一次翻转。
+    var txt = cdClock(p.sec);
+    var blurred = fsShouldBlur(p.item, p.sec);
+    if (blurred) txt = fsBlurText(txt);
+    if (blurred !== fsBlurred) { fsBlurred = blurred; fsSt.key = null; }
+    fsRender(txt);
+    // 到点扫描：剩余归零且仍在运行 = 「时间到了」→ 色块开始掠屏，直到这条被关掉。
+    // （暂停后 state 不再是 running，扫描自然停；取消/删除会直接退出全屏。）
+    var rung = !!p.item && p.item.state === 'running' && p.sec <= 0;
+    if (rung !== fsRung) {
+      fsRung = rung;
+      el('fs-view').classList.toggle('rung', rung);
+    }
     var pt = fsClockText();
     if (pt !== fsPillTxt) { fsPillTxt = pt; el('fs-pill-time').textContent = pt; }
   }
+  // ---- 进出全屏的形变动画（FLIP）：一块玻璃从胶囊矩形长到整屏，反向就是缩回胶囊 ----
+  // 观感目标 = 手机上点开 / 关掉一个 app 图标。几个必须守住的点：
+  //   · 起点要**在 cdSyncFab() 把胶囊藏掉之前**量（藏掉是 display:none，rect 会全是 0）
+  //   · 形变层 = 「背景的预览」（底色 + 同比例水位条，即 #fs-morph / #fs-morph-fill），
+  //     长到整屏时与 #fs-view 的画面逐像素一致 → 收层直接切，不需要淡出（淡出会像糊了层白）
+  //   · 进全屏**三段式**：形变铺满整屏（0.8s）→ 空等（0.8s，此刻露的是原样的时钟）→ 切界面
+  //   · 系统开了「减弱动态效果」就直接切换，不做形变（尊重无障碍偏好）
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  function rectOf(node) {
+    var r = node.getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
+  // 胶囊当前的矩形（起点 / 终点都用它）。胶囊被藏起来或淡出中 → 用它「该在」的位置兜底。
+  function fabRect() {
+    var fab = el('cd-fab');
+    if (fab && !fab.classList.contains('hidden-fab')) {
+      var r = rectOf(fab);
+      if (r.width > 1 && r.height > 1) { r.radius = 999; return r; }
+    }
+    var w = 132; // 顶部居中、44 高的兜底胶囊
+    return { left: (window.innerWidth - w) / 2, top: 14, width: w, height: 44, radius: 999 };
+  }
+  // 形变→到位即隐：形变层与真背景**逐像素一致**（同底色、同水位条），
+  // 收层那一刻画面完全不变，看不出接缝 —— 淡出反而会露出下面那幅几乎相同的画，
+  // 看着像「糊了一层」。所以进 / 出全屏都用「到位即隐」，不做溶解。
+  function fsMorphRun(from, to, done, ms) {
+    var m = el('fs-morph');
+    if (!m) { if (done) done(); return; }
+    ms = ms || FS_MORPH_MS;
+    // 短的一拍（320ms）用「快出慢收」；长的一拍（800ms）换成更匀的曲线 ——
+    // 否则前 1/3 就长满了、后面大半段在爬，反而像卡住。
+    var ease = ms > 500 ? 'cubic-bezier(.4,0,.2,1)' : 'cubic-bezier(.22,.68,.36,1)';
+    m.style.transition = 'none';
+    m.style.left = from.left + 'px'; m.style.top = from.top + 'px';
+    m.style.width = from.width + 'px'; m.style.height = from.height + 'px';
+    m.style.borderRadius = (from.radius || 999) + 'px';
+    m.style.opacity = '1';
+    m.style.visibility = 'visible';
+    void m.offsetWidth; // 强制重排：起点先落地，下面这段过渡才会真的播出来
+    m.style.transition = 'left ' + ms + 'ms ' + ease + ', top ' + ms + 'ms ' + ease
+      + ', width ' + ms + 'ms ' + ease + ', height ' + ms + 'ms ' + ease
+      + ', border-radius ' + ms + 'ms ' + ease;
+    m.style.left = to.left + 'px'; m.style.top = to.top + 'px';
+    m.style.width = to.width + 'px'; m.style.height = to.height + 'px';
+    m.style.borderRadius = (to.radius || 0) + 'px';
+    // 收尾：位置动画放完（ms + 40 那点零头是给浏览器留的余量）
+    if (fsMorphTimer) clearTimeout(fsMorphTimer);
+    fsMorphTimer = setTimeout(function () {
+      fsMorphTimer = null;
+      fsMorphing = false;
+      m.style.transition = 'none';
+      m.style.visibility = 'hidden';
+      if (done) done();
+    }, ms + 40);
+  }
+
+  // 形变放完 → 切界面：加 .show → #fs-view 自带 .22s 淡入盖过时钟（这就是「淡入淡出」）。
+  // ⚠️ FS_MORPH_HOLD_MS 若为 0 必须**同步**执行：若包一层 setTimeout(0)，
+  //    中间会渲染出「形变层已隐、#fs-view 还没上来」的一帧 —— 时钟一闪。
+  function fsOpenCommit(v) {
+    if (fsOpenTimer) { clearTimeout(fsOpenTimer); fsOpenTimer = null; }
+    if (FS_MORPH_HOLD_MS > 0) fsOpenTimer = setTimeout(commit, FS_MORPH_HOLD_MS);
+    else commit();
+    function commit() {
+      fsOpenTimer = null;
+      if (!fsOpen) return; // 形变期间已经退出了 → 这一下别再切
+      fsPokeBlur();  // 真正「进来」才算有过操作：模糊的 5 秒从切界面这刻起算
+      applyFsAnim(); // 形变期间用户可能改过字体 / 动画 → 切之前重刷一遍
+      fsTick();
+      if (!fsOpen) return; // fsTick() 里「倒计时被删光」会自己退出全屏 → 这一下就别再切了
+      // 切换前：形变那 0.8s 里时钟是「活的」，用户完全可能双击数字把面板调出来 → 先收掉
+      if (uiOpen) closeUi();
+      v.setAttribute('aria-hidden', 'false');
+      v.classList.add('show'); // ← 就是这一下：整层 .22s 淡入，盖过时钟
+      fsPokePill();  // 全屏里的时钟胶囊：露面 + 起 3 秒淡出计时
+    }
+  }
+
+  function fsMorphCancel() {
+    if (fsMorphTimer) { clearTimeout(fsMorphTimer); fsMorphTimer = null; }
+    if (fsOpenTimer) { clearTimeout(fsOpenTimer); fsOpenTimer = null; }
+    var m = el('fs-morph');
+    if (m) { m.style.transition = 'none'; m.style.opacity = '0'; m.style.visibility = 'hidden'; }
+    var f = el('cd-fab'); if (f) f.classList.remove('fab-veil');
+    fsMorphing = false;
+  }
+
   function openFs() {
     if (fsOpen) return;
+    // 上一次「出全屏」的收尾动画还在放 → 直接掐断：用户又点进来，这一下必须立刻生效
+    var mid = fsMorphing;
+    if (mid) fsMorphCancel();
     if (!cdPick().has) { openCd(); return; } // 空态（一条都没有）→ 直接开抽屉：此时胶囊就是「新建」入口
+    // ⚠️ 起点必须在 cdSyncFab() 藏掉胶囊之前量。
+    // 上一次动画没放完就重进来 → 这次不再重播（否则会看到「刚缩下去又长起来」的乱跳）。
+    var morph = !reducedMotion() && !mid;
+    var from = morph ? fabRect() : null;
     fsOpen = true;
-    fsId = null; fsPillTxt = ''; fsSnap = true;
-    el('fs-view').classList.add('show');
-    el('fs-view').setAttribute('aria-hidden', 'false');
-    fsTick();
-    cdSyncFab();  // 全屏里不再显示底部那颗倒计时胶囊（免得和新胶囊混）
-    fsPokePill(); // 全屏里的时钟胶囊：露面 + 起 3 秒淡出计时
+    fsId = null; fsPillTxt = ''; fsSnap = true; fsArmed = false; fsSt.key = null;
+    fsBlurred = false; fsRung = false;
+    fsApplyAccent();     // 水位条可能刚在电脑上换成别的色（其实只存本机，这里只是保证一致）
+    fsMsg('');
+    var v = el('fs-view');
+    v.classList.remove('rung');
+    cdSyncFab(); // 逻辑上已进全屏 → 底部那颗倒计时胶囊先藏（形变层正是从它的矩形长出来的）
     cdVibrate(8);
+    if (!morph) {
+      // 系统开了「减弱动态效果」/ 接着上一次没放完的动画 → 不做形变，直接切界面
+      fsPokeBlur();  // 刚进来算「有过操作」→ 模糊的 5 秒从这一刻起算
+      applyFsAnim(); // 进来先按当前配置刷一遍动画类（配置可能刚被改过）
+      fsTick();
+      v.setAttribute('aria-hidden', 'false');
+      v.classList.add('show');
+      fsPokePill();  // 全屏里的时钟胶囊：露面 + 起 3 秒淡出计时
+      return;
+    }
+    // ① 形变：玻璃从胶囊长满整屏。此刻 #fs-view **还没有 .show**（整层不可见）→
+    //    形变层下面就是**时钟**；形变层是不透明的「背景预览」，正好把时钟整个盖住。
+    fsTick(); // 先把数字 / 按钮显隐 / 形变层里那条水位条的宽度就位
+    fsMorphing = true;
+    fsMorphRun(from, { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, radius: 0 },
+      function () {
+        // ② 形变到位、形变层收起（与真背景一致，看不出接缝）→ 立刻切界面：
+        //    #fs-view 淡入盖过时钟，数字 / 按钮浮上来。
+        fsOpenCommit(v);
+      }, FS_MORPH_OPEN_MS);
   }
   function closeFs() {
     if (!fsOpen) return;
-    fsOpen = false; fsId = null;
+    var mid = fsMorphing;
+    if (mid) fsMorphCancel(); // 收尾动画还没放完就又点了一下 → 掐断重来（这次不再重播）
+    // ⚠️ 进全屏那「切界面」还没执行就退回来了 → 必须把这一下掐掉，
+    //    否则 #fs-view 会自己淡入，用户明明已经退出了。
+    if (fsOpenTimer) { clearTimeout(fsOpenTimer); fsOpenTimer = null; }
+    var morph = !reducedMotion() && !mid;
+    fsOpen = false; fsId = null; fsArmed = false; fsRung = false;
+    if (fsArmTimer) { clearTimeout(fsArmTimer); fsArmTimer = null; }
     if (fsIdleTimer) { clearTimeout(fsIdleTimer); fsIdleTimer = null; }
     el('fs-pill').classList.remove('idle');
-    el('fs-view').classList.remove('show');
-    el('fs-view').setAttribute('aria-hidden', 'true');
+    var v = el('fs-view');
+    v.classList.remove('rung');
+    v.classList.remove('show');
+    v.setAttribute('aria-hidden', 'true');
+    fsMsg('');
+    fsActsSig = '';
+    if (uiOpen) closeUi(); // 全屏里弹出的字号面板跟着一起收，别留在时钟上
     cdSyncFab();
     cdPokeFab(); // 回时钟 → 胶囊露面并重新开始 3 秒计时
     cdVibrate(6);
+    if (!morph) return;
+    var fab = el('cd-fab');
+    // 胶囊先隐身，等形变层缩到它头上再淡入 —— 否则会「目标位置已经站着一颗、另一颗缩小过来重叠」
+    if (fab && !fab.classList.contains('hidden-fab')) fab.classList.add('fab-veil');
+    fsMorphing = true;
+    fsMorphRun(
+      { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, radius: 0 },
+      fabRect(),
+      function () { var f = el('cd-fab'); if (f) f.classList.remove('fab-veil'); });
+  }
+  // 「按下即触发」——全屏里两个按钮一律不等 click。
+  // 原因：真机上 click 要求 down/up 落在同一个元素、且中途不能有合成层变动；
+  // 而这一下 pointerdown 会顺带唤醒全屏里的时钟胶囊（visibility + transform 变化 →
+  // 合成层重建），真机上整下点击就跟着被丢掉了，表现成「第一次点按钮没反应，
+  // 得先点一下屏幕、再点第二下才灵」。按下就执行 → 从根上不依赖 up/click 的配对。
+  // （桌面 headless 用的是合成触摸事件，复现不出这个现象，所以这条只能靠实现绕开。）
+  // click 分支只服务键盘与辅助技术：那条路径没有 pointerdown，不会被吞。
+  function bindPressFire(node, onFire) {
+    if (!node) return;
+    var swallow = false, t = null;
+    function arm() {
+      swallow = true;
+      if (t) clearTimeout(t);
+      t = setTimeout(function () { swallow = false; t = null; }, 800); // 兜底：万一 click 压根没来
+    }
+    function fire(e) { if (e && e.preventDefault) e.preventDefault(); onFire(); }
+    if (window.PointerEvent) {
+      node.addEventListener('pointerdown', function (e) {
+        if (e.button && e.button !== 0) return; // 只认主键
+        if (e.isPrimary === false) return;      // 多指时只认第一根
+        arm(); fire(e);
+      });
+    } else { // 老浏览器：触摸 / 鼠标两套
+      node.addEventListener('touchstart', function (e) {
+        if (e.touches && e.touches.length > 1) return;
+        arm(); fire(e);
+      }, { passive: false });
+      node.addEventListener('mousedown', function (e) { if (e.button) return; arm(); fire(e); });
+    }
+    node.addEventListener('click', function (e) {
+      if (e.preventDefault) e.preventDefault();
+      if (swallow) { // 这一下已经由 pointerdown 处理过，别再执行第二次
+        swallow = false;
+        if (t) { clearTimeout(t); t = null; }
+        return;
+      }
+      onFire();
+    });
+  }
+  // 右下角两个按钮的动作：暂停/继续 一发即生效；取消要点两下（第二下才真删）
+  function bindFs() {
+    bindPressFire(el('fs-toggle'), function () {
+      var p = cdPick();
+      if (!p.item || fsBusy) return;
+      fsDo(p.item.state === 'paused' ? 'resume' : 'pause');
+    });
+    bindPressFire(el('fs-cancel'), function () {
+      var p = cdPick();
+      if (!p.item || fsBusy) return;
+      if (!fsArmed) { fsArmCancel(); return; } // 第一下只是「武装」，防误删
+      if (fsArmTimer) { clearTimeout(fsArmTimer); fsArmTimer = null; }
+      fsArmed = false;
+      fsDo('cancel');
+    });
   }
   // 全屏里那颗「当前时间」胶囊：也要 3 秒没操作就淡出（全屏是看大字的地方，不该长期挡着）；
   // 屏幕上任何一次操作立刻唤回来并重新计时。与底部倒计时胶囊同一套节奏，只是作用对象不同。
@@ -1463,15 +2313,42 @@
 
     // 底部胶囊要装两个动作，用手势区分：单击进全屏、长按开抽屉。
     // 长按期间手指移动超过 10px 视为拖动 → 两个都不触发。
+    // ⚠️ 短按**既不能只挂 click，也不能只挂 pointerup**（两个坑都实测踩到了）：
+    //    · 只挂 click —— 这一下 pointerdown 会让胶囊进 `:active`（transform → 合成层重建），
+    //      真机上整下 click 会跟着被丢掉（和全屏那两颗按钮一模一样的坑）；
+    //    · 只挂 pointerup —— 真触摸路径下有时压根收不到 pointerup，长按计时器就没人清，
+    //      松手 500ms 后抽屉自己打开（表现成「点一下胶囊变成开抽屉」）。
+    //    所以两条路都挂，用 tapHandled 去重：谁先到谁生效，另一个直接忽略。
+    //    触发时必须吞掉紧随的 click —— 胶囊这时已经 hidden-fab（display:none），
+    //    那一下会落到**同一位置的 #fs-pill（全屏里的时钟胶囊）**上，
+    //    触发 closeFs() 把刚打开的全屏当场自己关掉。
     (function bindFabPress() {
-      var fab = el('cd-fab'), timer = null, sx = 0, sy = 0, fired = false, moved = false;
+      var fab = el('cd-fab'), timer = null, sx = 0, sy = 0;
+      var moved = false;
+      // ⚠️ 两个「时间窗」而不是布尔标志 —— 布尔标志在「click 被吞掉、压根到不了这里」时
+      //    没人复位，就会把下一次正常单击一并吃掉（jsdom 用 .click() 模拟时必踩）。
+      var tapUntil = 0;   // 同一次手势去重：pointerup 与紧随的 click 只算一次
+      var longUntil = 0;  // 长按刚触发过 → 这一下余波不算单击
       function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+      function fireTap() {
+        var now = Date.now();
+        if (now < tapUntil) return;         // 这一下已经由 pointerup 处理过了
+        tapUntil = now + 150;               // 150ms 足够覆盖 pointerup+click 这一对
+        if (now < longUntil) return;        // 长按的余波
+        if (moved) { moved = false; return; } // 拖过 → 两个都不触发
+        swallowTapClick();
+        openFs(); // 单击 → 全屏
+      }
       fab.addEventListener('pointerdown', function (e) {
         if (e.button && e.button !== 0) return;
-        fired = false; moved = false; sx = e.clientX; sy = e.clientY;
+        moved = false; sx = e.clientX; sy = e.clientY;
         stop();
         timer = setTimeout(function () {
-          timer = null; fired = true;
+          timer = null;
+          longUntil = Date.now() + 600;
+          // 长按一开抽屉，胶囊自己就 hidden-fab 了 → 抬手那下 click 会落到刚铺开的遮罩上，
+          // 把抽屉当场又关掉（表现成「长按胶囊没反应」）→ 同样吞掉。
+          swallowTapClick();
           openCd(); // 长按 → 抽屉
           cdVibrate(14);
         }, FAB_LONG_MS);
@@ -1480,11 +2357,17 @@
         if (!timer) return;
         if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) { moved = true; stop(); }
       });
-      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (n) { fab.addEventListener(n, stop); });
-      fab.addEventListener('click', function () {
-        if (fired) { fired = false; return; } // 长按已经处理过了，这里吞掉
-        if (moved) { moved = false; return; }
-        openFs();
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (n) {
+        fab.addEventListener(n, function () {
+          stop();
+          if (n === 'pointerup') fireTap();
+        });
+      });
+      // 兜底（同时也是「只收到 click 的那条路径」）：键盘 Enter/Space 只会给一个 click。
+      fab.addEventListener('click', function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        stop();
+        fireTap();
       });
     })();
     document.addEventListener('keydown', function (e) {
@@ -1492,10 +2375,13 @@
     });
 
     // 底部胶囊的「3 秒无操作淡出」：任意触摸 / 点击 / 按键 / 滚动都算操作
+    // 同一个「有操作」信号也喂给全屏的「模糊数字」（它按 5 秒算，且只在有交互时取消模糊）
     ['pointerdown', 'touchstart', 'keydown'].forEach(function (t) {
       document.addEventListener(t, cdPokeFab, { passive: true });
+      document.addEventListener(t, fsPokeBlur, { passive: true });
     });
     window.addEventListener('scroll', cdPokeFab, { passive: true });
+    window.addEventListener('scroll', fsPokeBlur, { passive: true });
 
     // 列表动作（事件委托，重画后依然有效）
     el('cd-list').addEventListener('click', function (e) {
@@ -1596,6 +2482,8 @@
 
   function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* 隐私模式：当次会话内有效即可 */ } }
+  // 删键（而不是写空串）：「恢复默认」要真的回到「从没设过」的状态
+  function lsDel(k) { try { window.localStorage.removeItem(k); } catch (e) { /* 同上 */ } }
   function cdSoundOn() { return lsGet(LS_SOUND) !== '0'; }   // 默认开：提醒类功能默认可用，用户可关
   function cdSoundKind() {
     var k = String(lsGet(LS_KIND) || '');
@@ -1799,37 +2687,233 @@
   }
 
   var uiOpen = false;
+  var uiTarget = 'clock'; // 'clock' = 主界面时钟字号；'fs' = 全屏倒计时大字字号（两档各自独立）
 
+  // 面板里的「大小」对谁生效 —— 由「从哪进来」决定（双击时钟 / 双击全屏大数字）
+  function uiScaleGet() { return uiTarget === 'fs' ? fsScale() : phoneScale(); }
+  function uiScaleSet(v) { return uiTarget === 'fs' ? setFsScale(v) : setPhoneScale(v); }
+  function uiScaleApply() { if (uiTarget === 'fs') fsFit(); else fit(); }
+  // ---- 主界面时钟专属：字体（预设 / 自定义）+ 数字动画（家族 / 方向 / 时长）----
+  // 数据都存本机 localStorage：面板里选了「跟随电脑」，该项才回到跟电脑一致。
+  var UI_FONTS = [
+    ['auto', '跟随电脑', 'Match desktop'],
+    ['system', '系统', 'System'],
+    ['sans', '无衬线', 'Sans'],
+    ['serif', '衬线', 'Serif'],
+    ['mono', '等宽', 'Mono'],
+    ['round', '圆润', 'Rounded'],
+    ['custom', '自定义…', 'Custom…']
+  ];
+  var UI_ANIMS = [
+    ['auto', '跟随电脑', 'Match desktop'],
+    ['flip', '翻转', 'Flip'],
+    ['scale', '缩放', 'Scale'],
+    ['fade', '淡入', 'Fade'],
+    ['flip-3d', '3D 翻转', 'Flip 3D'],
+    ['none', '无', 'None']
+  ];
+  // [v1.0.5.7] 节奏档：'default'（弹性）= 不写 --anim-ease，各动画用自己原有的曲线
+  var UI_ANIM_EASES = [
+    ['auto', '跟随电脑', 'Match desktop'],
+    ['default', '弹性', 'Spring'],
+    ['linear', '匀速', 'Linear'],
+    ['ease-in', '慢起', 'Ease in'],
+    ['ease-out', '慢停', 'Ease out'],
+    ['ease-in-out', '两头慢', 'Ease in-out']
+  ];
+  // 方向可选项由「当前家族」决定：翻转 → 上/下；缩放 → 缩/放；其余家族没有方向
+  function uiDirOptions(fam) {
+    if (fam === 'flip') return [['up', '向上', 'Up'], ['down', '向下', 'Down']];
+    if (fam === 'scale') return [['shrink', '缩小', 'Shrink'], ['grow', '放大', 'Grow']];
+    return [];
+  }
+  // 当前**实际生效**的方向值（「跟随电脑」时算的是电脑那一套）—— 只给面板高亮用
+  function animDirValue() {
+    var lt = localAnimType();
+    if (lt === 'auto') {
+      var at = animFamily().at;
+      return at === 'flip' ? (CFG.animFlipDir === 'down' ? 'down' : 'up')
+        : at === 'scale' ? (CFG.animScaleDir === 'grow' ? 'grow' : 'shrink') : '';
+    }
+    var ld = localAnimDir();
+    if (lt === 'flip') return ld === 'down' ? 'down' : 'up';
+    if (lt === 'scale') return ld === 'grow' ? 'grow' : 'shrink';
+    return '';
+  }
+  function chipsHtml(items, active) {
+    return items.map(function (it) {
+      return '<button type="button" data-v="' + esc(it[0]) + '"'
+        + (it[0] === active ? ' class="active"' : '') + '>'
+        + esc(T(it[1], it[2])) + '</button>';
+    }).join('');
+  }
+  var uiFontCustomOpen = false; // 「自定义…」是否已展开（展开但还没输名字时不落盘）
+  function uiPaintClock() {
+    var blk = el('ui-clock-block');
+    if (blk) blk.hidden = uiTarget !== 'clock'; // 只在「双击时钟」进来的面板里出现
+    var lf = localFont();
+    var isCustom = lf.indexOf('custom:') === 0;
+    el('ui-font-chips').innerHTML = chipsHtml(UI_FONTS, isCustom ? 'custom' : lf);
+    var wrap = el('ui-font-custom');
+    wrap.hidden = !(isCustom || uiFontCustomOpen);
+    var inp = el('ui-font-input');
+    if (!wrap.hidden && document.activeElement !== inp) inp.value = isCustom ? lf.slice(7) : '';
+
+    var lt = localAnimType();
+    el('ui-anim-chips').innerHTML = chipsHtml(UI_ANIMS, lt);
+    var fam = lt === 'auto' ? animFamily().at : lt;
+    var dirs = uiDirOptions(fam);
+    var dc2 = el('ui-dir-chips');
+    dc2.hidden = !dirs.length;
+    dc2.innerHTML = dirs.length ? chipsHtml(dirs, animDirValue()) : '';
+    el('ui-ease-chips').innerHTML = chipsHtml(UI_ANIM_EASES, localAnimEase());
+
+    var d = animDur();
+    el('ui-dur-val').textContent = d + 'ms';
+    el('ui-dur-minus').disabled = d <= ANIM_DUR_MIN;
+    el('ui-dur-plus').disabled = d >= ANIM_DUR_MAX;
+  }
+  function uiPaintLabel() {
+    el('ui-title').textContent = uiTarget === 'fs'
+      ? T('倒计时显示', 'Countdown display') : T('手机端显示', 'Phone display');
+    el('ui-scale-label').textContent = uiTarget === 'fs'
+      ? T('倒计时大小', 'Countdown size') : T('时钟大小', 'Clock size');
+    el('ui-scale-hint').textContent = T(
+      '只影响这台手机，与电脑上的显示设置无关。',
+      'Only affects this phone — the desktop display setting is untouched.');
+    el('ui-blur-label').textContent = T('模糊数字', 'Blur digits');
+    el('ui-blur').setAttribute('aria-label', T('模糊数字', 'Blur digits'));
+    el('ui-blur-hint').textContent = T(
+      '5 秒无操作、且剩余时间超过 1 分钟时，秒数显示为 --',
+      'After 5s idle — and while over a minute remains — seconds show as --');
+    el('ui-accent-label').textContent = T('背景色', 'Background');
+    el('ui-accent-reset').textContent = T('默认', 'Default');
+    el('ui-accent-reset').setAttribute('aria-label', T('恢复默认颜色', 'Reset colour'));
+    el('ui-hue').setAttribute('aria-label', T('背景色', 'Background colour'));
+    el('ui-font-label').textContent = T('字体', 'Font');
+    el('ui-anim-label').textContent = T('数字动画', 'Digit animation');
+    el('ui-ease-label').textContent = T('动画节奏', 'Easing');
+    el('ui-dur-label').textContent = T('动画时长', 'Duration');
+    el('ui-dur-minus').setAttribute('aria-label', T('缩短', 'Shorter'));
+    el('ui-dur-plus').setAttribute('aria-label', T('延长', 'Longer'));
+    el('ui-font-input').setAttribute('placeholder',
+      T('字体名，如 微软雅黑', 'Font name, e.g. Bahnschrift'));
+    el('ui-font-input').setAttribute('aria-label', T('自定义字体名', 'Custom font name'));
+    el('ui-font-ok').textContent = T('确定', 'OK');
+    el('ui-anim-hint').textContent = T(
+      '只影响这台手机，与电脑上的动画设置无关。',
+      'Only affects this phone — the desktop animation is untouched.');
+  }
+  // 全屏倒计时专属那两块（模糊开关 + 色相滑块）的绘制
+  function uiPaintFs() {
+    var blk = el('ui-fs-block');
+    if (blk) blk.hidden = uiTarget !== 'fs'; // 只在「双击全屏大数字」进来的面板里出现
+    var sw = el('ui-blur');
+    if (sw) sw.setAttribute('aria-checked', fsBlurOn() ? 'true' : 'false');
+    var h = fsHue();
+    var knob = el('ui-hue-knob');
+    if (knob) {
+      knob.style.left = (h / 359 * 100).toFixed(2) + '%';
+      knob.style.background = 'hsl(' + h + ', 88%, 52%)';
+    }
+    var hue = el('ui-hue');
+    if (hue) hue.setAttribute('aria-valuenow', String(h));
+  }
   function uiPaint() {
-    var sc = phoneScale();
+    var sc = uiScaleGet();
     el('ui-scale-val').textContent = sc + '%';
     el('ui-fill').style.width =
       (((sc - SCALE_MIN) / (SCALE_MAX - SCALE_MIN)) * 100).toFixed(1) + '%';
     el('ui-minus').disabled = sc <= SCALE_MIN;
     el('ui-plus').disabled = sc >= SCALE_MAX;
     el('ui-new-cd').hidden = !CDS.canEdit; // 宿主没开放编辑就别给这个按钮
+    uiPaintLabel();
+    uiPaintFs();
+    uiPaintClock();
   }
-  function openUi() {
+  function openUi(target) {
     if (uiOpen || cdSheetOpen) return;
+    uiTarget = target === 'fs' ? 'fs' : 'clock';
     uiOpen = true;
+    uiFontCustomOpen = false; // 每次打开都从「收起自定义输入框」开始
     uiPaint();
     el('ui-scrim').classList.add('show');
     el('ui-sheet').classList.add('show');
     el('ui-sheet').setAttribute('aria-hidden', 'false');
+    // 全屏里的字号面板是「底部抽屉」，正好会盖住左下角的大数字 →
+    // 把整条底边上抬面板高度，用户边调边能看到数字变化（否则会以为按钮没用）
+    if (uiTarget === 'fs') fsLift(el('ui-sheet').offsetHeight || 0);
     cdVibrate(10);
     hideHint();
+  }
+  function fsLift(px) {
+    var v = el('fs-view'); if (!v) return;
+    v.style.setProperty('--fs-lift', Math.max(0, Math.round(px || 0)) + 'px');
   }
   function closeUi() {
     if (!uiOpen) return;
     uiOpen = false;
+    fsLift(0);
     el('ui-scrim').classList.remove('show');
     el('ui-sheet').classList.remove('show');
     el('ui-sheet').setAttribute('aria-hidden', 'true');
   }
   function bumpScale(delta) {
-    setPhoneScale(phoneScale() + delta);
+    uiScaleSet(uiScaleGet() + delta);
     uiPaint();
-    fit(); // 立刻生效，方便边调边看
+    uiScaleApply(); // 立刻生效，方便边调边看
+    cdVibrate(6);
+  }
+  // chips 点击 → 找到被点的那个 button（自己往上找，不依赖 Element.closest）
+  function chipBtn(e) {
+    var t = e.target;
+    while (t && t !== e.currentTarget) {
+      if (t.tagName === 'BUTTON') return t;
+      t = t.parentNode;
+    }
+    return null;
+  }
+  // 字体 / 动画改了之后统一收尾：重挂类名与字体 → 重算字号（字体换了宽度会变，不重算可能越界）
+  function applyFontPicked() {
+    applyStatic();
+    uiScaleApply();
+    uiPaint();
+  }
+  function commitFont() {
+    var name = sanitizeFontName(el('ui-font-input').value);
+    if (!name) { uiPaintClock(); return; } // 空名字 → 什么都不改
+    setLocalFont('custom:' + name);
+    applyFontPicked();
+    cdVibrate(6);
+  }
+  function bumpDur(delta) {
+    setAnimDur(animDur() + delta);
+    applyStatic(); // 时长写进 --anim-duration（时钟与全屏大字一起跟）
+    uiScaleApply();
+    uiPaint();
+    cdVibrate(6);
+  }
+  // 「恢复默认」= 复位**当前面板里的全部本机偏好**（不只是字号）
+  function uiResetAll() {
+    if (uiTarget === 'fs') {
+      setFsScale(100);
+      lsDel(LS_FS_BLUR);  // 删键 = 回到「从没设过」（默认关）
+      lsDel(LS_FS_HUE);   // 删键 = 回到内置默认色相（橙）
+      fsBlurred = false; fsSt.key = null;
+      fsApplyAccent();
+      if (fsOpen) fsTick();
+    } else {
+      setPhoneScale(100);
+      lsDel(LS_FONT);     // 下面五项删键 = 全部回到「跟随电脑」
+      lsDel(LS_ANIM_TYPE);
+      lsDel(LS_ANIM_DIR);
+      lsDel(LS_ANIM_DUR);
+      lsDel(LS_ANIM_EASE);
+      uiFontCustomOpen = false;
+      applyStatic();
+    }
+    uiPaint();
+    uiScaleApply();
     cdVibrate(6);
   }
 
@@ -1852,44 +2936,56 @@
     hintTimer = setTimeout(hideHint, 8000);
   }
 
-  // 长按：时钟区域，约 520ms。手指移动超过 10px 视为滑动，取消
-  function bindLongPress() {
-    var target = el('clock');
+  // 双击之后浏览器还会补一次 click。这次 click 的落点是**按新布局重新命中**的：
+  // 面板一弹出，遮罩（#ui-scrim）就铺满全屏并开始接收指针 → 这一下会正好点在遮罩上，
+  // 把刚打开的面板自己关掉（实测：面板出现后 83ms 就被点没了，表现成「双击没反应」）。
+  // 兜底：双击触发后的一小段窗口内，把 document 上捕获到的 click 全部吞掉。
+  // 窗口只有 450ms（人抬手后不可能在这么短时间里再点一次），不会伤到正常点击。
+  function swallowTapClick() {
+    var until = Date.now() + 450;
+    function sw(e) {
+      if (Date.now() > until) { document.removeEventListener('click', sw, true); return; }
+      e.stopPropagation(); e.preventDefault();
+    }
+    document.addEventListener('click', sw, true);
+    setTimeout(function () { document.removeEventListener('click', sw, true); }, 460);
+  }
+
+  // 双击：两次「按下」间隔 ≤ 320ms、位移 ≤ 40px 就算数。时钟与全屏大数字共用这一段。
+  // ⚠️ 判定放在**第二次按下的瞬间**（不等抬手、不等 click）：
+  //    真机上抬手那一下容易被合成层变动吞掉（上一次全屏按钮「第一下没反应」就是这个坑），
+  //    按下即触发就从根上不依赖 up/click 的配对。
+  function bindDoubleTap(target, onFire) {
     if (!target) return;
-    var timer = null, active = false, sx = 0, sy = 0;
-    function stop() { if (timer) { clearTimeout(timer); timer = null; } active = false; }
-    function start(e) {
-      if (e && e.touches && e.touches.length > 1) { stop(); return; }
-      if (e && typeof e.button === 'number' && e.button > 0) { stop(); return; }
-      stop();
-      active = true;
-      sx = e.clientX || 0; sy = e.clientY || 0;
-      timer = setTimeout(function () {
-        timer = null;
-        if (!active) return;
-        active = false;
-        openUi();
-      }, LONG_PRESS_MS);
+    var last = 0, lx = 0, ly = 0;
+    function down(e) {
+      if (e && typeof e.button === 'number' && e.button > 0) return; // 只认主键/单指
+      if (e && e.touches && e.touches.length > 1) { last = 0; return; } // 双指 → 作废
+      var t = (e && e.touches && e.touches[0]) || e || {};
+      var x = nm(t.clientX, 0), y = nm(t.clientY, 0), now = Date.now();
+      if (last && now - last <= DOUBLE_TAP_MS
+        && Math.abs(x - lx) <= DOUBLE_TAP_DIST && Math.abs(y - ly) <= DOUBLE_TAP_DIST) {
+        last = 0; // 用完即清：三连击不会连着开两次
+        swallowTapClick();
+        onFire();
+        return;
+      }
+      last = now; lx = x; ly = y;
     }
-    function move(e) {
-      if (!active) return;
-      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) stop();
-    }
-    if (window.PointerEvent) {
-      target.addEventListener('pointerdown', start);
-      target.addEventListener('pointermove', move);
-      target.addEventListener('pointerup', stop);
-      target.addEventListener('pointercancel', stop);
-      target.addEventListener('pointerleave', stop);
-    } else { // 老浏览器退回触摸/鼠标两套
-      target.addEventListener('touchstart', start, { passive: true });
-      target.addEventListener('touchmove', move, { passive: true });
-      target.addEventListener('touchend', stop);
-      target.addEventListener('touchcancel', stop);
-      target.addEventListener('mousedown', start);
-      target.addEventListener('mousemove', move);
-      target.addEventListener('mouseup', stop);
-    }
+    if (window.PointerEvent) { target.addEventListener('pointerdown', down); return; }
+    // 老浏览器：触摸 + 鼠标两套。触摸后浏览器补发的那次 mousedown 必须忽略，
+    // 否则「一下触摸」会被当成「两次按下」→ 单击就误触发。
+    var touchAt = 0;
+    target.addEventListener('touchstart', function (e) { touchAt = Date.now(); down(e); }, { passive: true });
+    target.addEventListener('mousedown', function (e) {
+      if (Date.now() - touchAt < 800) return;
+      down(e);
+    });
+  }
+  function bindDoubleTaps() {
+    bindDoubleTap(el('clock'), function () { openUi('clock'); });
+    // 全屏里双击大数字 → 同一块面板，但调的是「倒计时」那一档（含模糊数字 / 背景色）
+    bindDoubleTap(el('fs-time'), function () { openUi('fs'); });
   }
 
   function bindUi() {
@@ -1897,28 +2993,132 @@
     el('ui-scrim').addEventListener('click', closeUi);
     el('ui-minus').addEventListener('click', function () { bumpScale(-SCALE_STEP); });
     el('ui-plus').addEventListener('click', function () { bumpScale(SCALE_STEP); });
-    el('ui-reset').addEventListener('click', function () {
-      setPhoneScale(100); uiPaint(); fit(); cdVibrate(6);
-    });
+    el('ui-reset').addEventListener('click', uiResetAll);
     el('ui-new-cd').addEventListener('click', function () {
       closeUi();
+      // 从全屏进来的：先把全屏收掉再开抽屉 —— 抽屉层级 31 < 全屏 40，否则会被盖住
+      if (fsOpen) closeFs();
       openCd(); // 直接进新建
     });
+
+    // —— 主界面时钟专属：字体 chips（预设 / 自定义…）——
+    el('ui-font-chips').addEventListener('click', function (e) {
+      var b = chipBtn(e);
+      if (!b) return;
+      var v = b.getAttribute('data-v');
+      if (v === 'custom') {
+        // 只展开输入框：等真的输了名字才落盘，否则字体会瞬间掉回系统默认
+        uiFontCustomOpen = true;
+        uiPaintClock();
+        try { el('ui-font-input').focus(); } catch (err) { /* 忽略 */ }
+        return;
+      }
+      uiFontCustomOpen = false;
+      setLocalFont(v);
+      applyFontPicked();
+      cdVibrate(6);
+    });
+    el('ui-font-ok').addEventListener('click', commitFont);
+    el('ui-font-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commitFont(); } // 手机键盘上直接回车即可
+    });
+
+    // —— 主界面时钟专属：数字动画（家族 / 方向 / 时长）——
+    el('ui-anim-chips').addEventListener('click', function (e) {
+      var b = chipBtn(e);
+      if (!b) return;
+      var v = b.getAttribute('data-v');
+      lsSet(LS_ANIM_TYPE, v);
+      // 换成「没有方向」的家族时把方向清掉，免得下次切回翻转还留着上一次的旧方向
+      if (v !== 'flip' && v !== 'scale') lsSet(LS_ANIM_DIR, '');
+      applyStatic();
+      uiScaleApply(); // 字号 / 时长变量都挂在计时元素上，重算一次
+      uiPaint();
+      cdVibrate(6);
+    });
+    el('ui-dir-chips').addEventListener('click', function (e) {
+      var b = chipBtn(e);
+      if (!b) return;
+      lsSet(LS_ANIM_DIR, b.getAttribute('data-v'));
+      applyStatic();
+      uiScaleApply();
+      uiPaint();
+      cdVibrate(6);
+    });
+    // [v1.0.5.7] 节奏：本机偏好，'auto' = 跟随电脑
+    el('ui-ease-chips').addEventListener('click', function (e) {
+      var b = chipBtn(e);
+      if (!b) return;
+      lsSet(LS_ANIM_EASE, b.getAttribute('data-v'));
+      applyStatic();
+      uiScaleApply();
+      uiPaint();
+      cdVibrate(6);
+    });
+    el('ui-dur-minus').addEventListener('click', function () { bumpDur(-ANIM_DUR_STEP); });
+    el('ui-dur-plus').addEventListener('click', function () { bumpDur(ANIM_DUR_STEP); });
+
+    // —— 全屏倒计时专属：模糊秒数开关（aria-checked 是唯一事实来源）——
+    el('ui-blur').addEventListener('click', function () {
+      setFsBlur(!fsBlurOn());
+      uiPaintFs();
+      fsPokeBlur(); // 刚点过 → 从这一刻起重新算 5 秒
+      if (fsOpen) { fsBlurred = false; fsSt.key = null; fsTick(); } // 立刻看到效果（不走动画）
+      cdVibrate(6);
+    });
+
+    // —— 全屏倒计时专属：水位条色相滑块（自绘，pointer 拖动）——
+    (function bindHue() {
+      var track = el('ui-hue');
+      var dragging = false;
+      function hueAt(clientX) {
+        var r = track.getBoundingClientRect();
+        var p = r.width > 0 ? (clientX - r.left) / r.width : 0;
+        return Math.max(0, Math.min(1, p)) * 359;
+      }
+      function apply(clientX) {
+        setFsHue(hueAt(clientX));
+        fsApplyAccent();
+        uiPaintFs();
+      }
+      track.addEventListener('pointerdown', function (e) {
+        if (e.button && e.button !== 0) return;
+        e.preventDefault(); // 别让浏览器起滚动/选中
+        dragging = true;
+        try { track.setPointerCapture(e.pointerId); } catch (err) { /* 老浏览器忽略 */ }
+        apply(e.clientX);
+        cdVibrate(5);
+      });
+      track.addEventListener('pointermove', function (e) { if (dragging) apply(e.clientX); });
+      ['pointerup', 'pointercancel'].forEach(function (n) {
+        track.addEventListener(n, function () { dragging = false; });
+      });
+      // 键盘可达：左右方向键微调（辅助技术 / 外接键盘）
+      track.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowLeft' ? -2 : e.key === 'ArrowRight' ? 2 : 0;
+        if (!d) return;
+        setFsHue(fsHue() + d);
+        fsApplyAccent(); uiPaintFs();
+        e.preventDefault();
+      });
+      el('ui-accent-reset').addEventListener('click', function () {
+        setFsHue(FS_HUE_DEFAULT);
+        fsApplyAccent(); uiPaintFs(); cdVibrate(6);
+      });
+    })();
+
     bindSheetDrag(el('ui-sheet'), el('ui-scrim'), closeUi);
   }
 
   function uiLangRefresh() {
-    el('ui-title').textContent = T('手机端显示', 'Phone display');
-    el('ui-scale-label').textContent = T('时钟大小', 'Clock size');
+    uiPaintLabel();
+    uiPaintClock(); // chips 里的文案是动态生成的，语言变了要重建
     el('ui-close').setAttribute('aria-label', T('关闭', 'Close'));
     el('ui-minus').setAttribute('aria-label', T('缩小', 'Smaller'));
     el('ui-plus').setAttribute('aria-label', T('放大', 'Larger'));
     el('ui-reset').textContent = T('恢复默认', 'Reset');
     el('ui-new-cd').textContent = T('新建倒计时', 'New countdown');
-    el('ui-scale-hint').textContent = T(
-      '只影响这台手机，与电脑上的显示设置无关。',
-      'Only affects this phone — the desktop display setting is untouched.');
-    el('hint').textContent = T('长按时钟可调整字号', 'Long-press the clock to resize');
+    el('hint').textContent = T('双击时钟可调整字体与动画', 'Double-tap the clock for font & animation');
   }
 
   // 语言 / 配置变化时刷新文案
@@ -1940,14 +3140,18 @@
     else cdListVisibility((CDS.items || []).length);
     cdSyncFab();
     if (fsOpen) { fsId = null; fsTick(); } // 全屏里的名字也要跟着换语言
+    fsActsSig = ''; fsPaintActs();         // 右下角两个按钮的无障碍语义也跟着换（暂停/继续 · 取消/确认）
+    el('fs-pill').setAttribute('aria-label', T('返回时钟', 'Back to clock')); // 顶部时间胶囊的读屏标签
   }
 
   cdResetForm();
   bindCd();
+  bindFs();
   bindCdSound();
-  bindLongPress();
+  bindDoubleTaps();
   bindUi();
   cdLangRefresh();
+  fsApplyAccent(); // 水位条颜色是本机偏好，进页面就按它上色
   el('cd-sheet').setAttribute('aria-hidden', 'true');
   el('ui-sheet').setAttribute('aria-hidden', 'true');
   setInterval(tickCd, 1000);
