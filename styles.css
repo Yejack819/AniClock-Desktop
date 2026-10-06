@@ -181,6 +181,17 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: transparen
   opacity: 0.9;
 }
 
+/* ====== [v1.0.5.7] 倒计时内联显示 ====== */
+/* 等宽数字 + 补零固定位宽（见 countdown.js 的 formatClock）：
+   每秒刷新时宽度不变，避免反复触发窗口自适应（fw）导致窗口抖动 */
+#countdown-inline {
+  font-variant-numeric: tabular-nums;
+  transition: color 0.1s;
+}
+#countdown-inline.paused {
+  opacity: 0.6;
+}
+
 /* ====== [v1.0.5.5] 插件：信息栏插槽 ====== */
 /* 与日期 / 星期 / 时区同款：颜色继承（自动配色、文本颜色、闹钟闪烁都会带着它一起变），
    宽度会被 fw() 计入窗口自适应计算 */

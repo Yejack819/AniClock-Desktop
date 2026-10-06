@@ -20,12 +20,24 @@
   var seq = 0;
   var pending = {};         // id -> { resolve, reject }
   var events = {};          // 插件自己的事件总线（dc.on / dc.emit）
+  var cleanups = [];        // [v1.0.5.7] mount 回调返回的清理函数（dispose 时执行）
 
   // ---- 与宿主通信 ----
+  var TIMEOUT_MS = 15000; // [v1.0.5.7] RPC 超时：宿主方法丢失/卡死时别让插件永远挂着
   function call(method, args) {
     return new Promise(function (resolve, reject) {
       var id = ++seq;
-      pending[id] = { resolve: resolve, reject: reject };
+      var timer = setTimeout(function () {
+        delete pending[id];
+        // 超时按「无结果」收场（resolve undefined + 上报日志），不 reject：
+        // 插件里大量 fire-and-forget 调用没有 catch，reject 会变成未处理拒绝刷屏
+        try { fire('log', 'rpc-timeout:' + method); } catch (e) {}
+        resolve(undefined);
+      }, TIMEOUT_MS);
+      pending[id] = {
+        resolve: function (v) { clearTimeout(timer); resolve(v); },
+        reject: function (e) { clearTimeout(timer); reject(e); },
+      };
       parent.postMessage({ __dc: 1, kind: 'call', id: id, method: method, args: args || [] }, '*');
     });
   }
@@ -56,12 +68,25 @@
       bag.forEach(function (cb) { try { cb(d.payload); } catch (e) { reportErr(e); } });
       return;
     }
-    if (d.kind === 'dom') {
-      // 宿主执行完一次 DOM 指令后的结果（主要给 ui.get 的句柄用）
-      var p2 = pending[d.id];
-      if (!p2) return;
-      delete pending[d.id];
-      p2.resolve(d.value);
+    if (d.kind === 'dispose') {
+      // [v1.0.5.7] 宿主要卸载本插件：先执行 mount 回调返回的清理函数（落盘 / 释放
+      // 麦克风等），全部完成（或失败）后回执 'disposed'，宿主再移除 iframe。
+      var fns = cleanups;
+      cleanups = [];
+      var ack = function () {
+        try { parent.postMessage({ __dc: 1, kind: 'disposed' }, '*'); } catch (e) {}
+      };
+      if (!fns.length) { ack(); return; }
+      var left = fns.length;
+      var one = function () { left--; if (left <= 0) ack(); };
+      fns.forEach(function (fn) {
+        try {
+          var r = fn();
+          if (r && typeof r.then === 'function') r.then(one, one);
+          else one();
+        } catch (e) { one(); }
+      });
+      return;
     }
   });
 
@@ -131,8 +156,10 @@
           var key = 'dom:' + sel + ':' + type;
           if (!events[key]) {
             events[key] = [];
-            // 每个 (sel,type) 只在宿主注册一次转发
-            call('listen', [sel, type]).then(function (token) {
+            // 每个 (sel,type) 只在宿主注册一次转发。
+            // [v1.0.5.7] 走 dom 指令通道：宿主方法表里没有叫 'listen' 的方法，
+            // 直接 call('listen') 只会换来 unknown-method 被吞掉，事件永远注册不上。
+            domCall('listen', { sel: sel, type: type }).then(function (token) {
               events['__tok:' + key] = token;
             }).catch(function () {});
           }
@@ -171,6 +198,9 @@
       clock: {
         setInfoText: function (t) { return call('clock.setInfoText', [t]); },
         clearInfoText: function () { return call('clock.setInfoText', ['']); },
+        // [v1.0.5.7] 主动摘掉自己的信息栏插槽（infoStyle=none 一类）；
+        // 原来插件自己 document.body.remove() 删的是沙箱 body，宿主侧插槽仍然占位
+        removeInfoSlot: function () { return call('clock.removeInfoSlot', []); },
       },
 
       lightsOff: {
@@ -225,6 +255,9 @@
           events['host:layout'].push(cb);
         },
         getHostLang: function () { return call('ui.getHostLang', []); },
+        // [v1.0.5.7] 请求宿主重算信息栏可见性/窗口尺寸（替代跨 iframe 的
+        // window.dispatchEvent('dc-plugins-updated') —— 那在沙箱里发不到宿主）
+        notifyHost: function () { return call('ui.notifyHost', []); },
         onHostLangChanged: function (cb) {
           if (!events['host:lang']) {
             events['host:lang'] = [];
@@ -255,7 +288,8 @@
           var key = 'dom:' + sel + ':' + type;
           if (!events[key]) {
             events[key] = [];
-            call('listen', [sel, type]).catch(function () {});
+            // [v1.0.5.7] 与 ui.get().on 同一修复：listen 是 dom 指令，不是宿主方法
+            domCall('listen', { sel: sel, type: type }).catch(function () {});
           }
           events[key].push(cb);
           return true;
@@ -299,7 +333,12 @@
       // eslint-disable-next-line no-new-func
       new Function('dc', String(boot.code || ''))(d);
       mounts.forEach(function (fn) {
-        try { fn(document.body, d); } catch (e) { reportErr(e); }
+        try {
+          // [v1.0.5.7] 记录清理函数：宿主 dispose 时执行（原来被静默丢弃，
+          // 落盘 / 释放麦克风的语义在隔离路径整个丢失）
+          var c = fn(document.body, d);
+          if (typeof c === 'function') cleanups.push(c);
+        } catch (e) { reportErr(e); }
       });
       parent.postMessage({ __dc: 1, kind: 'ready' }, '*');
     } catch (e) {

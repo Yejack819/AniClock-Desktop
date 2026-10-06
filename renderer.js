@@ -5,8 +5,12 @@ const di=document.getElementById("date-inline");
 const ti=document.getElementById("tz-inline");
 const wi=document.getElementById("weekday-inline");
 const ai=document.getElementById("alarm-inline");
+const ci=document.getElementById("countdown-inline");
 const cl=document.getElementById("clock");
 let cfg={},cts="",cds="",cws="",ed=[],ti2=null,rdt=null,df=null,wf=null,ltk="",ocl=null;
+// [v1.0.5.7] 倒计时状态：主进程**只在列表变更时**推（不每秒推），剩余时间在这里本地倒扣。
+// 因为 nextTrigger/endAt 是真实系统时刻，手动校准偏移（cnow）不该影响它 —— 一律用 Date.now()。
+let cdState={items:[],showInInfoBar:true,ringingId:null};
 // Alarm state
 let alarmRingingId=null;
 let alarmFlashTimer=null;
@@ -17,6 +21,13 @@ let alarmOscillators=[];
 let alarmInlineTimer=null; // 3-second alternating timer
 let alarmInlineUseText1=true;
 let lastInlineType="";
+let lastInlineState=""; // [v1.0.5.7] 去重：主进程每秒广播一次状态，内容没变就不动 DOM/重排窗口
+let lastInlinePair="";  // [v1.0.5.7] 交替文案对：文案变了要重启交替定时器（旧闭包会一直显示过期文案）
+// [v1.0.5.7] 每位数字的待执行动画定时器。错峰延迟大 / 动画时长长时，上一次变化还没落定
+// 下一次就来了：旧定时器会中途把数字写回旧值（短暂回显）或与新一轮动画互相打架 —— 每位
+// 在排新定时器前必须先撤掉自己上一次的。
+let digitPending=[];
+function clearDigitPending(i){const p=digitPending[i];if(p){if(p.o)clearTimeout(p.o);if(p.n)clearTimeout(p.n);digitPending[i]=null;}}
 
 function gdf(l){try{return new Intl.DateTimeFormat(l==="zh"?"zh-CN":"en-US",{year:"numeric",month:"2-digit",day:"2-digit"});}catch(e){return new Intl.DateTimeFormat("zh-CN",{year:"numeric",month:"2-digit",day:"2-digit"});}}
 function fmt(d){if(!df)return"";const p=df.formatToParts(d),m={};p.forEach(x=>m[x.type]=x.value);return cfg.language==="zh"?m.year+"年"+m.month+"月"+m.day+"日":["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m.month,10)-1]+" "+m.day+", "+m.year;}
@@ -69,11 +80,11 @@ function applyAmpm(text){
 function syncAmpmNow(){const t=use12h()?ampmLabel(cnow().getHours()):"";lastAmpmText=t;applyAmpm(t);}
 function gz(d,o){const u=d.getUTCHours(),m=d.getUTCMinutes();const h24=(u+o+24)%24;const mm=String(m).padStart(2,"0");if(!use12h())return String(h24).padStart(2,"0")+":"+mm;return String(h24%12||12).padStart(2,"0")+":"+mm+" "+ampmLabel(h24);}
 function gwf(l){try{return new Intl.DateTimeFormat(l==="zh"?"zh-CN":"en-US",{weekday:"long"});}catch(e){return new Intl.DateTimeFormat("zh-CN",{weekday:"long"});}}
-function ri(now){if(cfg.showDate!==false){const s=fmt(now);if(s!==cds){di.textContent=s;cds=s;}di.style.display="";}else di.style.display="none";if(cfg.showWeekday!==false){const wd=wf.format(now);if(wd!==cws){wi.textContent=wd;cws=wd;}wi.style.display="";}else wi.style.display="none";const tz=(cfg.extraTimezones||[]).slice(0,2);if(tz.length){let k="";for(let j=0;j<tz.length;j++)k+=tz[j].label+","+tz[j].offset+","+gz(now,tz[j].offset)+"|";if(k!==ltk){ltk=k;ti.innerHTML="";for(let j=0;j<tz.length;j++){const e=document.createElement("span");e.style.marginLeft="8px";e.textContent=tz[j].label+" "+gz(now,tz[j].offset);ti.appendChild(e);}}ti.style.display="";}else ti.style.display="none";const hasDate=cfg.showDate!==false;const hasWeekday=cfg.showWeekday!==false;const hasTZ=tz.length>0;const hasAlarm=ai.style.display!=="none";const hasPlugin=!!ib.querySelector(".plugin-info-slot");ib.style.display=hasDate||hasWeekday||hasTZ||hasAlarm||hasPlugin?"":"none";}
+function ri(now){if(cfg.showDate!==false){const s=fmt(now);if(s!==cds){di.textContent=s;cds=s;}di.style.display="";}else di.style.display="none";if(cfg.showWeekday!==false){const wd=wf.format(now);if(wd!==cws){wi.textContent=wd;cws=wd;}wi.style.display="";}else wi.style.display="none";const tz=(cfg.extraTimezones||[]).slice(0,2);if(tz.length){let k="";for(let j=0;j<tz.length;j++)k+=tz[j].label+","+tz[j].offset+","+gz(now,tz[j].offset)+"|";if(k!==ltk){ltk=k;ti.innerHTML="";for(let j=0;j<tz.length;j++){const e=document.createElement("span");e.style.marginLeft="8px";e.textContent=tz[j].label+" "+gz(now,tz[j].offset);ti.appendChild(e);}}ti.style.display="";}else ti.style.display="none";renderCountdownChip();const hasDate=cfg.showDate!==false;const hasWeekday=cfg.showWeekday!==false;const hasTZ=tz.length>0;const hasAlarm=ai.style.display!=="none";const hasCd=!!ci&&ci.style.display!=="none";const hasPlugin=!!ib.querySelector(".plugin-info-slot");ib.style.display=hasDate||hasWeekday||hasTZ||hasAlarm||hasCd||hasPlugin?"":"none";}
 function gd(){const n=cnow();const h24=n.getHours();const hh=String(use12h()?(h24%12||12):h24).padStart(2,"0");const mm=String(n.getMinutes()).padStart(2,"0");const ss=String(n.getSeconds()).padStart(2,"0");return cfg.showSeconds!==false?{d:(hh+mm+ss).split(""),cc:2}:{d:(hh+mm).split(""),cc:1};}
-function bd(dg,cc){td.innerHTML="";ampmEl=null;let ci=0;for(let i=0;i<dg.length;i++){if(i>0&&i%2===0&&ci<cc){const e=document.createElement("span");e.className="colon";e.textContent=":";td.appendChild(e);ci++;}const g=document.createElement("span");g.className="digit-group";const c=document.createElement("span");c.className="digit-current";c.textContent=dg[i];g.appendChild(c);const n=document.createElement("span");n.className="digit-next";n.textContent=dg[i];g.appendChild(n);td.appendChild(g);}syncAmpmNow();}
+function bd(dg,cc){td.innerHTML="";ampmEl=null;digitPending=[];let ci=0;for(let i=0;i<dg.length;i++){if(i>0&&i%2===0&&ci<cc){const e=document.createElement("span");e.className="colon";e.textContent=":";td.appendChild(e);ci++;}const g=document.createElement("span");g.className="digit-group";const c=document.createElement("span");c.className="digit-current";c.textContent=dg[i];g.appendChild(c);const n=document.createElement("span");n.className="digit-next";n.textContent=dg[i];g.appendChild(n);td.appendChild(g);}syncAmpmNow();}
 function rs(c,n){c.style.transition=n.style.transition="none";c.classList.remove("animate-out");n.classList.remove("animate-in");c.style.transform=c.style.opacity=n.style.transform=n.style.opacity="";void c.offsetHeight;c.style.transition=n.style.transition="";}
-function uc(){const{d:nd,cc}=gd();const nts=nd.join("");const amp=use12h()?ampmLabel(cnow().getHours()):"";if(amp!==lastAmpmText){lastAmpmText=amp;applyAmpm(amp);requestAnimationFrame(()=>requestAnimationFrame(fw));}ri(cnow());const cg=gc();if(cg&&!alarmRingingId){const ck=cg.fg+"|"+cg.bg;if(ck!==ocl){td.style.color=cg.fg;td.style.backgroundColor=cg.bg;ib.style.color=cg.fg;ib.style.backgroundColor=cg.bg;ocl=ck;}}if(!cts||cts.length!==nd.length){bd(nd,cc);ed=nd.slice();cts=nts;return;}const sd=cfg.staggerDelay||0,rtl=cfg.staggerDirection==="rtl";if(cfg.animType==="none"){const gs=td.querySelectorAll(".digit-group");for(let i=0;i<nd.length;i++){if(ed[i]===nd[i])continue;const ce=gs[i]?.querySelector(".digit-current");if(!ce)continue;ed[i]=nd[i];if(sd>0){const _ce=ce,_d=nd[i];setTimeout(()=>{_ce.textContent=_d;},sd*(rtl?nd.length-1-i:i));}else ce.textContent=nd[i];}cts=nts;return;}for(let i=0;i<nd.length;i++){if(ed[i]===nd[i])continue;const g=td.querySelectorAll(".digit-group")[i];if(!g)continue;const ce=g.querySelector(".digit-current"),ne=g.querySelector(".digit-next");if(!ce||!ne)continue;ed[i]=nd[i];if(sd>0){const _ce=ce,_ne=ne,_d=nd[i],_ad=(cfg.animDuration||350);setTimeout(()=>{rs(_ce,_ne);_ne.textContent=_d;_ce.classList.add("animate-out");_ne.classList.add("animate-in");setTimeout(()=>{_ce.textContent=_d;rs(_ce,_ne);},_ad+30);},sd*(rtl?nd.length-1-i:i));}else{rs(ce,ne);ne.textContent=nd[i];ce.classList.add("animate-out");ne.classList.add("animate-in");const _ce=ce,_ne=ne,_d=nd[i];setTimeout(()=>{_ce.textContent=_d;rs(_ce,_ne);},(cfg.animDuration||350)+30);}}cts=nts;}
+function uc(){const{d:nd,cc}=gd();const nts=nd.join("");const amp=use12h()?ampmLabel(cnow().getHours()):"";if(amp!==lastAmpmText){lastAmpmText=amp;applyAmpm(amp);requestAnimationFrame(()=>requestAnimationFrame(fw));}ri(cnow());const cg=gc();if(cg&&!alarmRingingId){const ck=cg.fg+"|"+cg.bg;if(ck!==ocl){td.style.color=cg.fg;td.style.backgroundColor=cg.bg;ib.style.color=cg.fg;ib.style.backgroundColor=cg.bg;ocl=ck;}}if(!cts||cts.length!==nd.length){bd(nd,cc);ed=nd.slice();cts=nts;return;}const sd=cfg.staggerDelay||0,rtl=cfg.staggerDirection==="rtl";if(cfg.animType==="none"){const gs=td.querySelectorAll(".digit-group");for(let i=0;i<nd.length;i++){if(ed[i]===nd[i])continue;const ce=gs[i]?.querySelector(".digit-current");if(!ce)continue;ed[i]=nd[i];clearDigitPending(i);if(sd>0){const _ce=ce,_d=nd[i],_slot=i;const t=setTimeout(()=>{_ce.textContent=_d;},sd*(rtl?nd.length-1-i:i));digitPending[_slot]={o:t,n:null};}else ce.textContent=nd[i];}cts=nts;return;}for(let i=0;i<nd.length;i++){if(ed[i]===nd[i])continue;const g=td.querySelectorAll(".digit-group")[i];if(!g)continue;const ce=g.querySelector(".digit-current"),ne=g.querySelector(".digit-next");if(!ce||!ne)continue;ed[i]=nd[i];clearDigitPending(i);if(sd>0){const _ce=ce,_ne=ne,_d=nd[i],_ad=(cfg.animDuration||350),_slot=i;const outer=setTimeout(()=>{rs(_ce,_ne);_ne.textContent=_d;_ce.classList.add("animate-out");_ne.classList.add("animate-in");const inner=setTimeout(()=>{_ce.textContent=_d;rs(_ce,_ne);},_ad+30);if(digitPending[_slot])digitPending[_slot].n=inner;},sd*(rtl?nd.length-1-i:i));digitPending[_slot]={o:outer,n:null};}else{rs(ce,ne);ne.textContent=nd[i];ce.classList.add("animate-out");ne.classList.add("animate-in");const _ce=ce,_ne=ne,_d=nd[i],_slot=i;const t=setTimeout(()=>{_ce.textContent=_d;rs(_ce,_ne);},(cfg.animDuration||350)+30);digitPending[_slot]={o:t,n:null};}}cts=nts;}
 // [v1.0.5.4] 对齐秒边界的自调度 tick：每次按当前时间重算延迟，让 ms 级校准真正生效且抗漂移
 function scheduleTick(){if(ti2)clearTimeout(ti2);ti2=setTimeout(()=>{ti2=null;uc();scheduleTick();},1000-((Date.now()+calMs())%1000)+1);}
 function sc(){if(ti2){clearTimeout(ti2);ti2=null;}uc();scheduleTick();}function stc(){if(ti2){clearTimeout(ti2);ti2=null;}}
@@ -252,22 +263,32 @@ function dismissAlarm() {
 // ====== Alarm Display Update ======
 function updateAlarmInline(state) {
   if (!ai) return;
+  // [v1.0.5.7] 相同状态直接跳过：原来每秒一次的广播都会走一遍 ri() + 双 rAF fw()
+  // → 每秒一次 resize-window IPC，白白烧 CPU
+  const sig = JSON.stringify(state);
+  if (sig === lastInlineState) return;
+  lastInlineState = sig;
   if (!state || state.type === 'none') {
     ai.style.display = "none";
     ai.textContent = "";
     ai.className = "";
     if (alarmInlineTimer) { clearInterval(alarmInlineTimer); alarmInlineTimer = null; }
     lastInlineType = "";
+    lastInlinePair = "";
     return;
   }
   ai.style.display = "";
   const typeChanged = state.type !== lastInlineType;
   lastInlineType = state.type;
+  const pair = String(state.text || '') + '|' + String(state.text2 || '');
 
   if (state.type === 'ringing') {
     if (state.text2 && state.text) {
       // Alternating between alarm name and dismiss text
-      if (typeChanged) {
+      // [v1.0.5.7] 文案本身变了（比如换了一个正在响的闹钟）也要重启定时器，
+      // 否则旧闭包永远显示上一条文案
+      if (typeChanged || pair !== lastInlinePair) {
+        lastInlinePair = pair;
         if (alarmInlineTimer) clearInterval(alarmInlineTimer);
         alarmInlineUseText1 = true;
         ai.textContent = state.text; // start with alarm name
@@ -281,10 +302,12 @@ function updateAlarmInline(state) {
     } else {
       ai.textContent = state.text2 || state.text || (cfg.language === 'zh' ? '单击关闭闹钟' : 'Click to dismiss');
       ai.className = 'alarm-ringing';
+      lastInlinePair = pair;
     }
   } else if (state.type === 'retry') {
     if (state.text2 && state.text) {
-      if (typeChanged) {
+      if (typeChanged || pair !== lastInlinePair) {
+        lastInlinePair = pair;
         if (alarmInlineTimer) clearInterval(alarmInlineTimer);
         alarmInlineUseText1 = true;
         ai.textContent = state.text;
@@ -297,11 +320,13 @@ function updateAlarmInline(state) {
     } else {
       ai.textContent = state.text || '';
       ai.className = 'alarm-retry';
+      lastInlinePair = pair;
     }
   } else if (state.type === 'scheduled') {
     ai.textContent = state.text || '';
     ai.className = 'alarm-scheduled';
     if (alarmInlineTimer) { clearInterval(alarmInlineTimer); alarmInlineTimer = null; }
+    lastInlinePair = "";
   }
   // Update info-bar visibility
   ri(cnow());
@@ -316,6 +341,18 @@ async function init(){try{cfg=await window.electronAPI.getConfig();}catch(e){cfg
 window.electronAPI.onAlarmStateUpdate(state => {
   updateAlarmInline(state);
 });
+
+// [v1.0.5.7] 倒计时状态：主进程只在列表变更时推；这里只存下来，
+// 具体 chip 文案在每秒的 ri() 里按 Date.now() 本地倒扣算出来。
+window.electronAPI.onCountdownState(state => {
+  cdState = state || { items: [], showInInfoBar: true, ringingId: null };
+  requestAnimationFrame(() => requestAnimationFrame(fw));
+});
+window.electronAPI.countdownList().then(s => {
+  cdState = { items: (s && s.items) || [], showInInfoBar: cfg.countdownShowInInfoBar !== false, ringingId: null };
+  ri(cnow());
+  requestAnimationFrame(() => requestAnimationFrame(fw));
+}).catch(() => {});
 
 // Listen for alarm ringing
 window.electronAPI.onAlarmRinging(data => {
@@ -356,7 +393,10 @@ cl.addEventListener('click', () => {
   }
 });
 
-window.electronAPI.onConfigUpdated(nc=>{const lc=nc.language&&nc.language!==cfg.language;Object.assign(cfg,nc);if(lc){df=gdf(cfg.language);wf=gwf(cfg.language);cds="";cws="";}if(nc.passthrough!==undefined)sp(!!nc.passthrough);acf();cds="";ltk="";if(nc.showSeconds!==undefined||lc||nc.extraTimezones!==undefined)cts="";if(['timeOffsetMs','autoAdjustEnabled','autoAdjustIntervalSec','autoAdjustAmountMs','autoAdjustBaseMs','autoAdjustAnchor'].some(k=>nc[k]!==undefined))sc();uc();if(nc.fontSize!==undefined||nc.showSeconds!==undefined||nc.fontFamily!==undefined||nc.showDate!==undefined||nc.showWeekday!==undefined||nc.datePosition!==undefined||lc||nc.autoColor!==undefined||nc.color!==undefined||nc.bgColor!==undefined||nc.extraTimezones!==undefined||nc.language!==undefined){if(rdt)clearTimeout(rdt);rdt=setTimeout(()=>{rdt=null;requestAnimationFrame(()=>requestAnimationFrame(fw));},300);}});window.addEventListener("beforeunload",()=>{stc();stopAlarmSound();stopAlarmFlash();if(alarmInlineTimer)clearInterval(alarmInlineTimer);if(rdt)clearTimeout(rdt);});}init();
+window.electronAPI.onConfigUpdated(nc=>{const lc=nc.language&&nc.language!==cfg.language;Object.assign(cfg,nc);if(lc){df=gdf(cfg.language);wf=gwf(cfg.language);cds="";cws="";}
+// [v1.0.5.7] 响铃期间不恢复鼠标穿透：响铃入口刚把穿透关掉以便「单击关闭闹钟」，
+// 此时设置窗口的任何一次保存都会整份下发 config，把穿透原样打开、点击失效
+if(nc.passthrough!==undefined&&!alarmRingingId)sp(!!nc.passthrough);acf();cds="";ltk="";if(nc.showSeconds!==undefined||lc||nc.extraTimezones!==undefined)cts="";if(['timeOffsetMs','autoAdjustEnabled','autoAdjustIntervalSec','autoAdjustAmountMs','autoAdjustBaseMs','autoAdjustAnchor'].some(k=>nc[k]!==undefined))sc();uc();if(nc.fontSize!==undefined||nc.showSeconds!==undefined||nc.fontFamily!==undefined||nc.showDate!==undefined||nc.showWeekday!==undefined||nc.datePosition!==undefined||lc||nc.autoColor!==undefined||nc.color!==undefined||nc.bgColor!==undefined||nc.extraTimezones!==undefined||nc.language!==undefined){if(rdt)clearTimeout(rdt);rdt=setTimeout(()=>{rdt=null;requestAnimationFrame(()=>requestAnimationFrame(fw));},300);}});window.addEventListener("beforeunload",()=>{stc();stopAlarmSound();stopAlarmFlash();if(alarmInlineTimer)clearInterval(alarmInlineTimer);if(rdt)clearTimeout(rdt);});}init();
 
 // [v1.0.5.5] 插件改动（挂载/改文案）后：刷新信息栏可见性并按新宽度自适应窗口
 window.addEventListener('dc-plugins-updated', () => {
@@ -382,3 +422,55 @@ window.addEventListener('dc-plugins-updated', () => {
     }
   });
 })();
+
+// ====== [v1.0.5.7] 倒计时内联显示（信息栏 chip）======
+// 只显示「最近到期的那一个」；还有别的（含暂停的）时右侧带 +N。
+// 时间一律用 Date.now() 算：nextTrigger/endAt 是真实系统时刻，手动校准（timeOffsetMs）
+// 只该影响时钟显示，不该影响倒计时 —— 否则「校准过 3 分钟」的机器上倒计时会提前/延后 3 分钟。
+function cdRemain(item, nowMs) {
+  if (!item) return 0;
+  if (item.state === "paused") return Math.max(0, Number(item.remainingMs) || 0);
+  const t = item.endAt ? new Date(item.endAt).getTime() : NaN;
+  if (!isFinite(t)) return Math.max(0, Number(item.remainingMs) || 0);
+  return Math.max(0, t - nowMs);
+}
+// 与 countdown.js 的 formatClock 同口径：向上取整到秒 + 补零保持等宽
+function cdFmt(ms) {
+  const s = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p = n => (n < 10 ? "0" : "") + n;
+  return h > 0 ? p(h) + ":" + p(m) + ":" + p(ss) : p(m) + ":" + p(ss);
+}
+function cdTextHide() {
+  if (!ci) return;
+  if (ci.textContent !== "") ci.textContent = "";
+  if (ci.style.display !== "none") ci.style.display = "none";
+  if (ci.className !== "") ci.className = "";
+}
+function renderCountdownChip() {
+  if (!ci) return;
+  // 开关的单一事实来源是配置（设置界面能立刻改到；cdState 只是数据通道）
+  if (cfg.countdownShowInInfoBar === false) { cdTextHide(); return; }
+  const items = (cdState && Array.isArray(cdState.items)) ? cdState.items : [];
+  if (!items.length) { cdTextHide(); return; }
+  // 正在响的那一刻交给 alarm-inline（名称 ↔ 单击关闭），chip 让位
+  if (cdState.ringingId && items.some(x => x && x.id === cdState.ringingId)) { cdTextHide(); return; }
+  const nowMs = Date.now();
+  let runItem = null, runLeft = Infinity, pauseItem = null, pauseLeft = Infinity;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (!it) continue;
+    const left = cdRemain(it, nowMs);
+    if (it.state === "paused") { if (left < pauseLeft) { pauseLeft = left; pauseItem = it; } }
+    else if (left < runLeft) { runLeft = left; runItem = it; }
+  }
+  const chosen = runItem || pauseItem;
+  if (!chosen) { cdTextHide(); return; }
+  const paused = !runItem;
+  const extra = items.length - 1;
+  const text = (paused ? "⏸ " : "⏳ ") + cdFmt(paused ? pauseLeft : runLeft) + (extra > 0 ? " +" + extra : "");
+  if (ci.textContent !== text) ci.textContent = text;
+  const cls = "countdown-chip" + (paused ? " paused" : "");
+  if (ci.className !== cls) ci.className = cls;
+  if (ci.style.display !== "") ci.style.display = "";
+}

@@ -297,6 +297,84 @@ select { padding: 6px 10px; border-radius: 6px; border: 1px solid #555; backgrou
   background: rgba(108, 140, 255, 0.05);
 }
 
+/* ====== [v1.0.5.7] 倒计时列表 ====== */
+/* 沿用 .alarm-item 的骨架（卡片/信息列/操作按钮），这里只补倒计时自己的东西：
+   进度条、状态徽章、暂停/继续/再来一次按钮配色 */
+#countdown-list { margin-bottom: 8px; }
+/* HH:MM:SS 比闹钟的 HH:MM 宽一格，min-width 跟着放大，避免秒数跳动时行内位移 */
+#countdown-list .alarm-item .alarm-time { min-width: 70px; }
+
+.alarm-item .cd-progress {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.10);
+  overflow: hidden;
+}
+.alarm-item .cd-progress > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #6C8CFF, #9C7BFF);
+  transition: width 0.5s linear;
+}
+.alarm-item.is-paused .cd-progress > i { background: linear-gradient(90deg, #777, #999); }
+
+.alarm-item .cd-badge {
+  font-size: calc(var(--sfz) - 4px);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(108, 140, 255, 0.18);
+  color: #9FB4FF;
+  margin-left: 6px;
+}
+.alarm-item .cd-badge.paused { background: rgba(255, 255, 255, 0.10); color: #aaa; }
+.alarm-item .cd-badge.ringing { background: rgba(255, 102, 102, 0.18); color: #ff8a8a; }
+
+.alarm-item .alarm-actions .cd-pause-btn { color: #FFC86C; }
+.alarm-item .alarm-actions .cd-pause-btn:hover { background: rgba(255, 200, 108, 0.15); }
+.alarm-item .alarm-actions .cd-resume-btn { color: #6CD89A; }
+.alarm-item .alarm-actions .cd-resume-btn:hover { background: rgba(108, 216, 154, 0.15); }
+.alarm-item .alarm-actions .cd-restart-btn { color: #9C7BFF; }
+.alarm-item .alarm-actions .cd-restart-btn:hover { background: rgba(156, 123, 255, 0.15); }
+
+#countdown-add-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 2px dashed #555;
+  background: transparent;
+  color: #999;
+  font-size: var(--sfz);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+#countdown-add-btn:hover {
+  border-color: #9C7BFF;
+  color: #9C7BFF;
+  background: rgba(156, 123, 255, 0.05);
+}
+#countdown-empty {
+  color: #777;
+  font-size: var(--sfz);
+  padding: 12px 0;
+}
+
+/* [v1.0.5.7] 倒计时「新建时的默认时长」：数字输入 + 单位后缀，横排贴右 */
+.setting-row:has(> .num-input-wrap) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.num-input-wrap { display: flex; align-items: center; gap: 6px; }
+.num-input-wrap input[type="number"] {
+  width: 76px; padding: 4px 8px; border-radius: 6px; border: 1px solid #555;
+  background: #3a3a4a; color: #eee; font-size: var(--sfz); outline: none; text-align: center;
+}
+.num-input-wrap input[type="number"]:focus { border-color: #6C8CFF; }
+.num-input-wrap .num-unit { font-size: calc(var(--sfz) - 1px); color: #888; }
+
 /* ====== 闹钟高级设置 ====== */
 .alarm-advanced {
   margin-top: 16px;

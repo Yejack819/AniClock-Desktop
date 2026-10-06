@@ -130,6 +130,369 @@
     box-shadow: 0 0 8px rgba(58,197,105,.85); transition: background .3s ease, box-shadow .3s ease;
   }
   .dot.off { background: #e0685a; box-shadow: 0 0 8px rgba(224,104,90,.85); }
+
+  /* ====== [v1.0.5.7] 倒计时：底部胶囊 + 上拉抽屉 ====== */
+  /* 手机端全部按触控设计：可点目标 ≥44px、不吃 300ms 延迟、下拉不穿透到页面、
+     键盘弹出时抽屉可用 safe-area 顶开。颜色沿用页面的深色玻璃 / 昼间两套。 */
+  :root {
+    --glass: rgba(255,255,255,.075);
+    --glass-2: rgba(255,255,255,.14);
+    --sheet: rgba(15,17,24,.94);
+    --line: rgba(255,255,255,.14);
+    --ink: #fff;
+    --ink-dim: rgba(255,255,255,.55);
+    --accent: #8f7bff;
+    --danger: #ff7a7a;
+  }
+  body.is-day {
+    --glass: rgba(0,0,0,.045);
+    --glass-2: rgba(0,0,0,.08);
+    --sheet: rgba(250,251,253,.96);
+    --line: rgba(0,0,0,.12);
+    --ink: #111;
+    --ink-dim: rgba(0,0,0,.55);
+    --accent: #6a55e0;
+    --danger: #d64545;
+  }
+  #cd-fab {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(30px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 7px;
+    min-height: 44px; padding: 0 18px;
+    border-radius: 999px; border: 1px solid var(--line);
+    background: var(--glass); color: var(--ink);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: 14px; font-weight: 500; letter-spacing: .2px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer; touch-action: manipulation;
+    transition: transform .18s cubic-bezier(.34,1.4,.64,1), background .2s ease,
+                opacity .26s ease;
+  }
+  #cd-fab:active { transform: translateX(-50%) scale(.94); }
+  #cd-fab.has { background: var(--glass-2); }
+  #cd-fab.paused { opacity: .75; }
+  #cd-fab .cd-fab-num { font-size: 15px; font-weight: 600; }
+  /* 空态（一条倒计时都没有）：胶囊 = 新建入口，去掉漏斗图标免得跟「＋」打架 */
+  #cd-fab.empty > span[aria-hidden="true"] { display: none; }
+  #cd-fab .cd-fab-empty { font-size: 14px; font-weight: 600; }
+  #cd-fab .cd-fab-more { font-size: 12px; color: var(--ink-dim); }
+  /* 3 秒没操作 → 自动淡出；屏幕上任何一次操作都会立刻唤回来 */
+  #cd-fab.idle {
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateX(-50%) translateY(140%) scale(.96);
+    transition: opacity .3s ease, visibility .3s, transform .34s cubic-bezier(.4,0,.2,1);
+  }
+
+  #cd-scrim, #ui-scrim {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(0,0,0,.45); opacity: 0; pointer-events: none;
+    transition: opacity .26s ease;
+  }
+  #cd-scrim.show, #ui-scrim.show { opacity: 1; pointer-events: auto; }
+
+  #cd-sheet, #ui-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
+    max-height: 88vh; display: flex; flex-direction: column;
+    background: var(--sheet); color: var(--ink);
+    border-radius: 22px 22px 0 0;
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+    transform: translateY(102%);
+    transition: transform .32s cubic-bezier(.32,1.02,.4,1);
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior: contain;
+  }
+  #cd-sheet.show, #ui-sheet.show { transform: translateY(0); }
+  /* 手机端显示面板：比倒计时抽屉矮得多，一屏就够 */
+  #ui-sheet { max-height: 70vh; }
+  #ui-sheet .cd-body { padding: 4px 16px calc(16px + env(safe-area-inset-bottom)); }
+
+  .ui-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 6px 0 2px;
+  }
+  .ui-row-label { font-size: 14px; font-weight: 500; }
+  .ui-stepper { display: flex; align-items: center; gap: 6px; }
+  .ui-stepper button {
+    width: 46px; min-height: 46px; border-radius: 13px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+    font-size: 20px; line-height: 1; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+  }
+  .ui-stepper button:active { background: var(--glass-2); transform: scale(.94); }
+  .ui-stepper button[disabled] { opacity: .35; }
+  .ui-stepper .ui-val {
+    min-width: 62px; text-align: center; font-size: 16px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-scale-bar {
+    display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  }
+  .ui-scale-bar .ui-track {
+    flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden;
+  }
+  .ui-scale-bar .ui-fill { height: 100%; background: var(--accent); transition: width .16s ease; }
+  .ui-hint { font-size: 12px; color: var(--ink-dim); margin-top: 10px; line-height: 1.5; }
+  .ui-acts { display: flex; gap: 10px; margin-top: 16px; }
+  .ui-acts button {
+    flex: 1; min-height: 48px; border-radius: 14px; cursor: pointer;
+    font-size: 15px; font-weight: 500; touch-action: manipulation;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+  }
+  .ui-acts button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ui-acts button:active { transform: scale(.97); }
+  .ui-acts button[hidden] { display: none !important; }
+
+  /* 首次进页面的一次性提示（长按的发现性靠它） */
+  #hint {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(54px + env(safe-area-inset-bottom));
+    z-index: 29; max-width: 88vw;
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--glass-2); color: var(--ink);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: 12px; white-space: nowrap;
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  #hint.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #hint[hidden] { display: none !important; }
+  .cd-grab {
+    flex: 0 0 auto; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--line); margin: 9px auto 2px;
+  }
+  .cd-head {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px 6px;
+  }
+  .cd-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .cd-icon-btn {
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border: none; background: none; color: var(--ink-dim);
+    font-size: 18px; border-radius: 12px; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .cd-body {
+    flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 2px 16px 18px;
+  }
+  .cd-empty { color: var(--ink-dim); font-size: 13px; padding: 10px 2px 14px; text-align: center; }
+
+  /* ---- 倒计时卡片 ---- */
+  .cd-card {
+    border: 1px solid var(--line); border-radius: 16px;
+    background: var(--glass); padding: 12px 13px; margin-bottom: 10px;
+    transition: border-color .2s ease, transform .16s cubic-bezier(.34,1.4,.64,1);
+  }
+  .cd-card:active { transform: scale(.985); }
+  .cd-card.ringing { border-color: var(--danger); }
+  .cd-card .cd-row1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cd-card .cd-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cd-card .cd-edit-btn { width: 40px; height: 40px; margin: -8px -6px -8px 0; border-radius: 10px; font-size: 15px; flex: 0 0 auto; }
+  .cd-card .cd-state {
+    flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--glass-2); color: var(--ink-dim);
+  }
+  .cd-card .cd-state.ringing { background: rgba(255,122,122,.2); color: var(--danger); }
+  .cd-card .cd-time {
+    font-size: 30px; font-weight: 600; line-height: 1.15; margin: 2px 0 6px;
+    font-variant-numeric: tabular-nums; letter-spacing: .5px;
+  }
+  .cd-card.paused .cd-time { opacity: .55; }
+  .cd-bar { height: 4px; border-radius: 2px; background: var(--glass-2); overflow: hidden; }
+  .cd-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width .5s linear; }
+  .cd-card.paused .cd-bar > i { background: var(--ink-dim); }
+  .cd-card .cd-acts { display: flex; gap: 8px; margin-top: 10px; }
+  .cd-card .cd-acts button {
+    flex: 1; min-height: 44px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass-2); color: var(--ink);
+    font-size: 13px; touch-action: manipulation;
+    transition: background .15s ease, color .15s ease;
+  }
+  .cd-card .cd-acts button:active { transform: scale(.96); }
+  .cd-card .cd-acts .danger { color: var(--danger); }
+  .cd-card .cd-acts .danger.armed { background: rgba(255,122,122,.22); border-color: var(--danger); }
+
+  /* ---- 表单 ---- */
+  .cd-form { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+  .cd-form-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .cd-input {
+    width: 100%; min-height: 46px; padding: 0 14px; font-size: 15px;
+    border-radius: 12px; border: 1px solid var(--line);
+    background: var(--glass); color: var(--ink); outline: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  .cd-input:focus { border-color: var(--accent); }
+  .cd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+  .cd-chips button {
+    min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+    font-size: 13px; touch-action: manipulation;
+  }
+  .cd-chips button.active { border-color: var(--accent); background: var(--glass-2); color: var(--ink); }
+  .cd-chips button:active { transform: scale(.95); }
+  .cd-units { display: flex; gap: 8px; }
+  .cd-unit { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .cd-unit-val { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cd-unit-btns { display: flex; gap: 6px; width: 100%; }
+  .cd-unit-btns button {
+    flex: 1; min-height: 44px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+    font-size: 18px; line-height: 1; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+  }
+  .cd-unit-btns button:active { background: var(--glass-2); transform: scale(.94); }
+  .cd-unit-label { font-size: 11px; color: var(--ink-dim); }
+  .cd-total { text-align: center; font-size: 12px; color: var(--ink-dim); margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .cd-total.warn { color: var(--danger); }
+  .cd-form-acts { display: flex; gap: 10px; margin-top: 14px; }
+  .cd-form-acts button {
+    flex: 1; min-height: 48px; border-radius: 14px; cursor: pointer;
+    font-size: 15px; font-weight: 500; touch-action: manipulation;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+  }
+  .cd-form-acts button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .cd-form-acts button:active { transform: scale(.97); }
+  .cd-form-acts button[disabled] { opacity: .5; }
+  .cd-err { color: var(--danger); font-size: 12px; min-height: 16px; margin-top: 8px; }
+
+  /* ---- 提示音设置（存在手机本地，与桌面端完全独立）---- */
+  .cd-head-acts { display: flex; align-items: center; gap: 4px; }
+  .cd-sound-kind {
+    min-height: 44px; padding: 0 12px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--glass); color: var(--ink);
+    font-size: 12px; font-weight: 500; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none;
+  }
+  .cd-sound-kind:active { transform: scale(.95); }
+  .cd-sound-kind.off { opacity: .45; }
+  .cd-sound-kind.playing { border-color: var(--accent); }
+  #cd-sound-btn { font-size: 17px; }
+  #cd-sound-btn.off { opacity: .5; }
+
+  /* ---- 到点提醒条：给「响一小段 + 持续震动」一个看得见的落点 ---- */
+  #cd-alert {
+    position: fixed; z-index: 60;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px; right: 12px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 8px 8px 16px; border-radius: 16px;
+    background: var(--sheet); border: 1px solid var(--danger);
+    box-shadow: 0 12px 34px rgba(0,0,0,.4);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    transform: translateY(-160%); opacity: 0;
+    transition: transform .28s cubic-bezier(.22,.8,.3,1), opacity .22s ease;
+    pointer-events: none;
+  }
+  body.is-day #cd-alert { box-shadow: 0 12px 30px rgba(0,0,0,.14); }
+  #cd-alert.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  #cd-alert.hidden { display: none; }
+  #cd-alert .cd-alert-icon { flex: 0 0 auto; font-size: 19px; }
+  #cd-alert .cd-alert-txt { flex: 1 1 auto; min-width: 0; }
+  #cd-alert .cd-alert-txt b {
+    display: block; font-size: 14px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #cd-alert .cd-alert-txt span { display: block; font-size: 12px; color: var(--ink-dim); margin-top: 1px; }
+  #cd-alert button {
+    flex: 0 0 auto; min-height: 44px; padding: 0 16px; border-radius: 12px; cursor: pointer;
+    border: none; background: var(--accent); color: #fff;
+    font-size: 14px; font-weight: 500; touch-action: manipulation;
+  }
+  #cd-alert button:active { transform: scale(.96); }
+
+  #cd-fab.hidden-fab { display: none; }
+  /* 抓手 / 标题栏用于下滑关闭，必须吃掉浏览器的滚动与回弹手势；内容区照常滚动 */
+  #cd-grab, #cd-sheet .cd-head, .ui-grab, #ui-sheet .cd-head { touch-action: none; }
+  /* hidden 属性兜底（这里几条规则声明了 flex，会盖掉 UA 的 [hidden]{display:none}） */
+  #cd-form[hidden], #cd-empty[hidden], #cd-readonly[hidden] { display: none !important; }
+
+  /* ====== [v1.0.5.7] 全屏倒计时（仅手机端）======
+     左右两半：左边橙色、右边白/黑，橙色宽度 = 剩余比例（LTR 铺开）；
+     中间大字显示剩余时间，底部再给一个显示「当前时间」的胶囊（点它回时钟）。
+     z-index 40：盖住时钟与倒计时胶囊，但仍低于到点提醒条（60）。 */
+  #fs-view {
+    position: fixed; inset: 0; z-index: 40;
+    background: var(--page); color: #fff;
+    overflow: hidden; touch-action: manipulation;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .22s ease, visibility .22s;
+  }
+  body.is-day #fs-view { color: #14161c; }
+  #fs-view.show { opacity: 1; visibility: visible; pointer-events: auto; }
+
+  /* 橙色那一半：宽度由 JS 每秒推进一次，transition 线性 → 像水位在退。
+     夜间用偏深的橙（白字才压得住），日间用亮橙（深字对比更足）。 */
+  #fs-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: linear-gradient(90deg, #ea580c, #f97316);
+    transition: width 1s linear;
+  }
+  body.is-day #fs-fill { background: linear-gradient(90deg, #fb923c, #fdba74); }
+  #fs-fill.snap { transition: none; } /* 打开 / 切换对象时直接就位，别从 0 长出来 */
+
+  .fs-stage {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 0 16px; text-align: center;
+    pointer-events: none; /* 别挡住底部胶囊的点击 */
+  }
+  #fs-time {
+    font-size: clamp(56px, 15vw, 170px);
+    font-weight: 700; line-height: 1; letter-spacing: .01em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    text-shadow: 0 2px 20px rgba(0,0,0,.32), 0 1px 2px rgba(0,0,0,.22);
+  }
+  #fs-time.long { font-size: clamp(44px, 11.5vw, 132px); } /* 带小时（h:mm:ss）时收一档 */
+  body.is-day #fs-time { text-shadow: 0 2px 18px rgba(255,255,255,.55); }
+  #fs-time .fs-d { display: inline-block; }
+  #fs-time .fs-d.flip { animation: fsFlip .34s cubic-bezier(.2,.9,.3,1); }
+  #fs-time .fs-colon { display: inline-block; opacity: .7; }
+  @keyframes fsFlip {
+    from { transform: translateY(-.38em); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+  }
+
+  #fs-name {
+    font-size: 15px; font-weight: 500; letter-spacing: .3px; opacity: .82;
+    max-width: 84vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  body.is-day #fs-name { opacity: .66; }
+
+  /* 全屏里显示「当前时间」的胶囊：点一下回时钟。没有动画（跟随桌面设置决定带不带秒）。 */
+  #fs-pill {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(30px + env(safe-area-inset-bottom));
+    display: flex; align-items: center;
+    min-height: 44px; padding: 0 18px;
+    border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(10,12,17,.55); color: #fff;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
+    cursor: pointer; touch-action: manipulation;
+    transition: transform .18s cubic-bezier(.34,1.4,.64,1), opacity .26s ease;
+  }
+  body.is-day #fs-pill {
+    background: rgba(255,255,255,.8); color: #14161c; border-color: rgba(0,0,0,.12);
+  }
+  #fs-pill:active { transform: translateX(-50%) scale(.94); }
+  /* 全屏里这颗时钟胶囊同样 3 秒没操作就淡出（全屏是「看大字」的场景，别长期挡着）；
+     屏幕上任何一次操作立刻唤回来。规则与底部倒计时胶囊一致，只是作用对象不同。 */
+  #fs-pill.idle {
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateX(-50%) translateY(140%) scale(.96);
+    transition: opacity .3s ease, visibility .3s, transform .34s cubic-bezier(.4,0,.2,1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #cd-sheet, #cd-scrim, #ui-sheet, #ui-scrim, #hint, #cd-fab, #cd-alert, #fs-view, #fs-fill,
+    #fs-pill, #fs-time .fs-d,
+    .cd-card, .cd-card .cd-acts button,
+    .cd-chips button, .cd-unit-btns button, .cd-form-acts button,
+    .ui-stepper button, .ui-acts button { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -140,6 +503,122 @@
 <div id="ampm"></div>
 <div id="foot"><span id="dot" class="dot off"></span><span id="status">连接中…</span></div>
 
+<!-- ====== [v1.0.5.7] 倒计时：底部胶囊入口 + 上拉抽屉（触控优先，全部自包含） ====== -->
+<button id="cd-fab" class="hidden-fab" type="button" aria-label="倒计时" aria-haspopup="dialog">
+  <span aria-hidden="true">⏳</span><span id="cd-fab-text">倒计时</span>
+</button>
+
+<!-- 长按的发现性：首次进页面提示一次，8 秒后自己消失 -->
+<div id="hint" hidden>长按时钟可调整字号</div>
+
+<div id="ui-scrim"></div>
+
+<!-- 长按时钟弹出的面板：手机端自己的显示设置 + 倒计时入口 -->
+<!-- ⚠️ 没有倒计时时胶囊会完全隐藏，所以「新建倒计时」必须在这里留一个入口 -->
+<section id="ui-sheet" role="dialog" aria-modal="true" aria-labelledby="ui-title">
+  <div class="cd-grab" aria-hidden="true"></div>
+  <div class="cd-head">
+    <h2 id="ui-title">手机端显示</h2>
+    <button class="cd-icon-btn" id="ui-close" type="button" aria-label="关闭">✕</button>
+  </div>
+  <div class="cd-body">
+    <div class="ui-row">
+      <span class="ui-row-label" id="ui-scale-label">时钟大小</span>
+      <div class="ui-stepper">
+        <button type="button" id="ui-minus" aria-label="缩小">−</button>
+        <span class="ui-val" id="ui-scale-val">100%</span>
+        <button type="button" id="ui-plus" aria-label="放大">+</button>
+      </div>
+    </div>
+    <div class="ui-scale-bar"><div class="ui-track"><div class="ui-fill" id="ui-fill"></div></div></div>
+    <div class="ui-hint" id="ui-scale-hint">只影响这台手机，与电脑上的显示设置无关。</div>
+    <div class="ui-acts">
+      <button type="button" id="ui-reset">恢复默认</button>
+      <button type="button" class="primary" id="ui-new-cd">新建倒计时</button>
+    </div>
+  </div>
+</section>
+
+<div id="cd-scrim"></div>
+
+<!-- ====== [v1.0.5.7] 全屏倒计时（仅手机端）：单击胶囊进入，点底部时钟胶囊返回 ====== -->
+<section id="fs-view" role="dialog" aria-modal="true" aria-labelledby="fs-name" aria-hidden="true">
+  <div id="fs-fill" aria-hidden="true"></div>
+  <div class="fs-stage">
+    <div id="fs-time">00:00</div>
+    <div id="fs-name">倒计时</div>
+  </div>
+  <button id="fs-pill" type="button" aria-label="返回时钟">
+    <span id="fs-pill-time">00:00</span>
+  </button>
+</section>
+
+<!-- 到点提醒条：声音只响一小段，震动持续到用户处理（或 90 秒后自动收起） -->
+<div id="cd-alert" class="hidden" role="alert" aria-live="assertive">
+  <span class="cd-alert-icon" aria-hidden="true">⏰</span>
+  <div class="cd-alert-txt">
+    <b id="cd-alert-name">倒计时</b>
+    <span id="cd-alert-sub">时间到了</span>
+  </div>
+  <button id="cd-alert-stop" type="button">知道了</button>
+</div>
+
+<section id="cd-sheet" role="dialog" aria-modal="true" aria-labelledby="cd-title">
+  <div class="cd-grab" id="cd-grab" aria-hidden="true"></div>
+  <div class="cd-head">
+    <h2 id="cd-title">倒计时</h2>
+    <div class="cd-head-acts">
+      <button class="cd-sound-kind" id="cd-sound-kind" type="button" aria-label="提示音音色">beep</button>
+      <button class="cd-icon-btn" id="cd-sound-btn" type="button" aria-pressed="true" aria-label="提示音">🔔</button>
+      <button class="cd-icon-btn" id="cd-close" type="button" aria-label="关闭">✕</button>
+    </div>
+  </div>
+  <div class="cd-body" id="cd-body">
+    <div id="cd-list"></div>
+    <div class="cd-empty" id="cd-empty" hidden></div>
+    <div class="cd-empty" id="cd-readonly" hidden></div>
+
+    <form class="cd-form" id="cd-form" autocomplete="off" novalidate>
+      <div class="cd-form-title" id="cd-form-title">新建倒计时</div>
+      <input class="cd-input" id="cd-name" type="text" maxlength="40" placeholder="名称（可选）"
+             aria-label="倒计时名称" enterkeyhint="done">
+      <div class="cd-chips" id="cd-chips"></div>
+      <div class="cd-units">
+        <div class="cd-unit">
+          <div class="cd-unit-val" id="cd-unit-h">0</div>
+          <div class="cd-unit-btns">
+            <button type="button" data-unit="h" data-delta="-1" aria-label="小时减一">−</button>
+            <button type="button" data-unit="h" data-delta="1" aria-label="小时加一">+</button>
+          </div>
+          <div class="cd-unit-label">时</div>
+        </div>
+        <div class="cd-unit">
+          <div class="cd-unit-val" id="cd-unit-m">5</div>
+          <div class="cd-unit-btns">
+            <button type="button" data-unit="m" data-delta="-1" aria-label="分钟减一">−</button>
+            <button type="button" data-unit="m" data-delta="1" aria-label="分钟加一">+</button>
+          </div>
+          <div class="cd-unit-label">分</div>
+        </div>
+        <div class="cd-unit">
+          <div class="cd-unit-val" id="cd-unit-s">0</div>
+          <div class="cd-unit-btns">
+            <button type="button" data-unit="s" data-delta="-1" aria-label="秒减一">−</button>
+            <button type="button" data-unit="s" data-delta="1" aria-label="秒加一">+</button>
+          </div>
+          <div class="cd-unit-label">秒</div>
+        </div>
+      </div>
+      <div class="cd-total" id="cd-total"></div>
+      <div class="cd-err" id="cd-err" role="alert"></div>
+      <div class="cd-form-acts">
+        <button type="button" id="cd-edit-cancel" hidden>取消编辑</button>
+        <button type="submit" class="primary" id="cd-submit">开始</button>
+      </div>
+    </form>
+  </div>
+</section>
+
 <script>
 (function () {
   'use strict';
@@ -147,6 +626,22 @@
   // 与主进程约定的路径；访问码直接取自地址栏，页面不拼任何外部地址
   var API_TAIL = '/api/state';
   var POLL_MS = 15000;
+
+  // [v1.0.5.7] 页面自愈：宿主在发出这份 HTML 时，会把页面文件的 mtime+size 填进下面这个占位符；
+  // /api/state 也带同一个值。两者一对不上，说明「手机上跑的是旧页面」（页面在 app 重启/改版前
+  // 就打开了，已加载的旧脚本不会自己更新）→ 立刻自动重载，免得又出现「改了不生效」的假 bug。
+  // 直接双击打开文件（file://）时占位符不会被替换 → 恒等，永不触发。
+  var PAGE_BUILD = '__DC_PAGE_BUILD__';
+  var pageReloaded = false;
+  // 底部胶囊：平时可见，3 秒没动静自动淡出，屏幕上再有任何操作立刻回来
+  var FAB_IDLE_MS = 3000;
+  var FAB_LONG_MS = 500; // 长按胶囊 = 打开抽屉（单击 = 进全屏）
+
+  // 手机端本机偏好：只存在这台设备的浏览器里，与宿主配置 / 桌面端完全无关
+  var LS_SCALE = 'dc.clockScale';   // 时钟字号倍率（百分比整数）
+  var LS_HINT = 'dc.hintSeen';      // 「长按可调字号」提示是否已展示过
+  var SCALE_MIN = 60, SCALE_MAX = 150, SCALE_STEP = 10;
+  var LONG_PRESS_MS = 520;
 
   // 拿不到快照时的兜底配置：保证页面一打开就有钟走，而不是空白
   var FALLBACK = {
@@ -157,7 +652,8 @@
     animType: 'flip', animFlipDir: 'up', animScaleDir: 'shrink', animDuration: 350,
     staggerDelay: 0, staggerDirection: 'ltr',
     timeOffsetMs: 0, autoAdjustEnabled: false, autoAdjustIntervalSec: 3600,
-    autoAdjustAmountMs: 0, autoAdjustBaseMs: 0, autoAdjustAnchor: 0
+    autoAdjustAmountMs: 0, autoAdjustBaseMs: 0, autoAdjustAnchor: 0,
+    countdownDefaultMinutes: 5
   };
 
   var CFG = FALLBACK;
@@ -179,6 +675,12 @@
     var seg = location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '';
     return (seg ? '/' + seg : '') + API_TAIL;
   }
+  // 同源 API 基址（带访问码前缀）。倒计时读写都走这里，永远不拼外部主机。
+  function apiBase() {
+    var seg = location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '';
+    return seg ? '/' + seg : '';
+  }
+  function apiPath(tail) { return apiBase() + '/api/' + tail; }
 
   // ====== 时间：与 renderer.js 同源（手动校准 + 定时自动校准的阶梯累积） ======
   function use12() {
@@ -331,21 +833,47 @@
     if (!text) { node.className = ''; node.textContent = ''; return; }
     node.textContent = text;
     node.className = 'show ' + corner;
-    node.style.fontSize = Math.max(11, Math.min(30, Math.round(curPx * 0.18))) + 'px';
+    node.style.fontSize = ampmFontPx() + 'px';
   }
 
+  // [v1.0.5.7] 角标字号按**当前**字号算：原来只在文案变化时算一次，且初始化时
+  // 用的还是 fit() 探针阶段的旧值，此后窗口缩放再也不更新
   var curPx = 120;
+  function ampmFontPx() {
+    return Math.max(11, Math.min(30, Math.round(curPx * 0.18)));
+  }
+  // ---- 本机字号倍率（只影响这台手机，与桌面端的任何设置无关）----
+  // lsGet 是函数声明、会提升，所以这里能安全调用，尽管它写在文件更靠后的位置
+  function phoneScale() {
+    var v = Number(lsGet(LS_SCALE));
+    if (!isFinite(v) || v <= 0) return 100;
+    return Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.round(v / SCALE_STEP) * SCALE_STEP));
+  }
+  function setPhoneScale(v) {
+    var n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.round(Number(v) / SCALE_STEP) * SCALE_STEP));
+    lsSet(LS_SCALE, String(n));
+    return n;
+  }
+
   function fit() {
     var clock = el('clock'), digits = el('digits');
     var probe = 100;
-    clock.style.fontSize = probe + 'px';
+    clock.style.fontSize = probe + 'px'; // ⚠️ 测量必须用基准字号，倍率不能掺进来
     var w = digits.getBoundingClientRect().width || 1;
     var avail = Math.max(140, window.innerWidth - 28);
     var px = probe * (avail / w);
     px = Math.max(30, Math.min(px, Math.round(window.innerHeight * 0.38), 460));
+    // [v1.0.5.7] 叠加本机倍率后再夹一次上下限（上限也跟着放宽，否则放大到 150% 会被 460 卡住）
+    var sc = phoneScale();
+    if (sc !== 100) px = Math.round(px * sc / 100);
+    px = Math.max(18, Math.min(px, Math.round(window.innerHeight * 0.62), Math.round(460 * sc / 100)));
     clock.style.fontSize = px + 'px';
     curPx = px;
-    el('info-bar').style.fontSize = Math.max(10, Math.min(38, Math.round(px * nm(CFG.infoScale, 0.3)))) + 'px';
+    // 字号变了立刻同步角标（文案没变时 applyAmpm 不会重算）
+    if (lastAmpm) el('ampm').style.fontSize = ampmFontPx() + 'px';
+    // 信息栏跟着一起缩放 —— 它的 38px 硬上限也要按倍率放宽，不然放大了信息栏纹丝不动
+    var ibMax = Math.round(38 * sc / 100);
+    el('info-bar').style.fontSize = Math.max(10, Math.min(ibMax, Math.round(px * nm(CFG.infoScale, 0.3)))) + 'px';
     el('time-display').style.setProperty('--anim-duration', nm(CFG.animDuration, 350) + 'ms');
   }
 
@@ -355,15 +883,18 @@
     var dir = AT === 'flip' ? (CFG.animFlipDir === 'down' ? 'dir-down' : 'dir-up')
       : AT === 'scale' ? (CFG.animScaleDir === 'grow' ? 'dir-grow' : 'dir-shrink') : '';
     clock.className = 'anim-' + AT + (dir ? ' ' + dir : '') + (CFG.datePosition === 'above' ? ' date-above' : '');
-    var ff = String(CFG.fontFamily || '').replace(/[^A-Za-z0-9 _-]/g, '').trim();
+    // [v1.0.5.7] 只剔危险字符（引号/反斜杠/分号等），保留中文等非 ASCII 字体名 ——
+    // 原来 [^A-Za-z0-9 _-] 会把「微软雅黑」剥成空串，字体设置在手机端永远不生效
+    var ff = String(CFG.fontFamily || '').replace(/["'`\\;{}<>\/]/g, '').trim();
     document.body.style.fontFamily = (ff ? '"' + ff + '",' : '') +
       '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif';
+    cdLangRefresh(); // 语言 / 字号等配置变了，倒计时面板的文案一起跟上
   }
 
   function setStatus() {
     var zh = CFG.language !== 'en';
     el('status').textContent = online
-      ? (zh ? '实时同步 · 只读' : 'Live · read-only')
+      ? (zh ? '实时同步' : 'Live')
       : (zh ? '连接断开，本地继续走时' : 'Disconnected — running locally');
     el('dot').className = online ? 'dot' : 'dot off';
   }
@@ -394,6 +925,20 @@
     schedule();
   }
 
+  // 页面版本自愈：宿主给的值与本页内嵌的值不一致 → 自己在跑旧脚本，立刻重载换新
+  function checkPageBuild(v) {
+    if (pageReloaded) return;
+    if (!v || typeof v !== 'string') return;   // 宿主没给（老宿主 / stat 失败）→ 不动
+    // ⚠️ 必须按「形状」判定占位符有没有被替换，**不能**拿 PAGE_BUILD 跟那个占位符字面量比：
+    // 宿主是把整份 HTML 里的该串**全量**替换掉的（连注释里的也算），那种写法会被换坏成
+    // 「自己跟自己相等」→ 恒真早退 → 自愈彻底失效（这条是被 jsdom 用例抓出来的）。
+    // 真版本一定形如 mtimeMs:size（数字开头），占位符不是 → 用形状区分最稳。
+    if (!/^\d+(\.\d+)?:\d+$/.test(PAGE_BUILD)) return; // 未被替换（file:// 直开）→ 不动
+    if (v === PAGE_BUILD) return;                       // 一致 → 正常
+    pageReloaded = true;                                // 加锁：一次会话只重载一次，杜绝循环
+    try { location.reload(); } catch (e) { /* ignore */ }
+  }
+
   // ====== 拉取快照 ======
   function pull() {
     var t0 = Date.now();
@@ -401,6 +946,7 @@
     fetch(url, { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
       .then(function (j) {
+        checkPageBuild(j.build);
         var t1 = Date.now();
         SYNC_MS = nm(j.now, Date.now()) - (t0 + t1) / 2;
         var next = j.cfg || CFG;
@@ -413,6 +959,7 @@
           lastKey = null; lastInfo = ''; colorKey = ''; lastAmpm = null;
         }
         setStatus();
+        applyCdSnapshot(j);
       })
       .catch(function () {
         fails++;
@@ -426,12 +973,993 @@
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', function () { setTimeout(fit, 120); });
 
+  // ==================== [v1.0.5.7] 倒计时（手机端） ====================
+  // 设计要点：
+  //   · 只在「列表变更」时重画卡片；剩余时间由本机每秒自减，不走网络（不打扰宿主）
+  //   · 时间基准用 realNow()（= 本机 + 快照时间差），和 endAt 同源，手机时钟不准也不会跑偏
+  //   · 写请求一律「先领一次性令牌 → 再带 X-DC-Nonce 提交」，令牌不缓存（一次一用最稳）
+  //   · 触控细节：所有可点目标 ≥44px、步进器支持长按连加、下滑抽屉关闭、关键动作震动反馈
+  var CDS = { items: [], canEdit: false, loaded: false };
+  var cdSheetOpen = false, cdEditId = null, cdBusy = false;
+  var cdDurH = 0, cdDurM = 5, cdDurS = 0, cdTouched = false, cdAppliedDefault = -1;
+  var cdArmDelete = null, cdArmTimer = null, cdNodes = {}, cdSig = '', cdFabSig = '';
+  var cdIdleTimer = null; // 胶囊自动隐藏的定时器
+  var fsOpen = false, fsId = null, fsSnap = false, fsPillTxt = ''; // 全屏倒计时状态
+  var fsIdleTimer = null; // 全屏里那颗时钟胶囊的淡出计时
+  var CD_MIN_MS = 1000, CD_MAX_MS = 24 * 3600 * 1000;
+  var CD_CHIPS = [60, 180, 300, 600, 900, 1800, 3600];
+
+  function ZH() { return CFG.language !== 'en'; }
+  function T(zh, en) { return ZH() ? zh : en; }
+  function cdVibrate(p) {
+    try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* 桌面浏览器没有，忽略 */ }
+  }
+  function cdErr(m) { el('cd-err').textContent = m || ''; }
+  function cdErrClear() { el('cd-err').textContent = ''; }
+
+  // 剩余秒数：运行中按 endAt 本地算；暂停用快照里的静态值。向上取整 —— 最后一秒显示 00:01 而不是 00:00
+  function cdSecLeft(it) {
+    if (it.state === 'paused') return Math.max(0, Math.ceil(nm(it.remainingMs, 0) / 1000));
+    var end = it.endAt ? Date.parse(it.endAt) : NaN;
+    var ms = isFinite(end) ? (end - realNow()) : nm(it.remainingMs, 0);
+    return Math.max(0, Math.ceil(ms / 1000));
+  }
+  function cdClock(sec) {
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+  }
+
+  // ---- 写请求：领令牌 + 提交（同源，永不拼外部主机） ----
+  function cdWrite(method, path, body) {
+    return fetch(apiPath('write-nonce'), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('http-' + r.status); return r.json(); })
+      .then(function (j) {
+        var nonce = String((j && j.nonce) || '');
+        if (!nonce) throw new Error('nonce-empty');
+        var opt = {
+          method: method, cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', 'X-DC-Nonce': nonce },
+        };
+        if (body !== undefined) opt.body = JSON.stringify(body);
+        return fetch(apiPath(path), opt);
+      })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok || j.ok === false) throw new Error((j && j.error) || ('http-' + r.status));
+          return j;
+        });
+      });
+  }
+  function cdErrText(e) {
+    var k = String((e && e.message) || e || '');
+    if (k.indexOf('bad-duration') === 0) return T('时长需要在 1 秒 ~ 24 小时之间', 'Duration must be 1s – 24h');
+    if (k === 'too-many') return T('倒计时数量已达上限（50 个）', 'Too many countdowns (max 50)');
+    if (k === 'not-found') return T('这个倒计时已经不存在了', 'That countdown no longer exists');
+    if (k === 'empty-update') return T('没有可保存的改动', 'Nothing to save');
+    if (k === 'http-429') return T('操作太快了，稍等一下', 'Too fast — try again in a moment');
+    if (k === 'http-413') return T('提交内容过大', 'Payload too large');
+    if (k === 'http-415' || k === 'nonce-empty' || k === 'http-403') return T('校验失败，请刷新页面重试', 'Verification failed — reload the page');
+    return T('操作失败，请稍后再试', 'Something went wrong');
+  }
+  function cdApply(j) {
+    if (j && Array.isArray(j.items)) {
+      CDS.items = j.items; CDS.loaded = true;
+      renderCdList();
+      cdSyncFab(); // 写成功后底部胶囊立刻反映新读数，不等下一秒 tick
+    }
+  }
+
+  // ---- 快照合并 ----
+  function applyCdSnapshot(j) {
+    if (!j) return;
+    if (Array.isArray(j.countdowns)) { CDS.items = j.countdowns; CDS.loaded = true; }
+    if (j.countdownCanEdit !== undefined) CDS.canEdit = j.countdownCanEdit === true;
+    // 宿主的「默认时长」偏好是随快照到的：首次拿到时补齐表单，
+    // 但用户已经开始调时间（或正在编辑某个倒计时）就绝不打断
+    var dm = Math.max(1, Math.min(1440, Math.round(nm(CFG.countdownDefaultMinutes, 5))));
+    if (!cdEditId && !cdTouched && !el('cd-name').value && dm !== cdAppliedDefault) cdResetForm();
+    cdSyncFab();
+    if (cdSheetOpen) renderCdList();
+  }
+
+  // ---- 底部胶囊 ----
+  // [v1.0.5.7] 显隐分两层，别混：
+  //   · 结构性（hidden-fab）—— 只在三种情况下根本不出现：
+  //       抽屉开着 / 全屏倒计时中 / **宿主还没告知过倒计时**（老宿主，CDS.loaded=false）
+  //   · 时间性（idle）      —— **只有「未激活」才允许 3 秒无操作淡出**。
+  //     「激活」= 至少有一条运行中的倒计时：这时胶囊要常驻，因为
+  //       ① 剩余读数是给人一眼看的；② 它同时是点进全屏的唯一入口。
+  //     「未激活」= 全部暂停 **或一条都没有（含全部被关掉）** → 两者走同一套淡出逻辑，
+  //       点一下屏幕就回来（**不是永久隐藏**）。
+  //     ⚠️ 别按「条目数」隐藏胶囊：空态胶囊本身就是「新建倒计时」的入口，
+  //        隐藏掉就等于「一条都没有时怎么点都不出来」（实测踩过）。
+  // 唤醒底部胶囊（屏幕上任何一次操作都算）；排计时统一交给 cdArmIdle
+  function cdPokeFab() {
+    fsPokePill(); // 全屏中时操作的对象是另一颗胶囊（时钟胶囊），一并唤醒
+    if (cdIdleTimer) { clearTimeout(cdIdleTimer); cdIdleTimer = null; }
+    var fab = el('cd-fab');
+    if (fab.classList.contains('idle')) {
+      fab.classList.remove('idle');
+      cdFabSig = ''; // 隐藏期间读数一直在走，唤醒时按最新值重画一次
+      cdSyncFab();   // 立刻重画；要不要重新排队计时也由它一处决定
+      return;
+    }
+    cdArmIdle();
+  }
+  // 「未激活」才排淡出计时：激活中（有运行中的）既不排也不收
+  function cdArmIdle() {
+    if (cdIdleTimer || cdSheetOpen || fsOpen) return;
+    if (!CDS.loaded || el('cd-fab').classList.contains('hidden-fab')) return; // 没得显示就别排
+    if (el('cd-fab').classList.contains('idle')) return; // 已经藏着了，不必再排（避免每 3 秒空转一次）
+    if (cdPick().anyRunning) return;
+    cdIdleTimer = setTimeout(cdIdleHide, FAB_IDLE_MS);
+  }
+  function cdIdleHide() {
+    cdIdleTimer = null;
+    // 抽屉开着 → 胶囊本来就藏着；全屏中 → 有另一颗胶囊；到点提醒中 → 此刻正需要人看见。都不收。
+    if (cdSheetOpen || cdAlert.active || fsOpen) return;
+    if (!CDS.loaded || el('cd-fab').classList.contains('hidden-fab')) return;
+    if (cdPick().anyRunning) return; // 兜底：激活中绝不收（哪怕有个残留计时器）
+    el('cd-fab').classList.add('idle');
+  }
+
+  // 「最近一次倒计时」= 剩余最少的那个（全是暂停态时也取剩余最少的）。
+  // 胶囊与全屏共用这一份判定 —— 保证点进全屏看到的就是胶囊上那个。
+  function cdPick() {
+    var items = CDS.items || [], best = null, bestSec = Infinity, anyRunning = false;
+    items.forEach(function (it) {
+      if (it.state === 'paused') return;
+      anyRunning = true;
+      var s = cdSecLeft(it);
+      if (s < bestSec) { bestSec = s; best = it; }
+    });
+    if (!best) { // 全是暂停态 → 显示剩余最少的那个
+      items.forEach(function (it) {
+        var s = cdSecLeft(it);
+        if (s < bestSec) { bestSec = s; best = it; }
+      });
+    }
+    return {
+      item: best,
+      sec: isFinite(bestSec) ? Math.max(0, bestSec) : 0,
+      has: !!best,
+      anyRunning: anyRunning,
+      count: items.length,
+    };
+  }
+
+  function cdSyncFab() {
+    var fab = el('cd-fab');
+    // [v1.0.5.7] 结构性隐藏只有三种：抽屉开着、全屏倒计时中、宿主还没告知过倒计时。
+    // ⚠️ 这里**不按条目数隐藏**：「全部暂停」「一条都没有（含全部被关掉）」都属于
+    //    「未激活」，走同一套 3 秒淡出逻辑（点一下屏幕就回来），空态胶囊本身就是
+    //    「新建倒计时」的入口。老宿主从不给 countdowns → CDS.loaded 恒 false → 不出现。
+    var show = CDS.loaded && !cdSheetOpen && !fsOpen;
+    fab.classList.toggle('hidden-fab', !show);
+    if (!show) {
+      fab.classList.remove('idle');
+      if (cdIdleTimer) { clearTimeout(cdIdleTimer); cdIdleTimer = null; }
+      return;
+    }
+    var p = cdPick();
+    if (p.anyRunning) {
+      // 激活中 → 常驻：清掉淡出计时；正处在 idle（比如刚由「全暂停」转运行）就立刻唤回来，
+      // 否则胶囊会一直藏着 → 读数看不见、也点不进全屏
+      if (cdIdleTimer) { clearTimeout(cdIdleTimer); cdIdleTimer = null; }
+      if (fab.classList.contains('idle')) { fab.classList.remove('idle'); cdFabSig = ''; }
+    } else {
+      cdArmIdle(); // 未激活（全暂停 / 一条都没有）→ 从这一拍起算 3 秒
+    }
+    if (fab.classList.contains('idle')) return; // 隐藏期间不写 DOM；唤醒时会整份重画
+    // 这个函数每秒都会被 tickCd 调到：内容没变就别碰 DOM（手机上省一点是一点）
+    var sig = (p.has ? '' : 'e') + p.sec + '|' + p.count + '|'
+      + (p.anyRunning ? 1 : 0) + '|' + (CDS.canEdit ? 1 : 0);
+    fab.classList.toggle('has', p.has);
+    fab.classList.toggle('empty', !p.has);
+    fab.classList.toggle('paused', !p.anyRunning && p.has);
+    if (sig === cdFabSig) return;
+    cdFabSig = sig;
+    if (!p.has) { // 空态：胶囊 = 新建入口（可写才给 ＋，只读就只报个名字）
+      el('cd-fab-text').innerHTML = '<span class="cd-fab-empty">'
+        + esc(CDS.canEdit ? T('＋ 倒计时', '+ Countdown') : T('倒计时', 'Countdown'))
+        + '</span>';
+      return;
+    }
+    var more = p.count > 1 ? '  +' + (p.count - 1) : '';
+    el('cd-fab-text').innerHTML = p.sec <= 0
+      ? '<span class="cd-fab-num">' + esc(T('提醒中', 'Ringing')) + '</span>'
+      : '<span class="cd-fab-num">' + esc(cdClock(p.sec)) + '</span>'
+        + '<span class="cd-fab-more">' + esc(more) + '</span>';
+  }
+
+  // ===== 全屏倒计时（仅手机端）：左橙 / 右白黑，橙色宽度 = 剩余比例 =====
+  // 用毫秒算比例（不是整秒），配合 #fs-fill 的 1s 线性过渡 → 橙色退得很顺
+  function fsRatio(it) {
+    var dur = nm(it && it.durationMs, 0);
+    if (!(dur > 0)) return 0;
+    var left = it.state === 'paused' ? nm(it.remainingMs, 0)
+      : (it.endAt ? Date.parse(it.endAt) - realNow() : NaN);
+    if (!isFinite(left)) left = nm(it.remainingMs, 0);
+    return Math.max(0, Math.min(1, left / dur));
+  }
+  // 大数字：逐位对比，只给真的变了的位加动画（翻转感），没变的不动
+  function fsSetTime(txt) {
+    var node = el('fs-time');
+    if (node.getAttribute('data-t') === txt) return;
+    var old = node.getAttribute('data-t') || '';
+    var same = old.length === txt.length;
+    var html = '', i, ch;
+    for (i = 0; i < txt.length; i++) {
+      ch = txt.charAt(i);
+      if (ch === ':') { html += '<span class="fs-colon">:</span>'; continue; }
+      html += '<span class="fs-d' + ((!same || old.charAt(i) !== ch) ? ' flip' : '') + '">' + ch + '</span>';
+    }
+    node.className = txt.split(':').length > 2 ? 'long' : ''; // 带小时就收一档字号
+    node.setAttribute('data-t', txt);
+    node.innerHTML = html;
+  }
+  // 全屏里那颗胶囊显示「当前时间」：不做动画；带不带秒跟电脑上的设置走
+  function fsClockText() {
+    var d = effNow(), h = d.getHours(), m = d.getMinutes();
+    var t = use12() ? String((h % 12) || 12) + ':' + pad(m) : pad(h) + ':' + pad(m);
+    return CFG.showSeconds !== false ? t + ':' + pad(d.getSeconds()) : t;
+  }
+  function fsTick() {
+    if (!fsOpen) return;
+    var p = cdPick();
+    if (!p.item) { closeFs(); return; } // 倒计时被取消光了 → 自动退出全屏
+    if (fsId !== p.item.id) { // 换了对象：橙区直接就位，别从上一条的宽度滑过去
+      fsId = p.item.id;
+      fsSnap = true;
+      el('fs-time').setAttribute('data-t', ''); // 清空旧串 → 整份重画，不留上一条的残影
+      el('fs-name').textContent = p.item.name || T('倒计时', 'Countdown');
+    }
+    el('fs-fill').style.width = (fsRatio(p.item) * 100).toFixed(2) + '%';
+    if (fsSnap) {
+      fsSnap = false;
+      var f = el('fs-fill');
+      f.classList.add('snap');
+      void f.offsetWidth; // 强制重排：让刚设的宽度以「无过渡」生效
+      f.classList.remove('snap');
+    }
+    fsSetTime(cdClock(p.sec));
+    var pt = fsClockText();
+    if (pt !== fsPillTxt) { fsPillTxt = pt; el('fs-pill-time').textContent = pt; }
+  }
+  function openFs() {
+    if (fsOpen) return;
+    if (!cdPick().has) { openCd(); return; } // 空态（一条都没有）→ 直接开抽屉：此时胶囊就是「新建」入口
+    fsOpen = true;
+    fsId = null; fsPillTxt = ''; fsSnap = true;
+    el('fs-view').classList.add('show');
+    el('fs-view').setAttribute('aria-hidden', 'false');
+    fsTick();
+    cdSyncFab();  // 全屏里不再显示底部那颗倒计时胶囊（免得和新胶囊混）
+    fsPokePill(); // 全屏里的时钟胶囊：露面 + 起 3 秒淡出计时
+    cdVibrate(8);
+  }
+  function closeFs() {
+    if (!fsOpen) return;
+    fsOpen = false; fsId = null;
+    if (fsIdleTimer) { clearTimeout(fsIdleTimer); fsIdleTimer = null; }
+    el('fs-pill').classList.remove('idle');
+    el('fs-view').classList.remove('show');
+    el('fs-view').setAttribute('aria-hidden', 'true');
+    cdSyncFab();
+    cdPokeFab(); // 回时钟 → 胶囊露面并重新开始 3 秒计时
+    cdVibrate(6);
+  }
+  // 全屏里那颗「当前时间」胶囊：也要 3 秒没操作就淡出（全屏是看大字的地方，不该长期挡着）；
+  // 屏幕上任何一次操作立刻唤回来并重新计时。与底部倒计时胶囊同一套节奏，只是作用对象不同。
+  function fsPokePill() {
+    if (!fsOpen) return;
+    el('fs-pill').classList.remove('idle');
+    fsArmPillIdle();
+  }
+  function fsArmPillIdle() {
+    if (fsIdleTimer) { clearTimeout(fsIdleTimer); fsIdleTimer = null; }
+    if (!fsOpen) return;
+    fsIdleTimer = setTimeout(function () {
+      fsIdleTimer = null;
+      // 到点提醒中不收（此刻正需要人看见），其余情况一律淡出
+      if (!fsOpen || cdAlert.active) return;
+      el('fs-pill').classList.add('idle');
+    }, FAB_IDLE_MS);
+  }
+
+  // ---- 列表渲染 ----
+  function cdCardHtml(it) {
+    var sec = cdSecLeft(it);
+    var ring = it.state === 'running' && sec <= 0;
+    var stateTxt = ring ? T('提醒中', 'Ringing') : (it.state === 'paused' ? T('已暂停', 'Paused') : T('进行中', 'Running'));
+    var dur = nm(it.durationMs, 0);
+    var ratio = dur > 0 ? Math.max(0, Math.min(1, (sec * 1000) / dur)) : 0;
+    var paused = it.state === 'paused';
+    var primary = paused ? 'resume' : 'pause';
+    var primaryTxt = paused ? T('继续', 'Resume') : T('暂停', 'Pause');
+    var armed = cdArmDelete === it.id;
+    var id = esc(it.id);
+    return '<div class="cd-card' + (paused ? ' paused' : '') + (ring ? ' ringing' : '') + '" data-id="' + id + '">'
+      + '<div class="cd-row1">'
+      +   '<div class="cd-name">' + esc(it.name || T('倒计时', 'Countdown')) + '</div>'
+      +   '<button class="cd-icon-btn cd-edit-btn" type="button" data-act="edit" data-id="' + id
+      +     '" aria-label="' + esc(T('编辑', 'Edit')) + '">✎</button>'
+      +   '<div class="cd-state' + (ring ? ' ringing' : '') + '">' + esc(stateTxt) + '</div>'
+      + '</div>'
+      + '<div class="cd-time">' + cdClock(sec) + '</div>'
+      + '<div class="cd-bar"><i style="width:' + (ratio * 100).toFixed(1) + '%"></i></div>'
+      + '<div class="cd-acts">'
+      +   '<button type="button" data-act="' + primary + '" data-id="' + id + '">' + esc(primaryTxt) + '</button>'
+      +   '<button type="button" data-act="restart" data-id="' + id + '">' + esc(T('重启', 'Restart')) + '</button>'
+      +   '<button type="button" class="danger' + (armed ? ' armed' : '') + '" data-act="cancel" data-id="' + id + '">'
+      +     esc(armed ? T('确认取消', 'Confirm') : T('取消', 'Cancel')) + '</button>'
+      + '</div>'
+      + '</div>';
+  }
+  function renderCdList(force) {
+    var items = CDS.items || [];
+    var sig = JSON.stringify(items);
+    if (!force && sig === cdSig) { cdListVisibility(items.length); return; }
+    cdSig = sig;
+    el('cd-list').innerHTML = items.map(cdCardHtml).join('');
+    cdNodes = {};
+    Array.prototype.forEach.call(el('cd-list').querySelectorAll('.cd-card'), function (card) {
+      cdNodes[card.getAttribute('data-id')] = {
+        card: card,
+        time: card.querySelector('.cd-time'),
+        bar: card.querySelector('.cd-bar > i'),
+        state: card.querySelector('.cd-state'),
+        last: null, ring: null,
+      };
+    });
+    cdListVisibility(items.length);
+    cdArmedPaint();
+  }
+  function cdListVisibility(n) {
+    var canEdit = !!CDS.canEdit;
+    el('cd-empty').hidden = !(n === 0 && canEdit); // 「还没倒计时，在下面添加」只在可写且为空时提示
+    el('cd-readonly').hidden = canEdit;            // 不可写就始终挂着说明（有条目时更要说清楚）
+    el('cd-form').hidden = !canEdit;
+  }
+  function cdArmedPaint() {
+    Array.prototype.forEach.call(el('cd-list').querySelectorAll('button[data-act="cancel"]'), function (b) {
+      var armed = b.getAttribute('data-id') === cdArmDelete;
+      b.classList.toggle('armed', armed);
+      b.textContent = armed ? T('确认取消', 'Confirm') : T('取消', 'Cancel');
+    });
+  }
+
+  // ---- 每秒本地倒扣：只改文本与进度条，不重画 DOM ----
+  function tickCd() {
+    var items = CDS.items || [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], n = cdNodes[it.id];
+      if (!n) continue;
+      var sec = cdSecLeft(it);
+      var txt = cdClock(sec);
+      if (n.last !== txt) { n.time.textContent = txt; n.last = txt; }
+      var dur = nm(it.durationMs, 0);
+      n.bar.style.width = ((dur > 0 ? Math.max(0, Math.min(1, (sec * 1000) / dur)) : 0) * 100).toFixed(1) + '%';
+      var ring = it.state === 'running' && sec <= 0;
+      if (n.ring !== ring) {
+        n.ring = ring;
+        n.card.classList.toggle('ringing', ring);
+        n.state.classList.toggle('ringing', ring);
+        n.state.textContent = ring ? T('提醒中', 'Ringing')
+          : (it.state === 'paused' ? T('已暂停', 'Paused') : T('进行中', 'Running'));
+        if (ring) pull(); // 到点 → 立刻拉一次，确认宿主的真实状态
+      }
+    }
+    cdSyncFab();
+    if (fsOpen) fsTick(); // 全屏里的读数、橙区宽度、时钟胶囊都靠这一拍
+  }
+
+  // ---- 抽屉开合 ----
+  function openCd() {
+    cdSheetOpen = true;
+    if (cdIdleTimer) { clearTimeout(cdIdleTimer); cdIdleTimer = null; }
+    el('cd-sheet').style.transform = '';
+    el('cd-scrim').style.opacity = '';
+    el('cd-scrim').classList.add('show');
+    el('cd-sheet').classList.add('show');
+    el('cd-sheet').setAttribute('aria-hidden', 'false');
+    el('cd-fab').classList.add('hidden-fab');
+    cdLangRefresh();
+    renderCdList(true);
+    tickCd();
+    cdVibrate(8);
+    pull(); // 免得看到 15 秒前的旧值
+  }
+  function closeCd() {
+    cdSheetOpen = false;
+    cdArmDelete = null;
+    clearTimeout(cdArmTimer);
+    el('cd-scrim').classList.remove('show');
+    el('cd-scrim').style.opacity = '';
+    el('cd-sheet').classList.remove('show');
+    el('cd-sheet').style.transform = '';
+    el('cd-sheet').setAttribute('aria-hidden', 'true');
+    cdResetForm();
+    cdErrClear();
+    cdSig = '';
+    cdSyncFab();
+    cdPokeFab(); // 关掉抽屉 → 胶囊回来，重新开始 3 秒计时
+    cdVibrate(6);
+  }
+
+  // ---- 表单 ----
+  function cdTotalMs() { return (cdDurH * 3600 + cdDurM * 60 + cdDurS) * 1000; }
+  function cdFormValid() { var ms = cdTotalMs(); return ms >= CD_MIN_MS && ms <= CD_MAX_MS; }
+  function buildChips() {
+    el('cd-chips').innerHTML = CD_CHIPS.map(function (s) {
+      return '<button type="button" data-sec="' + s + '">' + esc(cdChipLabel(s)) + '</button>';
+    }).join('');
+  }
+  function cdChipLabel(s) {
+    if (s % 3600 === 0) return (s / 3600) + T(' 小时', ' hr');
+    return (s / 60) + T(' 分钟', ' min');
+  }
+  function cdSyncForm() {
+    var ms = cdTotalMs();
+    el('cd-unit-h').textContent = cdDurH;
+    el('cd-unit-m').textContent = cdDurM;
+    el('cd-unit-s').textContent = cdDurS;
+    var total = el('cd-total');
+    if (ms < CD_MIN_MS) { total.textContent = T('至少 1 秒', 'At least 1 second'); total.classList.add('warn'); }
+    else if (ms > CD_MAX_MS) { total.textContent = T('最多 24 小时', 'At most 24 hours'); total.classList.add('warn'); }
+    else { total.textContent = T('共 ', 'Total ') + cdClock(Math.round(ms / 1000)); total.classList.remove('warn'); }
+    Array.prototype.forEach.call(el('cd-chips').querySelectorAll('button'), function (b) {
+      b.classList.toggle('active', Number(b.getAttribute('data-sec')) * 1000 === ms);
+    });
+    el('cd-form-title').textContent = cdEditId ? T('编辑倒计时', 'Edit countdown') : T('新建倒计时', 'New countdown');
+    el('cd-submit').textContent = cdEditId ? T('保存', 'Save') : T('开始', 'Start');
+    el('cd-submit').disabled = cdBusy || !cdFormValid();
+    el('cd-edit-cancel').hidden = !cdEditId;
+  }
+  function cdResetForm() {
+    cdEditId = null;
+    cdTouched = false;
+    el('cd-name').value = '';
+    var min = Math.max(1, Math.min(1440, Math.round(nm(CFG.countdownDefaultMinutes, 5))));
+    cdAppliedDefault = min;
+    cdDurH = Math.floor(min / 60); cdDurM = min % 60; cdDurS = 0;
+    cdSyncForm();
+  }
+  function cdStep(unit, delta) {
+    cdTouched = true;
+    if (unit === 'h') cdDurH = Math.max(0, Math.min(24, cdDurH + delta));
+    else if (unit === 'm') cdDurM = Math.max(0, Math.min(59, cdDurM + delta));
+    else if (unit === 's') cdDurS = Math.max(0, Math.min(59, cdDurS + delta));
+    cdSyncForm();
+  }
+  function cdStartEdit(id) {
+    var it = null;
+    (CDS.items || []).forEach(function (x) { if (x.id === id) it = x; });
+    if (!it) return;
+    cdEditId = id;
+    cdTouched = true;
+    el('cd-name').value = it.name || '';
+    var sec = Math.max(1, Math.round(nm(it.durationMs, 0) / 1000));
+    cdDurH = Math.floor(sec / 3600); cdDurM = Math.floor((sec % 3600) / 60); cdDurS = sec % 60;
+    cdSyncForm();
+    if (el('cd-form').scrollIntoView) el('cd-form').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    try { el('cd-name').focus(); } catch (e) { /* ignore */ }
+  }
+
+  // ---- 动作 ----
+  function cdDo(act, id) {
+    if (cdBusy) return;
+    cdBusy = true; cdErrClear(); cdSyncForm();
+    cdWrite('POST', 'countdowns/' + encodeURIComponent(id) + '/' + act, {})
+      .then(function (j) { cdApply(j); cdVibrate(10); })
+      .catch(function (err) { cdErr(cdErrText(err)); cdVibrate(60); })
+      .then(function () { cdBusy = false; cdSyncForm(); });
+  }
+  function bindCd() {
+    el('cd-close').addEventListener('click', closeCd);
+    el('cd-scrim').addEventListener('click', closeCd);
+    el('fs-pill').addEventListener('click', closeFs); // 全屏里点时钟胶囊 → 回时钟
+
+    // 底部胶囊要装两个动作，用手势区分：单击进全屏、长按开抽屉。
+    // 长按期间手指移动超过 10px 视为拖动 → 两个都不触发。
+    (function bindFabPress() {
+      var fab = el('cd-fab'), timer = null, sx = 0, sy = 0, fired = false, moved = false;
+      function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+      fab.addEventListener('pointerdown', function (e) {
+        if (e.button && e.button !== 0) return;
+        fired = false; moved = false; sx = e.clientX; sy = e.clientY;
+        stop();
+        timer = setTimeout(function () {
+          timer = null; fired = true;
+          openCd(); // 长按 → 抽屉
+          cdVibrate(14);
+        }, FAB_LONG_MS);
+      });
+      fab.addEventListener('pointermove', function (e) {
+        if (!timer) return;
+        if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) { moved = true; stop(); }
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (n) { fab.addEventListener(n, stop); });
+      fab.addEventListener('click', function () {
+        if (fired) { fired = false; return; } // 长按已经处理过了，这里吞掉
+        if (moved) { moved = false; return; }
+        openFs();
+      });
+    })();
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && cdSheetOpen) closeCd();
+    });
+
+    // 底部胶囊的「3 秒无操作淡出」：任意触摸 / 点击 / 按键 / 滚动都算操作
+    ['pointerdown', 'touchstart', 'keydown'].forEach(function (t) {
+      document.addEventListener(t, cdPokeFab, { passive: true });
+    });
+    window.addEventListener('scroll', cdPokeFab, { passive: true });
+
+    // 列表动作（事件委托，重画后依然有效）
+    el('cd-list').addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
+      if (!btn) return;
+      var id = btn.getAttribute('data-id'), act = btn.getAttribute('data-act');
+      if (act === 'edit') { cdStartEdit(id); return; }
+      if (act === 'cancel' && cdArmDelete !== id) { // 先「武装」再删除，避免误触
+        cdArmDelete = id;
+        cdVibrate(14);
+        cdArmedPaint();
+        clearTimeout(cdArmTimer);
+        cdArmTimer = setTimeout(function () { cdArmDelete = null; cdArmedPaint(); }, 3500);
+        return;
+      }
+      cdArmDelete = null;
+      clearTimeout(cdArmTimer);
+      cdDo(act, id);
+    });
+
+    // 快捷片
+    el('cd-chips').addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button[data-sec]') : null;
+      if (!b) return;
+      var sec = Number(b.getAttribute('data-sec'));
+      cdTouched = true;
+      cdDurH = Math.floor(sec / 3600); cdDurM = Math.floor((sec % 3600) / 60); cdDurS = sec % 60;
+      cdVibrate(5);
+      cdSyncForm();
+    });
+
+    // 步进器：单击 ±1，按住 400ms 后连加（长按调时间不用点几百次）
+    var units = document.querySelector('.cd-units');
+    var holdTimer = null, repTimer = null;
+    function stopHold() { clearTimeout(holdTimer); clearInterval(repTimer); holdTimer = repTimer = null; }
+    units.addEventListener('pointerdown', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button[data-unit]') : null;
+      if (!b) return;
+      var unit = b.getAttribute('data-unit'), delta = Number(b.getAttribute('data-delta'));
+      cdStep(unit, delta);
+      cdVibrate(4);
+      stopHold();
+      holdTimer = setTimeout(function () {
+        repTimer = setInterval(function () { cdStep(unit, delta); }, 110);
+      }, 400);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { units.addEventListener(t, stopHold, true); });
+    window.addEventListener('blur', stopHold);
+    units.addEventListener('click', function (e) { // 点按已在 pointerdown 处理，这里只吞掉默认行为
+      var b = e.target && e.target.closest ? e.target.closest('button[data-unit]') : null;
+      if (b) { e.preventDefault(); e.stopPropagation(); }
+    });
+
+    // 提交（新建 / 保存编辑）
+    el('cd-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (cdBusy) return;
+      if (!cdFormValid()) { cdErr(T('时长需要在 1 秒 ~ 24 小时之间', 'Duration must be 1s – 24h')); return; }
+      var editing = cdEditId;
+      var payload = { durationMs: cdTotalMs() };
+      var nmv = el('cd-name').value.trim();
+      if (nmv) payload.name = nmv;
+      cdBusy = true; cdErrClear(); cdSyncForm();
+      var p = editing
+        ? cdWrite('PATCH', 'countdowns/' + encodeURIComponent(editing), payload)
+        : cdWrite('POST', 'countdowns', payload);
+      p.then(function (j) {
+        cdApply(j);
+        cdVibrate([10, 26, 10]);
+        cdEditId = null;
+        el('cd-name').value = '';
+        cdSyncForm();
+        var last = el('cd-list').lastElementChild;
+        if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }).catch(function (err) {
+        cdErr(cdErrText(err));
+        cdVibrate(60);
+      }).then(function () { cdBusy = false; cdSyncForm(); });
+    });
+
+    el('cd-edit-cancel').addEventListener('click', function () { cdResetForm(); cdErrClear(); });
+
+    // 下滑关闭：只在抓手与标题栏生效，抽屉内容区仍可正常滚动
+    bindSheetDrag(el('cd-sheet'), el('cd-scrim'), closeCd);
+  }
+
+  // ==================== [v1.0.5.7] 手机端提示音 ====================
+  // 设计要点：
+  //   · 开关与音色只写本机 localStorage —— 与桌面端的 countdownSound 完全无关，
+  //     也不走快照（宿主既不知道也不需要知道手机要不要响）
+  //   · 零外部资源：三种音色全部用 Web Audio 现场合成，页面依旧自包含
+  //   · 浏览器要求用户手势之后才允许出声 → 任意触摸/按键静默解锁，点按钮时也解锁
+  //   · 响一小段（3 遍）后音频自动停；震动持续到用户点「知道了」或 90 秒上限
+  var LS_SOUND = 'dc.cdSound', LS_KIND = 'dc.cdSoundKind';
+  var CD_KINDS = ['beep', 'chime', 'alarm'];
+  var CD_KIND_LABEL = { beep: ['蜂鸣', 'Beep'], chime: ['铃音', 'Chime'], alarm: ['闹钟', 'Alarm'] };
+  var CD_ALERT_MS = 90000, CD_ALERT_REPEAT = 3, CD_ALERT_GAP_MS = 1000;
+
+  function lsGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* 隐私模式：当次会话内有效即可 */ } }
+  function cdSoundOn() { return lsGet(LS_SOUND) !== '0'; }   // 默认开：提醒类功能默认可用，用户可关
+  function cdSoundKind() {
+    var k = String(lsGet(LS_KIND) || '');
+    return CD_KINDS.indexOf(k) >= 0 ? k : 'beep';
+  }
+
+  // ---- Web Audio：三种提示音，全部现场合成 ----
+  var cdCtx = null, cdUnlocked = false;
+  function cdAudioCtx() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!cdCtx) { try { cdCtx = new AC(); } catch (e) { return null; } }
+    return cdCtx;
+  }
+  function cdUnlockAudio() {
+    if (cdUnlocked) return true;
+    var c = cdAudioCtx();
+    if (!c) return false;
+    try { if (c.state === 'suspended' && c.resume) c.resume(); } catch (e) { /* 忽略 */ }
+    if (c.state === 'running') cdUnlocked = true;
+    return cdUnlocked;
+  }
+  function cdTone(c, freq, at, dur, type, peak) {
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, at);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(peak, at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(at); o.stop(at + dur + 0.03);
+  }
+  // 播一遍当前音色；返回是否真的排上了音（未解锁 / 无 Web Audio 时为 false）
+  function cdPlayOnce() {
+    var c = cdAudioCtx();
+    if (!c || !cdUnlocked || c.state !== 'running') return false;
+    var t = c.currentTime + 0.02, k = cdSoundKind(), i;
+    try {
+      if (k === 'chime') {
+        cdTone(c, 1046.5, t,        0.55, 'sine', 0.22);
+        cdTone(c, 1318.5, t + 0.16, 0.55, 'sine', 0.20);
+        cdTone(c, 1568.0, t + 0.32, 0.80, 'sine', 0.18);
+      } else if (k === 'alarm') {
+        for (i = 0; i < 8; i++) cdTone(c, i % 2 ? 1000 : 800, t + i * 0.16, 0.12, 'square', 0.16);
+      } else {
+        cdTone(c, 880, t,        0.14, 'sine', 0.28);
+        cdTone(c, 880, t + 0.26, 0.14, 'sine', 0.28);
+      }
+    } catch (e) { return false; }
+    return true;
+  }
+  var cdAudioTimers = [];
+  function cdStopAudio() { while (cdAudioTimers.length) clearTimeout(cdAudioTimers.pop()); }
+  function cdPlayAlert() {
+    cdStopAudio();
+    if (!cdSoundOn()) return;
+    cdUnlockAudio();
+    var n = 0;
+    function fire() {
+      if (!cdAlert.active || n >= CD_ALERT_REPEAT) return;
+      n++;
+      cdPlayOnce();
+      cdAudioTimers.push(setTimeout(fire, CD_ALERT_GAP_MS));
+    }
+    fire();
+  }
+  // 试听（点开关 / 点音色时用）
+  function cdPreview() { cdUnlockAudio(); cdStopAudio(); cdPlayOnce(); }
+
+  // ---- 震动：比音频长得多，持续到用户处理 ----
+  var cdVibTimer = null;
+  function cdVibStart() {
+    cdVibStop();
+    var beat = function () { cdVibrate([220, 120, 220]); };
+    beat();
+    cdVibTimer = setInterval(beat, 1300);
+  }
+  function cdVibStop() { if (cdVibTimer) { clearInterval(cdVibTimer); cdVibTimer = null; } }
+
+  // ---- 到点提醒：横幅 + 声音 + 震动 ----
+  // ⚠️ 检测基于 CDS.items 而不是卡片 DOM —— 抽屉关着时 cdNodes 是空的，也必须能响
+  var cdAlert = { active: false, id: null, name: '', timer: null };
+  var cdRungIds = {};
+
+  function cdAlertStart(it) {
+    cdAlert.active = true;
+    cdAlert.id = it.id;
+    cdAlert.name = it.name || T('倒计时', 'Countdown');
+    cdPokeFab(); // 到点了 → 把胶囊唤出来，且提醒期间不自动收起
+    el('cd-alert-name').textContent = cdAlert.name;
+    el('cd-alert-sub').textContent = T('时间到了', 'Time is up');
+    el('cd-alert').classList.remove('hidden');
+    el('cd-alert').classList.remove('show');
+    void el('cd-alert').offsetWidth; // 强制重排，让「连着两个到点」时动画能重放
+    el('cd-alert').classList.add('show');
+    cdPlayAlert();
+    if (cdSoundOn()) cdVibStart(); // 关掉提示音 = 要安静：连震动一起停，只留视觉横幅
+    if (cdAlert.timer) clearTimeout(cdAlert.timer);
+    cdAlert.timer = setTimeout(cdAlertStop, CD_ALERT_MS);
+  }
+  function cdAlertStop() {
+    if (cdAlert.timer) { clearTimeout(cdAlert.timer); cdAlert.timer = null; }
+    cdAlert.active = false; cdAlert.id = null;
+    cdStopAudio();
+    cdVibStop();
+    el('cd-alert').classList.remove('show');
+    el('cd-alert').classList.add('hidden');
+    cdPokeFab(); // 提醒结束 → 胶囊恢复「3 秒无操作才淡出」的节奏
+  }
+  function cdAlertTick() {
+    var items = CDS.items || [], seen = {}, first = null, i, it, ring;
+    for (i = 0; i < items.length; i++) {
+      it = items[i];
+      ring = it.state === 'running' && cdSecLeft(it) <= 0;
+      if (!ring) continue;
+      seen[it.id] = 1;
+      if (!cdRungIds[it.id]) { cdRungIds[it.id] = 1; if (!first) first = it; }
+    }
+    // 不再处于「到点」状态的 id 要放掉，否则重启同一个倒计时后不会再提醒
+    for (var k in cdRungIds) if (!seen[k]) delete cdRungIds[k];
+    if (first) cdAlertStart(first);
+  }
+
+  // ---- 提示音按钮 ----
+  function cdSoundPaint() {
+    var on = cdSoundOn(), k = cdSoundKind();
+    var btn = el('cd-sound-btn'), chip = el('cd-sound-kind');
+    btn.textContent = on ? '🔔' : '🔕';
+    btn.classList.toggle('off', !on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', T(on ? '提示音已开，点击关闭' : '提示音已关，点击开启',
+                                    on ? 'Sound on — tap to mute' : 'Sound off — tap to enable'));
+    var lb = CD_KIND_LABEL[k];
+    chip.textContent = lb ? lb[ZH() ? 0 : 1] : k;
+    chip.classList.toggle('off', !on);
+    chip.setAttribute('aria-label', T('提示音音色：' + k + '，点击切换',
+                                      'Alert sound: ' + k + ' — tap to change'));
+  }
+  function bindCdSound() {
+    el('cd-sound-btn').addEventListener('click', function () {
+      var on = !cdSoundOn();
+      lsSet(LS_SOUND, on ? '1' : '0');
+      if (on) cdPreview(); else { cdStopAudio(); cdVibStop(); }
+      cdSoundPaint();
+    });
+    el('cd-sound-kind').addEventListener('click', function () {
+      if (!cdSoundOn()) lsSet(LS_SOUND, '1'); // 调音色 = 想要声音，顺手打开
+      var i = CD_KINDS.indexOf(cdSoundKind());
+      lsSet(LS_KIND, CD_KINDS[(i + 1) % CD_KINDS.length]);
+      cdPreview();
+      cdSoundPaint();
+    });
+    el('cd-alert-stop').addEventListener('click', function () { cdAlertStop(); cdVibrate(20); });
+    // 任意手势静默解锁音频。幂等：解锁后直接短路，常量级开销
+    ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) {
+      document.addEventListener(ev, function () {
+        if (cdUnlocked || !cdSoundOn()) return;
+        cdUnlockAudio();
+      }, { passive: true });
+    });
+  }
+
+  // ==================== [v1.0.5.7] 长按时钟 → 手机端显示面板 ====================
+  // 这个面板存在的两个理由：
+  //   · 倒计时未激活时底部胶囊会完全隐藏 → 「新建倒计时」需要一个替代入口
+  //   · 手机端字号是本机偏好（与桌面端无关），又不想在屏幕上常驻一个按钮
+  // 入口：在时钟数字上长按约 520ms；首次进页面会给一次提示
+
+  // 底部面板通用手势：抓手 / 标题栏下滑关闭，内容区照常滚动
+  function bindSheetDrag(sheet, scrim, closer) {
+    var sy = 0, dy = 0, dragging = false;
+    function start(e) {
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      dragging = true; sy = e.clientY; dy = 0;
+      sheet.style.transition = 'none';
+      try { if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    function move(e) {
+      if (!dragging) return;
+      dy = Math.max(0, e.clientY - sy);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      scrim.style.opacity = String(Math.max(0, 1 - dy / 340));
+      if (e.cancelable) e.preventDefault();
+    }
+    function end() {
+      if (!dragging) return;
+      dragging = false;
+      sheet.style.transition = '';
+      scrim.style.opacity = '';
+      sheet.style.transform = '';
+      if (dy > 88) closer();
+      dy = 0;
+    }
+    [sheet.querySelector('.cd-grab'), sheet.querySelector('.cd-head')].forEach(function (node) {
+      if (!node) return;
+      node.addEventListener('pointerdown', start);
+      node.addEventListener('pointermove', move);
+      node.addEventListener('pointerup', end);
+      node.addEventListener('pointercancel', end);
+    });
+  }
+
+  var uiOpen = false;
+
+  function uiPaint() {
+    var sc = phoneScale();
+    el('ui-scale-val').textContent = sc + '%';
+    el('ui-fill').style.width =
+      (((sc - SCALE_MIN) / (SCALE_MAX - SCALE_MIN)) * 100).toFixed(1) + '%';
+    el('ui-minus').disabled = sc <= SCALE_MIN;
+    el('ui-plus').disabled = sc >= SCALE_MAX;
+    el('ui-new-cd').hidden = !CDS.canEdit; // 宿主没开放编辑就别给这个按钮
+  }
+  function openUi() {
+    if (uiOpen || cdSheetOpen) return;
+    uiOpen = true;
+    uiPaint();
+    el('ui-scrim').classList.add('show');
+    el('ui-sheet').classList.add('show');
+    el('ui-sheet').setAttribute('aria-hidden', 'false');
+    cdVibrate(10);
+    hideHint();
+  }
+  function closeUi() {
+    if (!uiOpen) return;
+    uiOpen = false;
+    el('ui-scrim').classList.remove('show');
+    el('ui-sheet').classList.remove('show');
+    el('ui-sheet').setAttribute('aria-hidden', 'true');
+  }
+  function bumpScale(delta) {
+    setPhoneScale(phoneScale() + delta);
+    uiPaint();
+    fit(); // 立刻生效，方便边调边看
+    cdVibrate(6);
+  }
+
+  var hintTimer = null;
+  function hideHint() {
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+    var h = el('hint');
+    if (!h || h.hidden) return;
+    h.classList.remove('show');
+    setTimeout(function () { if (!h.classList.contains('show')) h.hidden = true; }, 340);
+  }
+  function showHintOnce() {
+    if (lsGet(LS_HINT) === '1') return;
+    lsSet(LS_HINT, '1');
+    var h = el('hint');
+    if (!h) return;
+    h.hidden = false;
+    void h.offsetWidth; // 强制重排，保证过渡真的播放
+    h.classList.add('show');
+    hintTimer = setTimeout(hideHint, 8000);
+  }
+
+  // 长按：时钟区域，约 520ms。手指移动超过 10px 视为滑动，取消
+  function bindLongPress() {
+    var target = el('clock');
+    if (!target) return;
+    var timer = null, active = false, sx = 0, sy = 0;
+    function stop() { if (timer) { clearTimeout(timer); timer = null; } active = false; }
+    function start(e) {
+      if (e && e.touches && e.touches.length > 1) { stop(); return; }
+      if (e && typeof e.button === 'number' && e.button > 0) { stop(); return; }
+      stop();
+      active = true;
+      sx = e.clientX || 0; sy = e.clientY || 0;
+      timer = setTimeout(function () {
+        timer = null;
+        if (!active) return;
+        active = false;
+        openUi();
+      }, LONG_PRESS_MS);
+    }
+    function move(e) {
+      if (!active) return;
+      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) stop();
+    }
+    if (window.PointerEvent) {
+      target.addEventListener('pointerdown', start);
+      target.addEventListener('pointermove', move);
+      target.addEventListener('pointerup', stop);
+      target.addEventListener('pointercancel', stop);
+      target.addEventListener('pointerleave', stop);
+    } else { // 老浏览器退回触摸/鼠标两套
+      target.addEventListener('touchstart', start, { passive: true });
+      target.addEventListener('touchmove', move, { passive: true });
+      target.addEventListener('touchend', stop);
+      target.addEventListener('touchcancel', stop);
+      target.addEventListener('mousedown', start);
+      target.addEventListener('mousemove', move);
+      target.addEventListener('mouseup', stop);
+    }
+  }
+
+  function bindUi() {
+    el('ui-close').addEventListener('click', closeUi);
+    el('ui-scrim').addEventListener('click', closeUi);
+    el('ui-minus').addEventListener('click', function () { bumpScale(-SCALE_STEP); });
+    el('ui-plus').addEventListener('click', function () { bumpScale(SCALE_STEP); });
+    el('ui-reset').addEventListener('click', function () {
+      setPhoneScale(100); uiPaint(); fit(); cdVibrate(6);
+    });
+    el('ui-new-cd').addEventListener('click', function () {
+      closeUi();
+      openCd(); // 直接进新建
+    });
+    bindSheetDrag(el('ui-sheet'), el('ui-scrim'), closeUi);
+  }
+
+  function uiLangRefresh() {
+    el('ui-title').textContent = T('手机端显示', 'Phone display');
+    el('ui-scale-label').textContent = T('时钟大小', 'Clock size');
+    el('ui-close').setAttribute('aria-label', T('关闭', 'Close'));
+    el('ui-minus').setAttribute('aria-label', T('缩小', 'Smaller'));
+    el('ui-plus').setAttribute('aria-label', T('放大', 'Larger'));
+    el('ui-reset').textContent = T('恢复默认', 'Reset');
+    el('ui-new-cd').textContent = T('新建倒计时', 'New countdown');
+    el('ui-scale-hint').textContent = T(
+      '只影响这台手机，与电脑上的显示设置无关。',
+      'Only affects this phone — the desktop display setting is untouched.');
+    el('hint').textContent = T('长按时钟可调整字号', 'Long-press the clock to resize');
+  }
+
+  // 语言 / 配置变化时刷新文案
+  function cdLangRefresh() {
+    buildChips();
+    el('cd-empty').textContent = T('还没有倒计时，在下面添加一个', 'No countdowns yet — add one below');
+    el('cd-readonly').textContent = T('当前时钟未开放手机端修改倒计时', 'Editing countdowns is disabled on this clock');
+    el('cd-close').setAttribute('aria-label', T('关闭', 'Close'));
+    el('cd-title').textContent = T('倒计时', 'Countdown');
+    el('cd-fab').setAttribute('aria-label', T('倒计时', 'Countdown'));
+    el('cd-name').setAttribute('placeholder', T('名称（可选）', 'Name (optional)'));
+    el('cd-edit-cancel').textContent = T('取消编辑', 'Cancel edit');
+    cdSyncForm();
+    cdSig = '';
+    cdFabSig = ''; // 语言变了 → 胶囊文案缓存作废（「提醒中」等字样要跟着换）
+    cdSoundPaint();
+    uiLangRefresh();
+    if (cdSheetOpen) renderCdList(true);
+    else cdListVisibility((CDS.items || []).length);
+    cdSyncFab();
+    if (fsOpen) { fsId = null; fsTick(); } // 全屏里的名字也要跟着换语言
+  }
+
+  cdResetForm();
+  bindCd();
+  bindCdSound();
+  bindLongPress();
+  bindUi();
+  cdLangRefresh();
+  el('cd-sheet').setAttribute('aria-hidden', 'true');
+  el('ui-sheet').setAttribute('aria-hidden', 'true');
+  setInterval(tickCd, 1000);
+  setInterval(cdAlertTick, 1000); // 到点提醒独立于卡片 DOM，抽屉关着也要能响
+  cdPokeFab(); // 进页面先让胶囊露个面，之后 3 秒没动静再淡出
+
   applyStatic();
   tick();
   setStatus();
   pull();
   setInterval(pull, POLL_MS);
+  showHintOnce(); // 「长按时钟可调字号」只提示一次（本机记忆）
 })();
-</script>
-</body>
+</script></body>
 </html>

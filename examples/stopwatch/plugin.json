@@ -1,0 +1,67 @@
+{
+  "id": "com.yejack819.stopwatch",
+  "name": "秒表 · 关灯背景板 + 日期条",
+  "version": "1.1.3",
+  "author": "Yejack819",
+  "description": "一个秒表，三处入口：关灯背景板上的大卡片（5 种样式、九宫格定位、昼夜自动配色）、时钟窗口日期栏里的紧凑秒表（3 种样式），以及设置窗口左侧导航里的「秒表」页（实时状态 + 全部设置 + 常用操作）。三处共享同一份计时状态。",
+  "homepage": "https://gitee.com/Yejack819/AniClock-Desktop",
+  "apiVersion": 3,
+  "hooks": ["lightsOff.background", "clock.infoBar", "settings.theme"],
+  "permissions": ["storage", "ui.settings"],
+  "main": "index.js",
+  "style": "style.css",
+  "settingsView": "settings.html",
+  "settings": [
+    { "key": "style", "type": "select", "label": "样式 Style", "hint": "5 种皮肤，切换后立即生效", "default": "classic", "options": [
+      { "value": "classic", "label": "经典 · 大数字 + 状态灯" },
+      { "value": "minimal", "label": "极简 · 只有数字" },
+      { "value": "ring", "label": "圆环 · 60 秒转一圈" },
+      { "value": "laps", "label": "计次板 · 数字 + 分段列表" },
+      { "value": "segment", "label": "数码管 · 发光方字" }
+    ] },
+    { "key": "position", "type": "select", "label": "位置 Position", "hint": "背景板上的九宫格定位", "default": "center", "options": [
+      { "value": "top-left", "label": "左上" },
+      { "value": "top-center", "label": "上中" },
+      { "value": "top-right", "label": "右上" },
+      { "value": "middle-left", "label": "左中" },
+      { "value": "center", "label": "居中" },
+      { "value": "middle-right", "label": "右中" },
+      { "value": "bottom-left", "label": "左下" },
+      { "value": "bottom-center", "label": "下中" },
+      { "value": "bottom-right", "label": "右下" }
+    ] },
+    { "key": "margin", "type": "slider", "label": "边距 Margin (px)", "hint": "离屏幕边缘的距离，仅在非居中位置生效", "min": 0, "max": 600, "step": 4, "default": 48 },
+    { "key": "scale", "type": "slider", "label": "缩放 Scale (%)", "min": 40, "max": 400, "step": 5, "default": 100 },
+    { "key": "opacity", "type": "slider", "label": "整体不透明度 (%)", "min": 5, "max": 100, "step": 5, "default": 92 },
+    { "key": "card", "type": "select", "label": "卡片底色 Card", "hint": "「跟随背景」按背景板实际明暗自动选深卡或浅卡", "default": "auto", "options": [
+      { "value": "auto", "label": "跟随背景（推荐）" },
+      { "value": "dark", "label": "固定深色玻璃" },
+      { "value": "light", "label": "固定浅色玻璃" },
+      { "value": "none", "label": "无卡片（纯文字）" }
+    ] },
+    { "key": "accent", "type": "color", "label": "强调色 Accent", "hint": "圆环进度、状态灯与数码管发光用它", "default": "#6C8CFF" },
+    { "key": "format", "type": "select", "label": "时间格式 Format", "default": "mmss", "options": [
+      { "value": "mmss", "label": "分:秒.百分秒（MM:SS.mm）" },
+      { "value": "hhmmss", "label": "时:分:秒（HH:MM:SS）" }
+    ] },
+    { "key": "blink", "type": "toggle", "label": "冒号闪烁", "hint": "计时中让分隔冒号跟着秒跳动", "default": true },
+    { "key": "showHint", "type": "toggle", "label": "显示操作提示", "hint": "在秒表下方提示可用快捷键", "default": true },
+    { "key": "showLaps", "type": "toggle", "label": "显示计次列表", "hint": "列出最近 4 圈的分段成绩", "default": false },
+    { "key": "keyboard", "type": "toggle", "label": "键盘快捷键", "hint": "空格 开始/暂停 · R 重置 · L 计次 · C 清空计次（不干扰 ESC 退出）", "default": true },
+    { "key": "mouse", "type": "toggle", "label": "鼠标控制按钮", "hint": "开启后秒表下方出现迷你按钮；按钮区域不再响应「双击退出关灯」，ESC 与右下角退出按钮不受影响", "default": false },
+    { "key": "autoStart", "type": "toggle", "label": "进入关灯自动开始", "hint": "打开关灯即刻开始计时；没有历史记录时才会触发", "default": false },
+    { "key": "persist", "type": "toggle", "label": "记住计时状态", "hint": "退出关灯或重启应用后接着走（运行中会按现实时间补齐）", "default": true },
+    { "key": "goalOn", "type": "toggle", "label": "目标时长提醒", "hint": "达到设定分钟数时数字变色并脉冲一次", "default": false },
+    { "key": "goal", "type": "number", "label": "目标时长 (分钟)", "min": 1, "max": 600, "step": 1, "default": 25 },
+    { "key": "infoStyle", "type": "select", "label": "日期条样式 Info bar", "hint": "时钟窗口日期栏上的紧凑秒表；选「不显示」就是手动关掉它，秒表只在关灯背景板上出现", "default": "dot", "options": [
+      { "value": "dot", "label": "状态点 + 时间（推荐）" },
+      { "value": "plain", "label": "纯文字 · 只有时间" },
+      { "value": "pill", "label": "胶囊 · 带底色衬托" },
+      { "value": "none", "label": "不显示 · 只在关灯背景板上" }
+    ] },
+    { "key": "infoAutoHide", "type": "toggle", "label": "打开关灯时自动隐藏日期栏", "hint": "进入关灯模式时日期栏上的秒表先收起来，退出关灯后自动恢复 —— 避免两处同时显示", "default": true },
+    { "key": "infoSeconds", "type": "toggle", "label": "日期条显示百分秒", "hint": "关掉更窄，不容易把时钟窗口撑宽", "default": false },
+    { "key": "infoScale", "type": "slider", "label": "日期条字号 (%)", "hint": "相对日期文字的大小；时钟窗口宽度是按日期栏内容撑开的，调小能让窗口更窄", "min": 60, "max": 130, "step": 5, "default": 80 },
+    { "key": "infoClick", "type": "toggle", "label": "日期条可点击控制", "hint": "单击 开始/暂停 · 双击 计次（单击约 0.24 秒判定延迟；关闭后该区域恢复为可拖动窗口）", "default": true }
+  ]
+}

@@ -5,9 +5,9 @@
  *       用一个符合 IPC 契约的假 electronAPI 驱动，断言面板的结构、状态、二维码与交互。
  *
  * 跑法（jsdom 只装在项目外，不污染项目依赖）：
- *   mkdir -p /tmp/settings-probe && cd /tmp/settings-probe
+ *   mkdir -p $HOME/.workbuddy/binaries/node/workspace && cd $HOME/.workbuddy/binaries/node/workspace
  *   npm install jsdom --registry=https://registry.npmmirror.com --no-audit --no-fund
- *   NODE_PATH=/tmp/settings-probe/node_modules node docs/tests/settings-panel.jsdom.js
+ *   NODE_PATH=$HOME/.workbuddy/binaries/node/workspace/node_modules node docs/tests/settings-panel.jsdom.js
  *
  * 边界：jsdom 没有 canvas 实现，这里用记录型 2d 上下文替代 ——
  *       能验「画了没有 / 画在多大的画布上 / fillRect 次数对不对」，不验像素外观；
@@ -149,8 +149,13 @@ const api = new Proxy({}, {
   // 3) 结构
   check('导航里有「局域网」项', !!q('#settings-nav .nav-item[data-panel="lan"]'));
   check('「局域网」面板存在', !!q('.panel[data-panel="lan"]'));
-  check('导航项 11 个', doc.querySelectorAll('#settings-nav .nav-item').length === 11, String(doc.querySelectorAll('#settings-nav .nav-item').length));
-  check('面板 11 个', doc.querySelectorAll('.panel').length === 11, String(doc.querySelectorAll('.panel').length));
+  check('导航项 12 个', doc.querySelectorAll('#settings-nav .nav-item').length === 12, String(doc.querySelectorAll('#settings-nav .nav-item').length));
+  check('面板 12 个', doc.querySelectorAll('.panel').length === 12, String(doc.querySelectorAll('.panel').length));
+  // [v1.0.5.7] 倒计时面板：导航项与面板成对存在，且不是教育模式隐藏项
+  check('导航里有「倒计时」项', !!q('#settings-nav .nav-item[data-panel="countdown"]'));
+  check('「倒计时」项不在 edu-hide 里', !q('#settings-nav .nav-item[data-panel="countdown"]').classList.contains('edu-hide'));
+  check('「倒计时」面板存在', !!q('.panel[data-panel="countdown"]'));
+  check('「倒计时」面板有列表容器与新建按钮', !!$('countdown-list') && !!$('countdown-add-btn'));
   check('初始停留在局域网面板（配置 settingsTab=lan）', q('.panel.active').dataset.panel === 'lan');
 
   // 4) 未开启时的初始态

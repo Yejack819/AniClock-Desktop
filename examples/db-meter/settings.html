@@ -1,0 +1,100 @@
+<!-- settings.html — 分贝仪的自绘设置说明区（可选）
+     宿主会白名单清洗这段片段：script / iframe / 事件属性 / javascript: 一律去掉，所以这里只有静态说明。
+     所有可调项都在上面的声明式表单里，这里只负责讲清楚「怎么用、怎么校准」。 -->
+
+<div class="plugin-section-label">主入口 · 设置窗口左侧导航「🔊 分贝仪」</div>
+
+<p style="font-size:calc(var(--sfz) - 1px);color:#bbb;line-height:1.7;margin:0 0 10px">
+  日常调这个插件请走左侧导航里的 <strong style="color:#ddd">分贝仪</strong> 页：那里有<strong style="color:#ddd">实时预览</strong>（停在那一页时才占用麦克风，切走就释放）、
+  <strong style="color:#ddd">一键校准</strong>，以及全部设置项（分「常用」与「高级」两组，改完点保存才写入）。
+  下面这张卡片里的设置项与导航页是同一份数据，用哪个改都行。
+</p>
+
+<div class="plugin-section-label">使用说明 · 分贝仪只在「关灯」时显示</div>
+
+<p style="font-size:calc(var(--sfz) - 1px);color:#bbb;line-height:1.7;margin:0 0 10px">
+  打开关灯模式后，背景板上就会浮出这个仪表（默认居中）。它从麦克风读取时域波形算出声级，
+  <strong style="color:#ddd">数值是相对读数，不是计量级声压</strong>，用来看「安静 / 一般 / 吵闹」的趋势足够准确。
+  仪表层默认不吃鼠标事件 —— 背景板上的「双击退出关灯」始终有效。
+</p>
+
+<div class="plugin-section-label">校准（决定数字准不准）</div>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.6">
+  <tr>
+    <td style="padding:4px 10px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">一键校准</td>
+    <td style="padding:4px 0">导航页上的按钮：停在「分贝仪」页，点一下「把当前环境设为 40 dB」，插件采样 1.6 秒环境底噪后自动算出偏移值（会顺手关掉自动校准，否则会被它覆盖）。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 10px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">自动校准</td>
+    <td style="padding:4px 0">开着它再进关灯，插件先采样 1.6 秒环境底噪，把「安静时的读数」自动对齐到下面的目标值。教室每次换位置、换机器，开一次就够。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 10px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">手动偏移</td>
+    <td style="padding:4px 0">关掉自动校准时用它：安静教室读数偏高就把「手动校准偏移」调小，偏低就调大，1 档 ≈ 1 dB。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 10px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">阈值</td>
+    <td style="padding:4px 0">自习模式：低于阈值 A 判「安静」、超过阈值 B 判「吵闹」。早读模式反过来：超过阈值 B 才判「洪亮」。</td>
+  </tr>
+</table>
+
+<div class="plugin-section-label">分档配色</div>
+
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px">
+  <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;background:rgba(93,202,165,0.18);color:#7fe0c0;font-size:calc(var(--sfz) - 2px)">
+    <span style="width:8px;height:8px;border-radius:50%;background:#5dcaa5"></span>达标 · 安静 / 洪亮
+  </span>
+  <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;background:rgba(239,159,39,0.18);color:#f6bb62;font-size:calc(var(--sfz) - 2px)">
+    <span style="width:8px;height:8px;border-radius:50%;background:#ef9f27"></span>一般
+  </span>
+  <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;background:rgba(226,75,74,0.18);color:#f58a89;font-size:calc(var(--sfz) - 2px)">
+    <span style="width:8px;height:8px;border-radius:50%;background:#e24b4a"></span>超标 · 吵闹 / 太静
+  </span>
+</div>
+
+<div class="plugin-section-label">9 种样式对照</div>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#999;line-height:1.65">
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">经典 classic</td>
+    <td style="padding:3px 0">大数字 + 状态灯 + 模式标签，信息最全，适合挂在教室前屏</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">极简 minimal</td>
+    <td style="padding:3px 0">只有数字，干扰最小</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">圆环 ring</td>
+    <td style="padding:3px 0">环形进度一眼看出离上限还有多远</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">光条 bar</td>
+    <td style="padding:3px 0">横向进度条 + 峰值刻度，适合放屏幕底部</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">胶囊 pill</td>
+    <td style="padding:3px 0">整块背景变色，隔远也能看清当前档位</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">状态词 text</td>
+    <td style="padding:3px 0">直接大字显示「安静 / 吵闹」，数字退到副行</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">弧形表 gauge</td>
+    <td style="padding:3px 0">半圆仪表，视觉分量最重</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">呼吸灯 pulse</td>
+    <td style="padding:3px 0">状态灯随音量一起呼吸，越吵跳得越快</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 10px 3px 0;color:#cfd8ff;white-space:nowrap">波形 wave</td>
+    <td style="padding:3px 0">实时声波曲线，最直观地「看见」声音</td>
+  </tr>
+</table>
+
+<p style="font-size:calc(var(--sfz) - 3px);color:#777;line-height:1.6;margin:12px 0 0">
+  提示：改任意一项设置都会立刻重载插件并重新取一次麦克风。
+  开启「点按仪表暂停」后，仪表会开始接收鼠标事件 —— 那一小块区域将不再响应「双击退出关灯」，其余区域不受影响。
+</p>

@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- [v1.0.5.7] CSP：'unsafe-inline'/'unsafe-eval' 为插件沙箱（srcdoc/new Function）所必需 -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; font-src 'self' data: file:; connect-src 'self' https: ws: wss:; media-src 'self' file: blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Digital Clock</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,6 +15,7 @@
       <span id="date-inline"></span>
       <span id="weekday-inline"></span>
       <span id="tz-inline"></span>
+      <span id="countdown-inline"></span>
       <span id="alarm-inline"></span>
     </div>
   </div>

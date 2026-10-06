@@ -1,0 +1,546 @@
+/* style.css — 秒表 · 关灯背景板  (stopwatch v1.0.0)
+ *
+ * 只注入到「声明了 lightsOff.background 的窗口」，但样式是全局生效的，
+ * 所以每条选择器都带 .sw- 前缀，避免影响宿主与其它插件。
+ *
+ * 所有尺寸用 em：基准字号由 index.js 写在卡片上，于是「缩放」一个滑条就能整体放大缩小。
+ * 颜色走 CSS 变量：--sw-fg / --sw-dim / --sw-track / --sw-bg / --sw-bd / --sw-shadow /
+ * --sw-accent，由 index.js 按背景板实际亮暗计算后写在卡片上，昼夜切换自动换深卡 / 浅卡。
+ *
+ * 5 种样式共用同一套 DOM，差异全部在这里：classic / minimal / ring / laps / segment。
+ */
+
+.sw-stage * { box-sizing: border-box; }
+
+/* ---------------- 卡片 ---------------- */
+.sw-card {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .55em;
+  padding: .85em 1.25em .9em;
+  border-radius: 1.05em;
+  background: var(--sw-bg, rgba(20, 21, 28, .62));
+  border: 1px solid var(--sw-bd, rgba(255, 255, 255, .14));
+  box-shadow: var(--sw-shadow, none);
+  color: var(--sw-fg, #fff);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none; /* 卡片本身穿透，只有「鼠标控制按钮」会单独开启 */
+  transition: background .4s, border-color .4s, box-shadow .4s;
+}
+
+/* 入场：只在 from 里写值，100% 沿用元素自身的 opacity（= 用户设的整体不透明度） */
+.sw-stage.sw-enter { animation: sw-enter .62s cubic-bezier(.16, .84, .34, 1) both; }
+@keyframes sw-enter {
+  from { opacity: 0; transform: translateY(.9em) scale(.97); }
+}
+
+/* ---------------- 状态灯 + 状态词 ---------------- */
+.sw-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+  font-size: .7em;
+  color: var(--sw-dim, rgba(255, 255, 255, .48));
+  letter-spacing: .1em;
+}
+.sw-status-text { white-space: nowrap; }
+.sw-dot {
+  width: .5em;
+  height: .5em;
+  border-radius: 50%;
+  background: var(--sw-dim, rgba(255, 255, 255, .48));
+  transition: background .3s, box-shadow .3s;
+}
+/* 待开始：状态灯保持暗淡，不发光 */
+.sw-card.sw-idle .sw-dot { opacity: .55; }
+.sw-card.sw-running .sw-dot {
+  background: #5dcaa5;
+  box-shadow: 0 0 .55em rgba(93, 202, 165, .8);
+  animation: sw-dot-pulse 1.6s ease-in-out infinite;
+}
+.sw-card.sw-paused .sw-dot { background: #ef9f27; box-shadow: 0 0 .5em rgba(239, 159, 39, .55); }
+@keyframes sw-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+/* ---------------- 数字 ---------------- */
+.sw-time {
+  display: flex;
+  align-items: baseline;
+  font-family: "Cascadia Mono", Consolas, "SF Mono", ui-monospace, monospace;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  text-shadow: var(--sw-text-shadow, none);
+  transition: color .4s;
+}
+.sw-t-main { display: inline-flex; align-items: baseline; }
+.sw-dg { display: inline-block; } /* 逐段数字，配合 tabular-nums 保证宽度稳定 */
+.sw-colon { font-style: normal; }
+.sw-t-frac {
+  font-size: .6em;
+  margin-left: .07em;
+  opacity: .8;
+}
+.sw-t-frac:empty { display: none; }
+
+/* 冒号闪烁：只在「计时中 + 开启闪烁」时跑 */
+.sw-card.sw-blink .sw-colon { animation: sw-colon-blink 1s steps(1, end) infinite; }
+@keyframes sw-colon-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: .28; }
+}
+
+/* ---------------- 副信息（目标进度 / 圈数） ---------------- */
+.sw-meta {
+  font-size: .68em;
+  color: var(--sw-dim, rgba(255, 255, 255, .48));
+  letter-spacing: .04em;
+  min-height: .2em;
+  transition: color .3s;
+}
+.sw-meta:empty { display: none; }
+
+/* ---------------- 计次列表 ---------------- */
+.sw-laps {
+  display: none;
+  flex-direction: column;
+  gap: .3em;
+  margin: .15em 0 0;
+  padding: .5em 0 0;
+  border-top: 1px solid var(--sw-track, rgba(255, 255, 255, .15));
+  min-width: 11em;
+  list-style: none;
+}
+.sw-card.sw-show-laps .sw-laps { display: flex; }
+.sw-lap {
+  display: flex;
+  align-items: baseline;
+  gap: .7em;
+  font-size: .62em;
+  font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  color: var(--sw-dim, rgba(255, 255, 255, .48));
+}
+.sw-lap-n { flex: 0 0 auto; }
+.sw-lap-seg {
+  flex: 1;
+  text-align: right;
+  color: var(--sw-fg, #fff);
+  opacity: .9;
+}
+.sw-lap-total { flex: 0 0 auto; opacity: .72; }
+
+/* ---------------- 鼠标控制按钮（仅开启「鼠标控制」时出现） ---------------- */
+.sw-btns { display: none; gap: .4em; align-items: center; }
+.sw-card.sw-has-btns .sw-btns { display: flex; }
+.sw-btn {
+  font: inherit;
+  font-size: .62em;
+  letter-spacing: .04em;
+  padding: .55em 1em;
+  border-radius: 99px;
+  border: 1px solid var(--sw-bd, rgba(255, 255, 255, .14));
+  background: rgba(127, 127, 127, .18);
+  color: var(--sw-fg, #fff);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background .2s, transform .12s, border-color .2s, opacity .2s;
+}
+.sw-btn:hover { background: rgba(127, 127, 127, .32); }
+.sw-btn:active { transform: scale(.94); }
+.sw-btn:disabled { opacity: .35; cursor: default; }
+.sw-btn:disabled:hover { background: rgba(127, 127, 127, .18); }
+.sw-btn-main {
+  background: var(--sw-accent, #6C8CFF);
+  border-color: transparent;
+  color: #fff;
+  min-width: 3.6em;
+}
+.sw-btn-lap, .sw-btn-reset { min-width: 3.2em; }
+.sw-btn-main:hover { background: var(--sw-accent, #6C8CFF); filter: brightness(1.12); }
+
+/* ---------------- 快捷键提示 ---------------- */
+.sw-hint {
+  display: none;
+  font-size: .58em;
+  color: var(--sw-dim, rgba(255, 255, 255, .48));
+  letter-spacing: .05em;
+}
+.sw-card.sw-show-hint .sw-hint { display: block; }
+
+/* ---------------- 目标达成 ---------------- */
+.sw-card.sw-goal .sw-time { color: #1f9e77; }
+.sw-card.sw-goal.sw-dark .sw-time { color: #6fe3b8; }
+.sw-card.sw-goal .sw-meta { color: #1f9e77; }
+.sw-card.sw-goal.sw-dark .sw-meta { color: #6fe3b8; }
+.sw-card.sw-goal-pulse { animation: sw-goal-pulse .9s cubic-bezier(.3, .9, .3, 1) 1; }
+@keyframes sw-goal-pulse {
+  0% { transform: scale(1); }
+  32% { transform: scale(1.055); }
+  100% { transform: scale(1); }
+}
+
+/* ================================================================
+ * 样式 1 · 经典 classic —— 状态灯 + 大数字 + 副信息，信息最全
+ * ================================================================ */
+.sw-card-classic .sw-time { font-size: 3.4em; }
+
+/* ================================================================
+ * 样式 2 · 极简 minimal —— 只留数字
+ * ================================================================ */
+.sw-card-minimal { padding: .55em .95em .6em; gap: .4em; }
+.sw-card-minimal .sw-time { font-size: 3.9em; }
+.sw-card-minimal .sw-status { font-size: .58em; letter-spacing: .06em; }
+.sw-card-minimal .sw-meta { font-size: .6em; }
+.sw-card-minimal .sw-hint { font-size: .54em; }
+
+/* ================================================================
+ * 样式 3 · 圆环 ring —— 外圈 60 秒转一圈（像秒针），数字在环心
+ * ================================================================ */
+.sw-card-ring {
+  width: 13.6em;
+  height: 13.6em;
+  padding: 1.15em;
+  justify-content: center;
+  gap: .3em;
+  border-radius: 50%; /* 圆形表盘 */
+}
+.sw-ringwrap { display: none; }
+.sw-card-ring .sw-ringwrap {
+  display: block;
+  position: absolute;
+  inset: .5em;
+}
+.sw-svg { width: 100%; height: 100%; display: block; }
+/* 环上的进度弧：只过渡描边颜色，dashoffset 是每帧算的，不能加过渡否则会拖后腿 */
+.sw-arc { transition: stroke .4s linear; }
+.sw-card-ring .sw-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .45em;
+}
+.sw-card-ring .sw-time { font-size: 2.3em; }
+.sw-card-ring .sw-status { font-size: .6em; }
+.sw-card-ring .sw-meta { font-size: .58em; }
+.sw-card-ring .sw-laps { min-width: 8.5em; }
+.sw-card-ring .sw-hint { font-size: .52em; white-space: nowrap; }
+
+/* ================================================================
+ * 样式 4 · 计次板 laps —— 数字 + 分段成绩列表（默认展开）
+ * ================================================================ */
+.sw-card-laps { padding: .85em 1.15em .9em; }
+.sw-card-laps .sw-time { font-size: 2.7em; }
+
+/* ================================================================
+ * 样式 5 · 数码管 segment —— 强调色发光方字，暗底最像仪表
+ * ================================================================ */
+.sw-card-segment .sw-time {
+  font-weight: 700;
+  font-size: 3.1em;
+  letter-spacing: .03em;
+  color: var(--sw-accent, #6C8CFF);
+  text-shadow:
+    0 0 .28em color-mix(in srgb, var(--sw-accent, #6C8CFF) 65%, transparent),
+    0 0 .9em color-mix(in srgb, var(--sw-accent, #6C8CFF) 28%, transparent);
+}
+.sw-card-segment.sw-goal .sw-time {
+  color: #6fe3b8;
+  text-shadow:
+    0 0 .28em color-mix(in srgb, #6fe3b8 65%, transparent),
+    0 0 .9em color-mix(in srgb, #6fe3b8 28%, transparent);
+}
+.sw-card-segment .sw-t-frac { opacity: .68; }
+
+/* ================================================================
+ * 日期条（clock.infoBar）—— 时钟窗口日期栏里的紧凑秒表
+ *
+ * 字号 / 字体 / 颜色全部继承宿主：renderer.js 在 #info-bar 上写了
+ *   font-size = cfg.fontSize × infoScale（默认 200×0.3 = 60px）
+ *   font-family = 用户选的字体，color = 当前昼夜色（闹钟闪烁时也会改它）
+ * 所以这里不写任何固定字号，只跟随即可。
+ * ================================================================ */
+.sw-i {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .26em;
+  /* 字号相对日期文字缩放（默认 80%）：时钟窗口宽度是按日期栏内容撑开的，
+     秒表越大窗口越宽。变量由 index.js 写在插槽上，这里给 0.8em 兜底。 */
+  font-size: calc(1em * var(--sw-i-scale, .8));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.1;
+  transition: transform .12s ease, opacity .12s ease;
+  /* 插槽宽度必须显式钉住，且用 min-width 而不是 width：
+     宿主的 .plugin-info-slot 在 #info-bar 里作为 flex item 时，width:auto 会被解析成
+     「第一个子项的宽度」（实测 19.2px = 状态点宽），后面的时间数字会被整个裁掉；
+     而窗口宽度又是按信息栏宽度反推的，会跟着一起算错。
+     用 min-width 是因为它对其它 width 规则免疫 —— 之前用 width 时，
+     样式修饰类 .sw-i-dot 和状态点元素的 .sw-i-dot 撞名（已改名为 .sw-i-mode-dot），
+     插槽自己被钉成 19.2px，重挂载后内联样式被序列化丢掉就露馅了。 */
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+/* 可点击：必须显式 no-drag —— .clock 整块是 -webkit-app-region: drag，
+   不设的话鼠标会被窗口拖拽吃掉，根本点不着。 */
+.sw-i-clickable {
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  user-select: none;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.sw-i-clickable:hover { opacity: .8; }
+
+/* [v1.1.1] 按下 → 立即有按压反馈；长按到 700ms 触发重置时脉冲一次 */
+.sw-i-pressing { transform: scale(.94); opacity: .5; }
+.sw-i-flash { animation: sw-i-flash .62s cubic-bezier(.3, .9, .3, 1) 1; }
+@keyframes sw-i-flash {
+  0% { transform: scale(1); }
+  28% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* [v1.1.1] 打开关灯背景板时自动收起（用 display:none 而不是摘掉元素，方便恢复） */
+.sw-i.sw-i-hidden { display: none; }
+
+/* ================================================================
+ * [v1.1.2] 设置窗口 ·「秒表」导航页
+ *
+ * 这一页活在设置窗口里，宿主的设置样式表已经加载，所以设置行**直接复用宿主的
+ * .setting-row / .toggle-switch / .setting-note / .plugin-section-label**，
+ * 外观自动与内置设置一致。这里只补宿主没覆盖到的：状态卡、操作按钮、保存条、
+ * 以及宿主没给 number / text 行做横排的那部分。
+ * ================================================================ */
+.sw-set { --sw-accent: #6C8CFF; }
+
+/* ---- 状态卡 ---- */
+.sw-set-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #2e2e3a;
+  background: rgba(255, 255, 255, .03);
+}
+.sw-set-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b6b7a;
+  flex: 0 0 auto;
+  transition: background .3s, box-shadow .3s;
+}
+.sw-set-status.sw-run .sw-set-dot {
+  background: #5dcaa5;
+  box-shadow: 0 0 8px rgba(93, 202, 165, .8);
+  animation: sw-set-pulse 1.6s ease-in-out infinite;
+}
+.sw-set-status.sw-pause .sw-set-dot { background: #ef9f27; box-shadow: 0 0 6px rgba(239, 159, 39, .5); }
+/* 待开始：状态点保持暗色，数字淡一档 */
+.sw-set-status.sw-off .sw-set-dot { background: #6b6b7a; box-shadow: none; }
+.sw-set-status.sw-off .sw-set-time { opacity: .78; }
+@keyframes sw-set-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+.sw-set-state { font-size: calc(var(--sfz) - 1px); color: #999; }
+.sw-set-time {
+  margin-left: auto;
+  font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  font-size: calc(var(--sfz) + 10px);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+.sw-set-lap {
+  font-size: calc(var(--sfz) - 2px);
+  color: #8b93b8;
+  min-width: 2.6em;
+  text-align: right;
+}
+
+/* ---- 常用操作按钮 ---- */
+.sw-set-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw-set-actions button {
+  align-self: auto;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #3a3a4a;
+  background: #2b2b36;
+  color: #ddd;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.sw-set-actions button:hover:not(:disabled) { background: #35354a; border-color: var(--sw-accent); color: #fff; }
+.sw-set-actions button:disabled { opacity: .35; cursor: default; }
+.sw-set-actions .sw-set-primary {
+  background: var(--sw-accent);
+  border-color: transparent;
+  color: #fff;
+  min-width: 92px;
+  font-weight: 600;
+}
+.sw-set-actions .sw-set-primary:hover:not(:disabled) { filter: brightness(1.12); }
+
+/* ---- 设置项 ---- */
+.sw-set-fields { display: flex; flex-direction: column; }
+.sw-set-group { display: flex; flex-direction: column; }
+.sw-set-val { color: #8b93b8; font-variant-numeric: tabular-nums; }
+
+/* 宿主的横排规则只覆盖了 select / color / toggle，这里给 number 与 text 补上 */
+.sw-set .setting-row:has(> input[type="number"]),
+.sw-set .setting-row:has(> input[type="text"]) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.sw-set input[type="number"],
+.sw-set input[type="text"] {
+  width: 132px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #3a3a4a;
+  background: #23232c;
+  color: #ddd;
+  font-family: inherit;
+  font-size: var(--sfz);
+  text-align: right;
+}
+.sw-set select,
+.sw-set textarea {
+  background: #23232c;
+  color: #ddd;
+  border: 1px solid #3a3a4a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: var(--sfz);
+}
+/* 带说明的行：说明独占一行，不跟控件挤在一起 */
+.sw-set .setting-row:has(> .setting-note) { flex-wrap: wrap; }
+.sw-set .setting-row > .setting-note { flex-basis: 100%; }
+
+/* ---- 保存条（吸底） ---- */
+.sw-set-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 6px;
+  margin-top: 6px;
+  border-top: 1px solid #2e2e3a;
+  background: rgba(22, 22, 28, .94);
+  backdrop-filter: blur(10px);
+}
+.sw-set-bar button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.sw-set-save {
+  border: 1px solid transparent;
+  background: var(--sw-accent);
+  color: #fff;
+  font-weight: 600;
+}
+.sw-set-save:hover:not(:disabled) { filter: brightness(1.12); }
+.sw-set-discard {
+  border: 1px solid #3a3a4a;
+  background: #2b2b36;
+  color: #ddd;
+}
+.sw-set-discard:hover:not(:disabled) { background: #35354a; border-color: #6C8CFF; color: #fff; }
+.sw-set-bar button:disabled { opacity: .32; cursor: default; }
+.sw-set-note {
+  margin-left: auto;
+  font-size: calc(var(--sfz) - 3px);
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 保存完成提示 ---- */
+.sw-set-saved {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(93, 202, 165, .16);
+  border: 1px solid rgba(93, 202, 165, .5);
+  color: #7fe0c0;
+  font-size: calc(var(--sfz) - 1px);
+  z-index: 60;
+  animation: sw-set-toast .3s ease;
+}
+@keyframes sw-set-toast {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+}
+
+.sw-i-dot {
+  align-self: center;
+  width: .32em;
+  height: .32em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .32;
+  flex: 0 0 auto;
+  transition: background .3s, opacity .3s, box-shadow .3s;
+}
+.sw-i-running .sw-i-dot {
+  background: #4bbf94;
+  opacity: 1;
+  box-shadow: 0 0 .35em rgba(75, 191, 148, .75);
+  animation: sw-i-pulse 1.6s ease-in-out infinite;
+}
+.sw-i-paused .sw-i-dot { background: #e79a24; opacity: 1; box-shadow: 0 0 .3em rgba(231, 154, 36, .5); }
+/* 待开始：数字淡一档，一眼能看出表还没跑 */
+.sw-i-idle .sw-i-main { opacity: .75; }
+@keyframes sw-i-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+.sw-i-main { font-weight: 600; letter-spacing: .01em; }
+.sw-i-frac { font-size: .72em; opacity: .62; }
+.sw-i-frac:empty { display: none; }
+.sw-i-lap {
+  font-size: .52em;
+  opacity: .55;
+  margin-left: .1em;
+  align-self: center;
+}
+.sw-i-lap:empty { display: none; }
+.sw-i-lap:not(:empty)::before { content: '×'; margin-right: .08em; }
+
+/* 样式修饰类：注意是 .sw-i-mode-* —— 不能叫 .sw-i-plain 之外的 .sw-i-dot，
+   那会和状态点元素 .sw-i-dot 撞名（width: .32em 会把插槽自己钉成 19px）。 */
+.sw-i-mode-dot { gap: .34em; }
+
+/* 纯文字：状态点与圈数都不显示，只剩时间 */
+.sw-i-mode-plain .sw-i-dot,
+.sw-i-mode-plain .sw-i-lap { display: none; }
+.sw-i-mode-plain .sw-i-main { font-weight: 500; }
+
+/* 胶囊：中性半透明底，深底浅底都成立 */
+.sw-i-mode-pill {
+  padding: .18em .55em .2em;
+  border-radius: 99px;
+  background: rgba(127, 127, 127, .18);
+}

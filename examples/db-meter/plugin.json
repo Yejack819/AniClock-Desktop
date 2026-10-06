@@ -1,0 +1,67 @@
+{
+  "id": "com.yejack819.dbmeter",
+  "name": "分贝仪 · 关灯背景板",
+  "version": "1.1.0",
+  "author": "Yejack819",
+  "description": "实时分贝仪：关灯背景板上显示 9 种样式的迷你仪表（经典 / 极简 / 圆环 / 光条 / 胶囊 / 状态词 / 弧形表 / 呼吸灯 / 波形），支持自习与早读两套判读标准、自动校准、九宫格定位、配色随昼夜自动切换；设置窗口左侧导航里另有一页「分贝仪」，带实时预览与一键校准。",
+  "homepage": "https://gitee.com/Yejack819/AniClock-Desktop",
+  "apiVersion": 3,
+  "hooks": ["lightsOff.background", "settings.theme"],
+  "permissions": ["ui.settings", "mic"],
+  "main": "index.js",
+  "style": "style.css",
+  "settingsView": "settings.html",
+  "settings": [
+    { "key": "style", "type": "select", "label": "样式 Style", "hint": "9 种迷你仪表，切换后立即重启插件生效", "default": "classic", "options": [
+      { "value": "classic", "label": "经典 · 大数字 + 状态灯" },
+      { "value": "minimal", "label": "极简 · 只有数字" },
+      { "value": "ring", "label": "圆环 · 环形进度" },
+      { "value": "bar", "label": "光条 · 横向进度条" },
+      { "value": "pill", "label": "胶囊 · 状态色胶囊" },
+      { "value": "text", "label": "状态词 · 大字安静/吵闹" },
+      { "value": "gauge", "label": "弧形表 · 半圆仪表" },
+      { "value": "pulse", "label": "呼吸灯 · 随音量呼吸" },
+      { "value": "wave", "label": "波形 · 实时声波" }
+    ] },
+    { "key": "position", "type": "select", "label": "位置 Position", "hint": "背景板上的九宫格定位", "default": "center", "options": [
+      { "value": "top-left", "label": "左上" },
+      { "value": "top-center", "label": "上中" },
+      { "value": "top-right", "label": "右上" },
+      { "value": "middle-left", "label": "左中" },
+      { "value": "center", "label": "居中" },
+      { "value": "middle-right", "label": "右中" },
+      { "value": "bottom-left", "label": "左下" },
+      { "value": "bottom-center", "label": "下中" },
+      { "value": "bottom-right", "label": "右下" }
+    ] },
+    { "key": "margin", "type": "slider", "label": "边距 Margin (px)", "hint": "离屏幕边缘的距离，仅在非居中位置生效", "min": 0, "max": 600, "step": 4, "default": 48 },
+    { "key": "scale", "type": "slider", "label": "缩放 Scale (%)", "min": 40, "max": 400, "step": 5, "default": 100 },
+    { "key": "opacity", "type": "slider", "label": "整体不透明度 (%)", "min": 5, "max": 100, "step": 5, "default": 92 },
+    { "key": "card", "type": "select", "label": "卡片底色 Card", "hint": "「跟随背景」会按背景板实际明暗自动选深卡或浅卡", "default": "auto", "options": [
+      { "value": "auto", "label": "跟随背景（推荐）" },
+      { "value": "dark", "label": "固定深色玻璃" },
+      { "value": "light", "label": "固定浅色玻璃" },
+      { "value": "none", "label": "无卡片（纯文字）" }
+    ] },
+    { "key": "mode", "type": "select", "label": "判读模式 Mode", "hint": "自习：越静越好；早读：越响亮越好", "default": "quiet", "options": [
+      { "value": "quiet", "label": "自习 / 安静（低了算好）" },
+      { "value": "loud", "label": "早读 / 洪亮（高了算好）" }
+    ] },
+    { "key": "low", "type": "number", "label": "阈值 A Low (dB)", "hint": "自习模式的上限 / 早读模式的下限", "min": 10, "max": 130, "step": 1, "default": 55 },
+    { "key": "high", "type": "number", "label": "阈值 B High (dB)", "hint": "自习模式的吵闹线 / 早读模式的达标线", "min": 10, "max": 140, "step": 1, "default": 70 },
+    { "key": "goodColor", "type": "color", "label": "达标色 Good", "default": "#5dcaa5" },
+    { "key": "warnColor", "type": "color", "label": "一般色 Fair", "default": "#ef9f27" },
+    { "key": "badColor", "type": "color", "label": "超标色 Bad", "default": "#e24b4a" },
+    { "key": "autoCal", "type": "toggle", "label": "启动时自动校准 Auto-calibrate", "hint": "开启后先采样 1.6 秒环境底噪，把安静时的读数对齐到下面的目标值", "default": false },
+    { "key": "calTarget", "type": "number", "label": "校准目标底噪 (dB)", "hint": "自动校准想让安静环境显示成多少分贝，建议 35–45", "min": 20, "max": 80, "step": 1, "default": 40 },
+    { "key": "calibration", "type": "slider", "label": "手动校准偏移 (dB)", "hint": "自动校准关闭时用这一项；读数偏高就调小、偏低就调大", "min": 40, "max": 140, "step": 1, "default": 94 },
+    { "key": "smooth", "type": "slider", "label": "平滑 Smoothing (%)", "hint": "越大数字越稳，越小反应越快", "min": 0, "max": 95, "step": 5, "default": 70 },
+    { "key": "showMode", "type": "toggle", "label": "显示模式标签", "default": true },
+    { "key": "showWord", "type": "toggle", "label": "显示状态词", "default": true },
+    { "key": "showPeak", "type": "toggle", "label": "显示峰值 Peak", "default": true },
+    { "key": "fps", "type": "slider", "label": "刷新率 FPS", "hint": "每秒采样次数，越低越省电", "min": 4, "max": 30, "step": 1, "default": 12 },
+    { "key": "rangeMin", "type": "number", "label": "进度下限 (dB)", "hint": "圆环 / 光条 / 弧形表的 0% 位置", "min": 0, "max": 90, "step": 1, "default": 30 },
+    { "key": "rangeMax", "type": "number", "label": "进度上限 (dB)", "hint": "圆环 / 光条 / 弧形表的 100% 位置", "min": 40, "max": 140, "step": 1, "default": 90 },
+    { "key": "clickPause", "type": "toggle", "label": "点按仪表暂停", "hint": "默认关闭；开启后仪表区域会吃掉鼠标事件（该区域不再能双击退出关灯）", "default": false }
+  ]
+}

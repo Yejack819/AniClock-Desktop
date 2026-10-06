@@ -1,0 +1,142 @@
+<!-- settings.html — 秒表的自绘设置说明区（可选）
+     宿主会白名单清洗这段片段：script / iframe / 内联事件属性 / 危险协议 一律去掉，所以这里只有静态说明。
+     所有可调项都在上面的声明式表单里，这一段只负责讲清楚「怎么用」。 -->
+
+<div class="plugin-section-label">使用说明 · 秒表只在「关灯」时显示</div>
+
+<p style="font-size:calc(var(--sfz) - 1px);color:#bbb;line-height:1.7;margin:0 0 10px">
+  打开关灯模式后，背景板上就会浮出这块秒表（默认居中）。计时精度到百分秒，暂停不清零。
+  秒表层默认<strong style="color:#ddd">完全不吃鼠标事件</strong>，所以「双击背景退出关灯 / ESC 退出」始终有效 ——
+  这也是它默认只用键盘控制的原因。
+</p>
+
+<div class="plugin-section-label">日期条上的秒表（时钟窗口）</div>
+
+<p style="font-size:calc(var(--sfz) - 1px);color:#bbb;line-height:1.7;margin:0 0 10px">
+  除了关灯背景板，时钟窗口的<strong style="color:#ddd">日期栏里也会挂一块紧凑秒表</strong>
+  （跟日期、星期、时区同一行）。两边是<strong style="color:#ddd">同一块表</strong>：
+  在关灯里按了开始，回到时钟窗口看到的还是同一个时间，反之亦然。
+</p>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.6">
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">单击</td>
+    <td style="padding:4px 0">开始 / 暂停。注意单击会有约 <strong style="color:#ddd">0.24 秒</strong>的判定延迟 —— 系统要先等一等，看是不是双击。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">双击</td>
+    <td style="padding:4px 0">计次。末尾会显示当前的圈数。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">长按</td>
+    <td style="padding:4px 0">重置。按住约 <strong style="color:#ddd">0.7 秒</strong>，数字会脉冲一下表示已归零。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">键盘</td>
+    <td style="padding:4px 0">与关灯窗口完全一致：空格 / L / R / C。</td>
+  </tr>
+</table>
+
+<p style="font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.7;margin:10px 0 10px">
+  三种样式：<strong style="color:#cfd8ff">状态点 + 时间</strong>（默认）、
+  <strong style="color:#cfd8ff">纯文字</strong>（只有时间，最窄）、
+  <strong style="color:#cfd8ff">胶囊</strong>（带一层底色衬托）。
+</p>
+
+<div class="plugin-section-label">想让它别在日期栏出现，两种办法</div>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.6">
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">手动关掉</td>
+    <td style="padding:4px 0">「日期条样式」选 <strong style="color:#ddd">不显示</strong> —— 插槽会被整个摘掉，
+      日期栏不会因为插件留下任何空白。秒表此后只在关灯背景板上出现。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top">自动收起</td>
+    <td style="padding:4px 0">「<strong style="color:#ddd">打开关灯时自动隐藏日期栏</strong>」默认开启：
+      进入关灯模式时日期栏上的秒表先收起来，退出关灯后自动恢复 —— 免得两处同时显示。</td>
+  </tr>
+</table>
+
+<p style="font-size:calc(var(--sfz) - 3px);color:#777;line-height:1.6;margin:10px 0 10px">
+  说明：进入关灯时宿主会强制显示时钟窗口，所以日期栏的秒表确实会和关灯背景板上的秒表同时存在
+  —— 这就是「自动收起」这个开关要解决的问题。
+</p>
+
+<p style="font-size:calc(var(--sfz) - 3px);color:#777;line-height:1.6;margin:0 0 10px">
+  小提示：时钟窗口的宽度是按「数字区」和「日期栏」里更宽的那个自动撑开的。所以日期栏上的秒表
+  默认<strong style="color:#999">不带百分秒</strong>、样式也做得紧凑 —— 如果你把时钟字号调得很小、
+  又开了百分秒，窗口可能会被秒表撑宽一些。关掉「日期条显示百分秒」即可收窄。
+</p>
+
+<div class="plugin-section-label">快捷键（默认开启）</div>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.6">
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top;font-family:Consolas,monospace">空格</td>
+    <td style="padding:4px 0">开始 / 暂停。暂停后再按接着走，不会清零。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top;font-family:Consolas,monospace">L</td>
+    <td style="padding:4px 0">计次。记录当前累计时间，列表里会算出每一圈的分段成绩（最近 4 圈）。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top;font-family:Consolas,monospace">R</td>
+    <td style="padding:4px 0">重置。时间与计次一起清零，回到「待开始」。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top;font-family:Consolas,monospace">C</td>
+    <td style="padding:4px 0">清空计次，保留正在走的时间。</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 12px 4px 0;color:#cfd8ff;white-space:nowrap;vertical-align:top;font-family:Consolas,monospace">ESC</td>
+    <td style="padding:4px 0">退出关灯（宿主功能，与秒表互不干扰）。</td>
+  </tr>
+</table>
+
+<div class="plugin-section-label">鼠标控制（默认关闭）</div>
+
+<p style="font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.7;margin:0 0 10px">
+  开启「鼠标控制按钮」后，秒表下方会浮出一排迷你按钮（开始/暂停 · 计次 · 重置）。
+  只有这一小块按钮区域接收鼠标事件，卡片其余部分与背景照旧穿透；
+  按钮上双击已被插件拦截，<strong style="color:#ddd">不会误触「双击退出关灯」</strong>。
+  不想用鼠标就把它关掉 —— 秒表会回到完全透明于指针的状态。
+</p>
+
+<div class="plugin-section-label">计时状态会被记住</div>
+
+<p style="font-size:calc(var(--sfz) - 2px);color:#aaa;line-height:1.7;margin:0 0 10px">
+  开着「记住计时状态」时，退出关灯、甚至重启应用后再进来，秒表会接着走
+  —— 如果退出时它正在计时，会按现实时间把间隔补齐（关灯期间它并没有真的停）。
+  想每次从零开始就关掉这一项，或按 <span style="color:#cfd8ff;font-family:Consolas,monospace">R</span> 重置。
+</p>
+
+<div class="plugin-section-label">5 种样式对照</div>
+
+<table style="width:100%;border-collapse:collapse;font-size:calc(var(--sfz) - 2px);color:#999;line-height:1.65">
+  <tr>
+    <td style="padding:3px 12px 3px 0;color:#cfd8ff;white-space:nowrap">经典 classic</td>
+    <td style="padding:3px 0">状态灯 + 大数字 + 副信息，信息最全，默认选它</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 12px 3px 0;color:#cfd8ff;white-space:nowrap">极简 minimal</td>
+    <td style="padding:3px 0">只有数字，干扰最小，适合挂在屏幕角落</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 12px 3px 0;color:#cfd8ff;white-space:nowrap">圆环 ring</td>
+    <td style="padding:3px 0">外圈 60 秒转一圈，像秒针；数字在环心</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 12px 3px 0;color:#cfd8ff;white-space:nowrap">计次板 laps</td>
+    <td style="padding:3px 0">数字 + 分段成绩列表，默认展开，适合多圈计时</td>
+  </tr>
+  <tr>
+    <td style="padding:3px 12px 3px 0;color:#cfd8ff;white-space:nowrap">数码管 segment</td>
+    <td style="padding:3px 0">强调色发光方字，暗底最像仪表，远看最醒目</td>
+  </tr>
+</table>
+
+<p style="font-size:calc(var(--sfz) - 3px);color:#777;line-height:1.6;margin:12px 0 0">
+  提示：改任意一项设置都会立刻重载插件。若同时开了「目标时长提醒」，数字会在达标时变成绿色并脉冲一次。
+  多显示器下每块屏会各显示一块秒表，计时在各自的屏幕上独立保存。
+</p>

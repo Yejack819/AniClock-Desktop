@@ -1,0 +1,365 @@
+/* style.css — 分贝仪 · 关灯背景板 + 设置窗口导航页  (db-meter v1.1.0)
+ *
+ * 注入到「声明了钩子的窗口」（关灯窗口 + 设置窗口），样式是全局生效的，
+ * 所以每条选择器都带自己的前缀：背景板仪表用 .dbm-*，设置页用 .dbm-set-*。
+ *
+ * 仪表尺寸全部用 em：基准字号由 index.js 写在卡片上，于是「缩放」一个滑条就能整体放大缩小。
+ * 颜色走 CSS 变量：--dbm-fg / --dbm-dim / --dbm-track / --dbm-bg / --dbm-bd / --dbm-shadow，
+ * 由 index.js 按所在窗口的实际亮暗计算后写在卡片上，所以昼夜切换会自动换深卡 / 浅卡。
+ *
+ * 设置页的控件刻意复用宿主内置设置行的结构（.setting-row / .toggle-switch / .setting-note），
+ * 这里只补宿主没覆盖到的部分（数值行横排、保存条、预览区），字号一律基于宿主的 --sfz。
+ */
+
+.dbm-stage * { box-sizing: border-box; }
+
+/* ---------------- 卡片 ---------------- */
+.dbm-card {
+  display: inline-flex;
+  align-items: center;
+  gap: .75em;
+  padding: .8em 1.15em;
+  border-radius: 1.05em;
+  background: var(--dbm-bg, rgba(20, 21, 28, .62));
+  border: 1px solid var(--dbm-bd, rgba(255, 255, 255, .14));
+  box-shadow: var(--dbm-shadow, none);
+  color: var(--dbm-fg, #fff);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  will-change: transform;
+}
+
+/* 纵向排布的样式 */
+.dbm-card.dbm-stack { flex-direction: column; align-items: center; gap: .5em; }
+
+/* 每种样式的内边距微调 */
+.dbm-card-classic { gap: .8em; }
+.dbm-card-minimal { padding: .6em .85em .5em; }
+.dbm-card-ring    { padding: .7em 1.05em; gap: 1em; }
+.dbm-card-bar     { padding: .7em 1em; }
+.dbm-card-pill    { padding: .28em; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+.dbm-card-text    { padding: .75em 1.3em; }
+.dbm-card-gauge   { padding: .7em 1em .55em; gap: .95em; }
+.dbm-card-pulse   { gap: .95em; }
+.dbm-card-wave    { padding: .7em .9em; }
+
+/* ---------------- 排版 ---------------- */
+.dbm-num {
+  font-family: "Cascadia Mono", Consolas, "SF Mono", ui-monospace, monospace;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  transition: color .35s;
+}
+.dbm-dim { color: var(--dbm-dim) !important; }
+.dbm-unit { font-size: .7em; color: var(--dbm-dim); transition: color .35s; }
+.dbm-lab {
+  font-size: .7em;
+  color: var(--dbm-dim);
+  white-space: nowrap;
+  transition: color .35s;
+}
+.dbm-lab:empty { display: none; }
+.dbm-word { font-size: 1.7em; font-weight: 600; letter-spacing: .02em; transition: color .35s; }
+.dbm-row { display: flex; align-items: center; gap: .5em; }
+.dbm-row.dbm-baseline { align-items: baseline; }
+.dbm-col { display: flex; flex-direction: column; }
+
+/* ---------------- 状态灯 ---------------- */
+.dbm-dot {
+  width: .62em;
+  height: .62em;
+  border-radius: 50%;
+  flex: none;
+  transition: background .35s, box-shadow .35s;
+}
+
+/* ---------------- 进度条 ---------------- */
+.dbm-track {
+  position: relative;
+  width: 7.6em;
+  height: .32em;
+  border-radius: 99em;
+  background: var(--dbm-track, rgba(255, 255, 255, .15));
+}
+.dbm-track > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 99em;
+  background: var(--dbm-dim);
+  transition: width .26s cubic-bezier(.2, .8, .25, 1), background .35s, box-shadow .35s;
+}
+.dbm-peak-mark {
+  position: absolute;
+  top: 50%;
+  width: .12em;
+  height: 1.5em;
+  border-radius: 99em;
+  background: var(--dbm-fg);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: left .26s cubic-bezier(.2, .8, .25, 1), opacity .3s;
+}
+
+/* ---------------- 胶囊 ---------------- */
+.dbm-pill {
+  display: flex;
+  align-items: center;
+  gap: .6em;
+  padding: .45em 1.6em;
+  border-radius: 99em;
+  background: rgba(128, 128, 128, .45);
+  transition: background .35s, box-shadow .35s;
+}
+.dbm-pill .dbm-num { color: #fff; }
+.dbm-pill-lab { font-size: .7em; color: rgba(255, 255, 255, .9); white-space: nowrap; }
+
+/* ---------------- 波形 ---------------- */
+.dbm-wave { display: block; width: 11em; height: 2.7em; }
+
+/* ---------------- 微动效 ---------------- */
+@keyframes dbm-in {
+  from { opacity: 0; transform: translateY(.55em) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+.dbm-enter .dbm-card { animation: dbm-in .55s cubic-bezier(.2, .8, .25, 1) both; }
+
+@keyframes dbm-bump {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.055); }
+  100% { transform: scale(1); }
+}
+.dbm-card.dbm-bump { animation: dbm-bump .34s cubic-bezier(.2, .8, .25, 1); }
+
+@keyframes dbm-breathe {
+  0%, 100% { transform: scale(1); opacity: .62; }
+  50%      { transform: scale(1.38); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dbm-enter .dbm-card,
+  .dbm-card.dbm-bump,
+  .dbm-dot { animation: none !important; }
+}
+
+/* ================================================================
+   设置窗口 · 导航页（v1.1.0）
+   控件沿用宿主内置设置行的结构，视觉自动与内置设置一致。
+   这里只补宿主没覆盖到的：预览区、一键校准行、折叠按钮、保存条、提示气泡。
+   ================================================================ */
+.dbm-set { --dbm-accent: #6C8CFF; }
+/* 保存条是 in-flow 的 sticky：滚到底时它自然落在末尾，不需要额外留白 */
+
+/* ---- 预览卡 ---- */
+.dbm-set-preview {
+  padding: 12px;
+  border: 1px solid #2e2e3a;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .02);
+}
+.dbm-set-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.dbm-set-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b6b7a;
+  flex: 0 0 auto;
+  transition: background .3s, box-shadow .3s;
+}
+.dbm-set-dot.on { background: #5dcaa5; box-shadow: 0 0 8px rgba(93, 202, 165, .8); animation: dbm-set-pulse 1.6s ease-in-out infinite; }
+.dbm-set-dot.err { background: #e24b4a; box-shadow: 0 0 6px rgba(226, 75, 74, .5); }
+@keyframes dbm-set-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+.dbm-set-state { font-size: calc(var(--sfz) - 2px); color: #999; }
+.dbm-set-readout { margin-left: auto; display: flex; align-items: baseline; gap: 5px; }
+.dbm-set-num {
+  font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  font-size: calc(var(--sfz) + 14px);
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  transition: color .35s;
+}
+.dbm-set-unit { font-size: calc(var(--sfz) - 2px); color: #8b93b8; }
+.dbm-set-sub { font-size: calc(var(--sfz) - 3px); color: #888; margin-left: 8px; }
+.dbm-set-seglabel { margin-left: 4px; font-size: calc(var(--sfz) - 3px); color: #777; }
+.dbm-set-seg { display: inline-flex; border: 1px solid #3a3a4a; border-radius: 8px; overflow: hidden; }
+.dbm-set-seg button {
+  padding: 3px 10px;
+  border: 0;
+  background: #2b2b36;
+  color: #bbb;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 3px);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.dbm-set-seg button + button { border-left: 1px solid #3a3a4a; }
+.dbm-set-seg button:hover { background: #35354a; color: #fff; }
+.dbm-set-seg button.on { background: #3b4a7a; color: #fff; }
+
+.dbm-set-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(255, 255, 255, .06);
+  overflow: hidden;
+  transition: background .3s, border-color .3s;
+}
+.dbm-set-stage.is-light { background: #f2f3f7; border-color: rgba(0, 0, 0, .08); }
+.dbm-set-cap { position: absolute; right: 8px; bottom: 6px; font-size: calc(var(--sfz) - 4px); color: #777; }
+
+/* ---- 一键校准 ---- */
+.dbm-set-cal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #2e2e3a;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .02);
+}
+.dbm-set-cal-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dbm-set-cal-info b { font-size: calc(var(--sfz) - 1px); color: #ddd; font-weight: 600; }
+.dbm-set-cal-env { font-size: calc(var(--sfz) - 2px); color: #8b93b8; font-variant-numeric: tabular-nums; }
+.dbm-set-cal-info small { font-size: calc(var(--sfz) - 3px); color: #777; line-height: 1.55; }
+.dbm-set-calbtn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--dbm-accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter .15s, opacity .15s;
+}
+.dbm-set-calbtn:hover:not(:disabled) { filter: brightness(1.12); }
+.dbm-set-calbtn:disabled { opacity: .35; cursor: default; }
+
+/* ---- 设置项 ---- */
+.dbm-set-fields { display: flex; flex-direction: column; }
+.dbm-set-group { display: flex; flex-direction: column; }
+.dbm-set-val { color: #8b93b8; font-variant-numeric: tabular-nums; }
+
+/* 宿主的横排规则只覆盖了 select / color / toggle，这里给 number 与 text 补上 */
+.dbm-set .setting-row:has(> input[type="number"]),
+.dbm-set .setting-row:has(> input[type="text"]) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.dbm-set input[type="number"],
+.dbm-set input[type="text"] {
+  width: 132px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #3a3a4a;
+  background: #23232c;
+  color: #ddd;
+  font-family: inherit;
+  font-size: var(--sfz);
+  text-align: right;
+}
+.dbm-set select,
+.dbm-set textarea {
+  background: #23232c;
+  color: #ddd;
+  border: 1px solid #3a3a4a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: var(--sfz);
+}
+/* 带说明的行：说明独占一行，不跟控件挤在一起 */
+.dbm-set .setting-row:has(> .setting-note) { flex-wrap: wrap; }
+.dbm-set .setting-row > .setting-note { flex-basis: 100%; }
+
+/* ---- 高级折叠 ---- */
+.dbm-set-adv { margin-top: 14px; }
+.dbm-set-adv-toggle {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #3a3a4a;
+  background: #2b2b36;
+  color: #ddd;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.dbm-set-adv-toggle:hover { background: #35354a; border-color: var(--dbm-accent); color: #fff; }
+.dbm-set-adv .dbm-set-fields { margin-top: 10px; }
+
+/* ---- 保存条（吸底） ---- */
+.dbm-set-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 6px;
+  margin-top: 6px;
+  border-top: 1px solid #2e2e3a;
+  background: rgba(22, 22, 28, .94);
+  backdrop-filter: blur(10px);
+}
+.dbm-set-bar button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.dbm-set-save { border: 1px solid transparent; background: var(--dbm-accent); color: #fff; font-weight: 600; }
+.dbm-set-save:hover:not(:disabled) { filter: brightness(1.12); }
+.dbm-set-discard { border: 1px solid #3a3a4a; background: #2b2b36; color: #ddd; }
+.dbm-set-discard:hover:not(:disabled) { background: #35354a; border-color: var(--dbm-accent); color: #fff; }
+.dbm-set-bar button:disabled { opacity: .32; cursor: default; }
+.dbm-set-note { margin-left: auto; font-size: calc(var(--sfz) - 3px); color: #888; }
+
+/* ---- 提示气泡（保存 / 校准完成） ---- */
+.dbm-set-saved {
+  position: fixed;
+  left: 50%;
+  bottom: 78px; /* 浮在吸底保存条之上，别压住按钮 */
+  transform: translateX(-50%);
+  max-width: 78vw;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(93, 202, 165, .16);
+  border: 1px solid rgba(93, 202, 165, .5);
+  color: #7fe0c0;
+  font-size: calc(var(--sfz) - 1px);
+  text-align: center;
+  z-index: 60;
+  animation: dbm-set-toast .3s ease;
+}
+@keyframes dbm-set-toast {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dbm-set-dot.on { animation: none !important; }
+}

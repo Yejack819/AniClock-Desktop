@@ -124,6 +124,17 @@
       .replace(/@import[^;]*;?/gi, '')
       .replace(/expression\s*\(/gi, '');
   }
+  // [v1.0.5.7] 插件资产 URL 校验：除了「前缀必须是本插件目录」，还要保证剩余路径
+  // 不能用 ../（或反斜杠）逃出插件目录去引用本机任意 file:// 资源
+  function isPluginAssetUrl(url, base) {
+    const u = String(url || '');
+    if (!base || !u || u.indexOf(base) !== 0) return false;
+    const rest = u.slice(base.length);
+    if (rest && rest.charAt(0) !== '/') return false;
+    if (rest.indexOf('\\') >= 0) return false;
+    if (rest.split('/').indexOf('..') >= 0) return false;
+    return true;
+  }
   function resolveTarget(sel) {
     try { return document.querySelector(String(sel)); } catch (e) { return null; }
   }
@@ -134,7 +145,6 @@
   }
 
   // ========== 沙箱桥（每个 iframe 一个 session；身份 = iframe.contentWindow） ==========
-  const sandboxSessions = new Map(); // contentWindow -> session
 
   function registerDomListener(session, sel, type) {
     const key = sel + '|' + type;
@@ -215,7 +225,14 @@
         addList.filter(Boolean).forEach(n => recClass(el, n, true));
         rmList.filter(Boolean).forEach(n => recClass(el, n, false));
       }
-      if (ops.attr) Object.keys(ops.attr).forEach(k => recAttr(el, k, ops.attr[k]));
+      if (ops.attr) Object.keys(ops.attr).forEach(k => {
+        // [v1.0.5.7] attr 里的 style 同样不能绕过受保护元素的显示性拦截
+        if (String(k).toLowerCase() === 'style' && prot &&
+            /display\s*:|visibility\s*:|opacity\s*:/i.test(String(ops.attr[k]))) {
+          throw new Error('protected-element:' + sel);
+        }
+        recAttr(el, k, ops.attr[k]);
+      });
     }
 
     // ---- 背景板 ----
@@ -238,7 +255,7 @@
       if (s.gradient) bg.push(String(s.gradient));
       else if (s.image) {
         const url = String(s.image);
-        const okAsset = plugin.assetsBase && url.indexOf(plugin.assetsBase) === 0;
+        const okAsset = isPluginAssetUrl(url, plugin.assetsBase);
         if (!(okAsset || /^https:\/\//i.test(url))) throw new Error('bad-image-url');
         bg.push('url("' + url.replace(/"/g, '\\"') + '")');
       } else if (s.color) {
@@ -343,7 +360,22 @@
       },
       'clock.setInfoText'(args) {
         if (hook !== 'clock.infoBar' || !record.slot) return false;
-        record.slot.textContent = args[0] === undefined || args[0] === null ? '' : String(args[0]);
+        // [v1.0.5.7] 隔离后 record.slot 里是沙箱 iframe —— textContent 赋值会清空全部子节点
+        // 把 iframe 一起摘掉，插件（定时器/连接）当场死亡。文本一律写进 iframe 之外的专用节点。
+        const target = record.infoEl || record.slot;
+        target.textContent = args[0] === undefined || args[0] === null ? '' : String(args[0]);
+        notifyHost();
+        return true;
+      },
+      // [v1.0.5.7] 插件主动摘掉自己的信息栏插槽（infoStyle=none 一类）。宿主判定
+      // 「信息栏要不要显示」看的就是这个元素在不在，display:none 会留下一条 padding。
+      'clock.removeInfoSlot'() {
+        if (hook !== 'clock.infoBar' || !record.slot) return false;
+        const s = record.slot;
+        try { if (s.parentNode) s.parentNode.removeChild(s); } catch (e) {}
+        record.slot = null;
+        record.infoEl = null;
+        record.nodes = record.nodes.filter(n => n !== s);
         notifyHost();
         return true;
       },
@@ -355,6 +387,10 @@
       'lightsOff.setBackground'(args) { return applyBackground(args[0]); },
       'lightsOff.clearBackground'() { return clearBackground(); },
       'ui.addStyle'(args) {
+        // [v1.0.5.7] 宿主侧注入需要该窗口的界面编辑权：零权限插件不允许往宿主窗口
+        // 注入任意 CSS（可用 #plugin-list{display:none} 绕过受保护元素防护）。
+        // 插件自己沙箱文档里的那份（plugin-sandbox.js 已本地注入）不受影响。
+        needsWindowUi();
         const css = safeStyleSheet(String(args[0] || ''));
         if (!css) return false;
         const el = document.createElement('style');
@@ -366,6 +402,8 @@
       },
       'ui.applyVars'(args) {
         if (hook !== 'settings.theme') return false;
+        // [v1.0.5.7] 同 ui.addStyle：动宿主 :root 的变量要持 ui.settings
+        needsWindowUi();
         const vars = args[0] || {};
         Object.keys(vars).forEach(k => {
           if (!/^--[a-zA-Z0-9-]{1,40}$/.test(k)) return;
@@ -465,6 +503,9 @@
       },
       // 订阅「宿主导航/布局发生变化」→ 插件重算滑块位置
       'ui.onHostLayoutChanged'() { return true; },
+      // [v1.0.5.7] 插件请求宿主重算信息栏可见性与窗口尺寸（替代隔离前
+      // window.dispatchEvent('dc-plugins-updated') 的跨 iframe 写法 —— 那在 v3 下发不到宿主）
+      'ui.notifyHost'() { notifyHost(); return true; },
       'ui.setPluginSetting'(args) {
         // 插件改自己的设置：只能改自己的 id（宿主侧写死 plugin.id，插件无法指定）
         const key = String(args[0] || '');
@@ -489,7 +530,14 @@
       dom(args) {
         const [op, p] = args;
         const sel = p && p.sel;
-        if (op === 'listen') return registerDomListener(session, sel, p.type);
+        if (op === 'listen') {
+          // [v1.0.5.7] 事件订阅与其它 DOM 操作同一道权限门：没持界面编辑权的插件
+          // 不允许在任何宿主元素上挂监听（否则 stopPropagation 能吃掉宿主自己的点击）；
+          // 受保护元素（设置页「插件」入口等）连监听都不给，防劫持自救入口。
+          needsWindowUi();
+          if (isProtected(sel)) throw new Error('protected-element:' + sel);
+          return registerDomListener(session, sel, p.type);
+        }
         needsWindowUi();
         const el = resolveTarget(sel);
         if (op === 'hide') {
@@ -517,7 +565,15 @@
           return true;
         }
         if (op === 'text') { recText(el, p.v); return true; }
-        if (op === 'attr') { recAttr(el, p.k, p.v); return true; }
+        if (op === 'attr') {
+          // [v1.0.5.7] style 属性等价于 op style 的写权，走同一道受保护元素检查，
+          // 否则 attr style="display:none" 就是绕过口
+          if (String(p.k).toLowerCase() === 'style' && isProtected(sel) &&
+              /display\s*:|visibility\s*:|opacity\s*:/i.test(String(p.v))) {
+            throw new Error('protected-element:' + sel);
+          }
+          recAttr(el, p.k, p.v); return true;
+        }
         if (op === 'patch') { patchEl(el, sel, p.ops || {}); return true; }
         if (op === 'push') { return pushHtml(el, p.html); }
         return false;
@@ -566,6 +622,10 @@
     // ⚠️ 关键安全属性：只给 allow-scripts，**绝不给 allow-same-origin**
     // 少了 allow-same-origin → iframe 与宿主跨源 → 插件拿不到 parent 的任何东西
     iframe.setAttribute('sandbox', 'allow-scripts');
+    // [v1.0.5.7] 申请了麦克风（permissions 里有 'mic'）的插件要显式放行：
+    // 跨源 sandbox iframe 的默认 Permissions Policy 是 'self'，不含不透明源，
+    // 不加 allow="microphone" 的话 getUserMedia 会被直接拒绝（分贝仪的预览就这样哑掉）
+    if ((plugin.permissions || []).indexOf('mic') >= 0) iframe.setAttribute('allow', 'microphone');
     iframe.style.cssText = 'border:0;width:100%;height:100%;background:transparent;display:block;';
     iframe.dataset.pluginId = plugin.id;
     if (opts && opts.panel) iframe.dataset.pluginPanel = opts.panel;
@@ -617,7 +677,6 @@
 
     window.addEventListener('message', onMessage);
     record.frames.push({ iframe, onMessage });
-    sandboxSessions.set(iframe.contentWindow, session);
     return iframe;
   }
 
@@ -762,7 +821,7 @@
       if (s.gradient) bg.push(String(s.gradient));
       else if (s.image) {
         const url = String(s.image);
-        const okAsset = plugin.assetsBase && url.indexOf(plugin.assetsBase) === 0;
+        const okAsset = isPluginAssetUrl(url, plugin.assetsBase);
         if (!(okAsset || /^https:\/\//i.test(url))) throw new Error('bad-image-url');
         bg.push('url("' + url.replace(/"/g, '\\"') + '")');
       } else if (s.color) bg.push(String(s.color));
@@ -794,6 +853,13 @@
       clock: {
         setInfoText: text => { if (hook !== 'clock.infoBar' || !slot) return; slot.textContent = text === undefined || text === null ? '' : String(text); notifyHost(); },
         clearInfoText: () => { if (slot) { slot.textContent = ''; notifyHost(); } },
+        // [v1.0.5.7] 与隔离版同名 API：插件主动摘掉自己的信息栏插槽
+        removeInfoSlot: () => {
+          if (hook !== 'clock.infoBar' || !slot) return;
+          try { if (slot.parentNode) slot.parentNode.removeChild(slot); } catch (e) {}
+          record.nodes = record.nodes.filter(n => n !== slot);
+          notifyHost();
+        },
       },
       lightsOff: {
         root: () => (hook === 'lightsOff.background' ? slot : null),
@@ -895,12 +961,27 @@
     // 宿主版本恒为最新，若用它判定，会把声明 apiVersion:1/2 的老插件也塞进 sandbox ——
     // 那些按「同页面 DOM / window.electronAPI」写的老代码在跨源 iframe 里会整体失效。
     const pluginApi = Number(plugin.apiVersion) || 1;
+    // [v1.0.5.7] v3 插件必须跑在沙箱里。沙箱运行时源码拿不到（读取失败）时，
+    // 绝不能静默降级成同页执行 —— 那等于隔离无声消失。直接报错不挂载。
+    if (pluginApi >= 3 && !sandboxSource) {
+      report(new Error('sandbox-runtime-missing'), plugin.id);
+      if (plugin.error) report(new Error(plugin.error), plugin.id);
+      return record;
+    }
     const useIsolation = pluginApi >= 3 && !!sandboxSource;
     if (useIsolation) {
       if (slot) {
         const iframe = createSandboxFrame(plugin, record, sandboxSource, {});
         // 关灯背景板/时钟信息栏：iframe 填满插槽
         slot.appendChild(iframe);
+        // [v1.0.5.7] clock.infoBar 专用：setInfoText 的文本写在这里，
+        // 与沙箱 iframe 互不干扰（原来直接 textContent 覆盖 slot 会把 iframe 摘掉）
+        if (hook === 'clock.infoBar') {
+          const infoEl = document.createElement('span');
+          infoEl.className = 'plugin-info-text';
+          slot.appendChild(infoEl);
+          record.infoEl = infoEl;
+        }
       }
       record.isolated = true;
     } else {
@@ -923,8 +1004,29 @@
   }
 
   // ========== 卸载 ==========
-  function teardown() {
+  // [v1.0.5.7] 改为 async：拆 DOM 之前先给每个沙箱 iframe 发 dispose，
+  // 等它跑完 mount 返回的清理函数（落盘 / 释放硬件）再动手 —— 原来直接移除 iframe，
+  // 清理函数被静默丢弃（legacy 路径有登记执行，隔离路径没有）。
+  async function teardown() {
     const closing = mounted.splice(0);
+    const disposeWaits = [];
+    closing.forEach(rec => {
+      (rec.frames || []).forEach(f => {
+        const win = (() => { try { return f.iframe.contentWindow; } catch (e) { return null; } })();
+        if (!win) return;
+        disposeWaits.push(new Promise(resolve => {
+          let done = false;
+          const finish = () => { if (done) return; done = true; try { window.removeEventListener('message', onMsg); } catch (e) {} resolve(); };
+          const onMsg = ev => {
+            if (ev.source === win && ev.data && ev.data.__dc === 1 && ev.data.kind === 'disposed') finish();
+          };
+          try { window.addEventListener('message', onMsg); } catch (e) { finish(); return; }
+          postTo(f.iframe, { __dc: 1, kind: 'dispose' });
+          setTimeout(finish, 200); // 兜底：清理函数卡死也不拖住重载
+        }));
+      });
+    });
+    if (disposeWaits.length) await Promise.all(disposeWaits);
     closing.forEach(rec => {
       rec.cleanups.forEach(fn => { try { fn(); } catch (e) {} });
       (rec.edits || []).slice().reverse().forEach(e => {
@@ -940,7 +1042,6 @@
       (rec.listeners || []).forEach(l => { try { l.el.removeEventListener(l.type, l.handler); } catch (e) {} });
       (rec.frames || []).forEach(f => {
         try { window.removeEventListener('message', f.onMessage); } catch (e) {}
-        try { sandboxSessions.delete(f.iframe.contentWindow); } catch (e) {}
       });
       rec.nodes.forEach(n => { if (n && n.parentNode) n.parentNode.removeChild(n); });
       rec.styles.forEach(n => { if (n && n.parentNode) n.parentNode.removeChild(n); });
@@ -970,21 +1071,37 @@
     if (loading) { pendingReload = true; return; }
     loading = true;
     try {
-      teardown();
-      Object.keys(reportedErrors).forEach(k => delete reportedErrors[k]);
+      // [v1.0.5.7] 重载前记住用户停在哪个插件导航页 —— 插件重载会把面板整块重建，
+      // 宿主的 refreshNavItems 发现没有 active 面板会把人踢回「插件」页；
+      // 隔离后插件自己挂 window 标志位的自救写法也跨不了 iframe，改由宿主记住并恢复。
+      const activeBtn = document.querySelector('.nav-item.active');
+      const restorePanel = (activeBtn && activeBtn.dataset && typeof activeBtn.dataset.panel === 'string' && activeBtn.dataset.panel.indexOf('plugin.') === 0)
+        ? activeBtn.dataset.panel : null;
       const [bundle, source] = await Promise.all([
         api.getPluginBundle(),
         sandboxSourceCache
           ? Promise.resolve(sandboxSourceCache)
           : (api.getPluginSandboxSource ? api.getPluginSandboxSource() : Promise.resolve('')),
       ]);
+      // [v1.0.5.7] 先取包、后拆旧：取包失败/变慢期间旧插件保持可见（原来先 teardown
+      // 再异步取包，网络/IPC 卡一下界面就全空；取包彻底失败时旧插件不再被误清）
+      await teardown();
       sandboxSourceCache = source || '';
+      Object.keys(reportedErrors).forEach(k => delete reportedErrors[k]);
       (bundle || [])
         .filter(p => (p.hooks || []).indexOf(hook) >= 0)
         .forEach(p => { mounted.push(runPlugin(p, sandboxSourceCache)); });
+      if (restorePanel) {
+        setTimeout(() => {
+          try {
+            const btn = document.querySelector('.nav-item[data-panel="' + restorePanel + '"]');
+            if (btn && !btn.classList.contains('active')) btn.click();
+          } catch (e) {}
+        }, 60);
+      }
       notifyHost();
     } catch (e) {
-      // 读取失败不打扰用户
+      // 读取失败不打扰用户：旧插件保持原样
     } finally {
       loading = false;
       if (pendingReload) { pendingReload = false; load(); }
@@ -1010,7 +1127,10 @@
   } catch (e) { /* 事件桥接失败不影响宿主 */ }
 
   // 宿主界面语言变化 → 通知所有沙箱（插件原来靠 MutationObserver 盯宿主节点，隔离后改成推送）
+  // [v1.0.5.7] 只有语言**真的变了**才广播：时钟窗口每秒都在改数字文本，
+  // 无脑广播会让所有插件每秒挨一次 'host:lang' 事件。
   try {
+    let lastLang = null;
     const langObserver = new MutationObserver(() => {
       const probes = ['navPlugins', 'settingsTitle', 'hint'];
       let lang = /^zh/i.test(document.documentElement.lang || '') ? 'zh' : 'en';
@@ -1018,6 +1138,8 @@
         const el = document.querySelector('[data-lang="' + probes[i] + '"]');
         if (el && el.textContent) { lang = /[\u4e00-\u9fa5]/.test(el.textContent) ? 'zh' : 'en'; break; }
       }
+      if (lang === lastLang) return;
+      lastLang = lang;
       broadcastToFrames('host:lang', lang);
     });
     langObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'], subtree: true, childList: true, characterData: true });
@@ -1087,7 +1209,7 @@
           if (ALLOWED_ATTRS.indexOf(name) < 0) { child.removeAttribute(attr.name); return; }
           if (name === 'href' && !/^https:\/\//i.test(value)) { child.removeAttribute(attr.name); return; }
           if (name === 'src') {
-            const okAsset = assetsBase && value.indexOf(assetsBase) === 0;
+            const okAsset = isPluginAssetUrl(value, assetsBase);
             if (!(okAsset || /^https:\/\//i.test(value))) { child.removeAttribute(attr.name); return; }
           }
         });

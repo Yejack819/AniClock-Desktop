@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="CSP" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';">
+  <!-- [v1.0.5.7] 修复：原来写成 http-equiv="CSP"（非法值，Chromium 直接忽略），
+       CSP 从未生效。'unsafe-inline' + 'unsafe-eval' 是插件沙箱（srcdoc 内联脚本与
+       new Function）和 legacy 插件所必需的；注入点的防护由 settings.js 的 escapeHtml 负责。 -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; font-src 'self' data: file:; connect-src 'self' https: ws: wss:; media-src 'self' file: blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title data-lang="settingsTitle">时钟设置</title>
   <link rel="stylesheet" href="settings.css">
 </head>
@@ -50,6 +53,10 @@
         </button>
         <button class="nav-item edu-hide" data-panel="alarm">
           <span class="nav-icon">⏰</span><span class="nav-text" data-lang="navAlarm">闹钟</span>
+        </button>
+        <!-- [v1.0.5.7] 倒计时：不进 edu-hide —— 上课/自习时当计时器用，正是教育模式的场景 -->
+        <button class="nav-item" data-panel="countdown">
+          <span class="nav-icon">⏳</span><span class="nav-text" data-lang="navCountdown">倒计时</span>
         </button>
         <button class="nav-item" data-panel="position">
           <span class="nav-icon">📍</span><span class="nav-text" data-lang="navPosition">位置</span>
@@ -425,6 +432,46 @@
         </div>
       </section>
 
+      <!-- ====== [v1.0.5.7] 倒计时 ====== -->
+      <section class="panel" data-panel="countdown">
+        <h2 class="panel-title" data-lang="navCountdown">倒计时</h2>
+
+        <div id="countdown-list"></div>
+
+        <button id="countdown-add-btn" data-lang="countdownAdd">+ 添加倒计时</button>
+
+        <div class="alarm-advanced">
+          <button id="countdown-advanced-toggle" data-lang="countdownAdvanced">▶ 高级设置</button>
+          <div id="countdown-advanced-content" class="hidden">
+            <div class="setting-row">
+              <label data-lang="countdownSound">到点提示音</label>
+              <select id="countdown-sound">
+                <option value="beep" data-lang="soundBeep">Beep</option>
+                <option value="chime" data-lang="soundChime">Chime</option>
+                <option value="alarm" data-lang="soundAlarm">Alarm</option>
+                <option value="none" data-lang="soundNone">无声音</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label data-lang="countdownShowInInfoBar">在时钟上显示倒计时</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="countdown-show-info" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <label data-lang="countdownDefaultMinutes">新建时的默认时长</label>
+              <div class="num-input-wrap">
+                <input type="number" id="countdown-default-minutes" min="1" max="1440" step="1" value="5">
+                <span class="num-unit" data-lang="unitMinutes">分钟</span>
+              </div>
+            </div>
+            <div class="setting-note" data-lang="countdownSoundHint">新建倒计时默认用这个提示音；单个倒计时的声音可在编辑窗里单独改。</div>
+            <div class="setting-note" data-lang="countdownDefaultHint">桌面编辑窗与手机端新建倒计时都用这个时长（1–1440 分钟）。</div>
+          </div>
+        </div>
+      </section>
+
       <!-- ====== 位置 ====== -->
       <section class="panel" data-panel="position">
         <h2 class="panel-title" data-lang="navPosition">位置</h2>
@@ -575,6 +622,7 @@
 
           <div id="lan-auth-note" class="setting-note"></div>
           <div id="lan-auth-warn" class="setting-note warn hidden"></div>
+          <div class="setting-note" data-lang="lanCountdownHint">手机端可以添加、编辑、暂停、继续、重新计时和取消倒计时；配置、闹钟和窗口位置始终只读。手机端到点时会自己响铃提醒，那个开关在手机抽屉里（喇叭按钮），与桌面端的声音设置互不影响。在时钟上长按约半秒，可调手机端自己的字号。</div>
           <div class="setting-note warn" data-lang="lanFirewallHint">连不上时先查两件事：① 手机和电脑是否在同一个 Wi-Fi；② Windows 防火墙是否拦住了这个端口（首次开启时若弹出提示，勾选「专用网络」允许即可；被判定为「公用网络」时会默认拦截）。</div>
         </div>
       </section>

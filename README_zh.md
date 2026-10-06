@@ -52,15 +52,20 @@
 - **设置窗口字号** — 5 档可调，且会记住上次的选择
 - **无边框设置窗口** — 自绘玻璃标题栏（拖拽区 + 最小化/最大化/关闭），插件换肤能一路覆盖到标题栏
 
-### 局域网共享（手机端查看）
-- **局域网只读镜像** — 打开后，同一 Wi-Fi 下的手机用浏览器就能看到这块时钟
+### 局域网共享（手机端查看 / 管理倒计时）
+- **局域网镜像** — 打开后，同一 Wi-Fi 下的手机用浏览器就能看到这块时钟，并顺手管理倒计时
 - **访问码三种模式** — 可选**随机访问码**（6 位短码，念得出来、手输得进去）、**自定义访问码**（自己定，如 `my-clock`）、**不需要访问码**（根路径直接打开）。码不对一律返回 404
 - **随时换码** — 随机模式下点「更换访问码」，之前分享出去的链接立刻失效
 - **二维码** — 设置面板直接画出可扫的二维码，手机扫一下即开
 - **外观跟着走** — 手机页跟随你的配色、字体、12/24 小时制、AM/PM 角标、秒/日期/星期、多时区、昼夜自动配色，以及动画家族与方向（数字翻转等一并还原）
 - **时间与桌面一致** — 手机页以应用时间为基准，并叠加手动校准与「定时自动校准」的累积量，两边同一秒
 - **页面自包含** — 内联 CSS/JS、零外部资源，没有外网也能打开；手机端看不到你的闹钟与任何设置
-- **天生只读** — 服务只接受 `GET`/`HEAD`（其余一律 405），没有任何写接口，也不引入任何外部依赖。「不需要访问码」模式下同网段任何设备都能打开页面，因此建议只在可信的 Wi-Fi 下使用
+- **倒计时可在手机上增删改** — 有倒计时时底部会出现胶囊：**单击进全屏**（整屏一分为二，左边橙色的宽度就是剩余比例，中间大字显示剩余时间；屏幕底部另有一颗显示当前时间的胶囊，点它回时钟），**长按开抽屉**（新建、编辑、暂停、继续、重新计时、取消）；**3 秒没有操作它就淡出，点一下屏幕或滑动一下又立刻回来**，不会一直挡在那儿；一条不剩时彻底收起，新建入口在长按时钟弹出的面板里。其余仍然只读：配置、闹钟、窗口位置都改不了
+- **手机端自己的字号** — 在时钟上**长按约半秒**，拉出「手机端显示」面板：可把时钟整体调大调小（60%–150%，数字与信息栏一起缩放），也能顺手从这里新建倒计时。这个倍率只存在这台手机的浏览器里，**与电脑上的显示设置完全无关**
+- **手机端会自己响** — 倒计时到点时手机页自己发声提醒（响三遍就停，同时弹出提醒条并持续震动，直到点「知道了」）。抽屉里的喇叭按钮随时静音，音色可切换蜂鸣 / 铃音 / 闹钟。这个开关只存在手机浏览器里，**与桌面端的声音设置完全独立** —— 桌面看不到它，它也读不到桌面。音色由页面现场合成，页面依旧零外部依赖。浏览器要求先有一次点击才允许出声，所以第一次需点一下页面（或点喇叭）解锁
+- **只开这一条写通道** — 写入口只有 `/api/countdowns` 一条独立路由，带自己的门禁；配置 / 闹钟 / 窗口位置依旧只读，快照里 `readOnly` 仍是 `true`
+- **写保护四道闸** — 每次写都要过：`Host` 校验（防 DNS rebinding）+ **一次性令牌**（`X-DC-Nonce`，每次写前现领、用过即焚）+ 内容与 CSRF 校验（`Content-Type: application/json`，浏览器有发 `Sec-Fetch-Site`/`Origin` 时一并校验）+ 限流（每设备每秒 5 次）。请求体上限 4 KB，字段全部走白名单
+- **服务端不碰你的文件** — 它不落盘、不生成数据，写请求全部转交主进程，由主进程唯一的写入口完成（与桌面界面同一条路）。「不需要访问码」模式下同网段任何设备都能打开页面并添加倒计时，因此建议只在可信的 Wi-Fi 下使用
 - **端口自动顺延** — 默认 8788，可改；被占用时自动顺延到下一个可用端口，面板显示的是真实端口
 - **防火墙提示** — 手机连不上时，面板里直接写着该查什么（是否同一 Wi-Fi、Windows 防火墙「专用/公用网络」的区别）
 
@@ -75,6 +80,16 @@
 - **智能跳过** — 前一个闹钟无人处理时，7 分钟内的重叠闹钟自动关闭
 - **错过恢复** — 程序关闭期间错过的闹钟在重启后顺延，并弹出系统通知
 - **高级设置**（可折叠）— 响铃时长（5–300s）、闪烁、自动显示、自动取消穿透、自动置顶
+
+### 倒计时
+- **同时跑多个** — 列表式管理，可新建 / 编辑 / 暂停 / 继续 / 重新计时 / 删除；数据独立存 `countdowns.json`，引擎也与闹钟分开
+- **时长自由** — 1 秒 ~ 24 小时，可直接输入，也可点快捷片（1/3/5/10/15/30 分钟、1 小时）
+- **内联显示** — 信息栏显示最近到期的那个，形如 `⏳ 04:59 +2`（暂停时是 `⏸`），不会跟时钟和闹钟提示打架
+- **到点响铃** — 每个倒计时可单独选声音（Beep / Chime / Alarm / 无声音），并支持贪睡与重试次数
+- **一个响铃槽、排队不跳过** — 同一时刻只响一件事；别的还在响时到点的倒计时会等下一拍，绝不会被静默丢掉
+- **本地倒扣** — 剩余时间由各端按同一个到期时刻本地计算，手机或第二个窗口都不会跑偏
+- **走真实系统时间** — 倒计时用真实时刻，不受显示端手动校准 / 定时自动校准（`timeOffsetMs`）影响
+- **手机端可管** — 局域网页面里能新建、编辑、暂停、继续、重新计时和取消倒计时（见下方）
 
 ### 数据与插件
 - **偏好导出 / 导入** — 导出为一个 JSON 文件，含全部偏好与闹钟，可保存到你选定的任意位置
@@ -119,14 +134,15 @@ NODE_OPTIONS= \
 ## 项目结构
 
 ```
-├── main.js              # Electron 主进程（窗口、托盘、闹钟、插件管理器、IPC）
+├── main.js              # Electron 主进程（窗口、托盘、闹钟、倒计时、插件管理器、IPC）
 ├── preload.js           # 上下文桥接（渲染进程唯一能碰到的 IPC 层）
 ├── index.html           # 时钟主窗口
 ├── renderer.js          # 时钟渲染、动画、实时更新
 ├── styles.css           # 时钟样式（动画、模糊/缩放、插件信息栏插槽）
+├── countdown.js         # 倒计时纯逻辑（解析 / 夹取 / 状态机，带单测）
 ├── plugin-host.js       # 插件沙箱运行时（三个窗口共用）
 ├── window-layout.js     # 位置预设 / 夹取 / 时钟压住背景板的纯函数
-├── lan-mirror.js        # 局域网只读镜像服务（Node 内置 http，零依赖；随机/自定义/无访问码三种模式）
+├── lan-mirror.js        # 局域网镜像服务（Node 内置 http，零依赖；时钟 + 倒计时接口）
 ├── lan-mirror-page.html # 手机端打开的自包含页面（内联 CSS/JS）
 ├── qr-code.js           # 极简二维码编码器（byte 模式、纠错 M、版本 1–6），供局域网面板使用
 ├── settings.html        # 设置窗口
@@ -134,6 +150,7 @@ NODE_OPTIONS= \
 ├── settings.css         # 设置页面样式
 ├── welcome.html/js/css  # 首次运行的欢迎界面
 ├── alarm-editor.*       # 闹钟编辑窗口
+├── countdown-editor.*   # 倒计时编辑窗口
 ├── lights-off.*         # 关灯全屏窗口
 ├── examples/
 │   └── sample-plugin/   # 随仓库提供的示例插件（三种钩子都有）
@@ -150,6 +167,7 @@ NODE_OPTIONS= \
 |---|---|
 | `config.json` | 全部偏好设置 |
 | `alarms.json` | 闹钟列表 |
+| `countdowns.json` | 倒计时列表（独立文件、独立引擎，绝不与闹钟混在一起） |
 | `plugins.json` | 插件的启用状态与各插件的设置值 |
 | `plugins/<插件 id>/` | 已安装的插件 |
 | `plugins-data/<插件 id>/data.json` | 插件自己的数据（只能通过插件 API 访问） |
@@ -165,6 +183,7 @@ NODE_OPTIONS= \
 | **动画** | `animType`（flip/scale/fade/flip-3d/none）、`animFlipDir`（up/down）、`animScaleDir`（shrink/grow）、`animDuration`、`staggerDelay`、`staggerDirection`、`blurEnabled`、`blurDuration`、`blurStrength`、`scaleInEnabled`、`scaleInFactor` |
 | **时间** | `showSeconds`、`showDate`、`showWeekday`、`datePosition`、`extraTimezones`、`hourFormat`（auto/24/12）、`ampmCorner`、`timeOffsetMs`、`autoAdjustEnabled`、`autoAdjustIntervalSec`、`autoAdjustAmountMs`、`autoAdjustBaseMs`、`autoAdjustAnchor` |
 | **闹钟** | `alarms.json`，以及 `alarmSoundDuration`、`alarmFlash`、`alarmAutoShow`、`alarmAutoPassthrough`、`alarmAutoTop` |
+| **倒计时** | `countdowns.json`，以及 `countdownSound`（beep/chime/alarm/none）、`countdownShowInInfoBar`、`countdownDefaultMinutes`（1–1440，新建时的默认时长） |
 | **位置** | `positionPreset`、`x`、`y`、`layerMode`（alwaysOnTop/normal） |
 | **系统** | `autoStart`、`silentStart`、`language`（zh/en）、`passthrough` |
 | **局域网** | `lanMirrorEnabled`、`lanMirrorPort`（默认 8788）、`lanMirrorAuthMode`（random/fixed/none）、`lanMirrorFixedCode`、`lanMirrorToken`（实际生效的路径段，只由主进程写入） |
@@ -204,6 +223,7 @@ NODE_OPTIONS= \
 | `ui.clock` | `clock.infoBar` | 编辑时钟窗口里的任意元素、往整个窗口叠加自己的层 |
 | `ui.settings` | `settings.theme` | 编辑设置窗口里的任意元素、往整个窗口叠加自己的层 |
 | `ui.lightsOffBg` | `lightsOff.background` | 支配关灯背景板的背景（颜色 / 渐变 / 图片 / 透明度 / 模糊） |
+| `mic` | 任意钩子 | 使用系统麦克风（分贝仪一类）。宿主据此给沙箱 iframe 加 `allow="microphone"`，没有它沙箱里的 `getUserMedia` 会被直接拒绝 |
 
 **如实说明边界。** 隔离是真的，但它不是「能力护城河」—— 它的意义在于：插件永远触及不到宿主与 Node，它能做的一切都必须经过宿主**校验过、有记录、会自动还原**的接口。具体边界：
 
@@ -258,7 +278,7 @@ my-plugin/
 | `homepage` | string | 否 | 必须以 `https://` 开头，否则丢弃 |
 | `apiVersion` | number | 否 | 缺省 1；当前宿主支持 **3**（真正的沙箱隔离从 `3` 起；界面编辑权从 `2` 起）。填高于宿主的版本会以 `api-too-new` 拒绝加载。**新插件请用 `3`。** |
 | `hooks` | string[] | **是** | 至少包含一个已知钩子，未知项会被丢弃；一个可用钩子都没有则拒绝加载（`no-hooks`） |
-| `permissions` | string[] | 否 | 可填 `storage`、`net`、`ui.clock`、`ui.settings`、`ui.lightsOffBg`，未知项丢弃；首次启用时宿主会把这些逐条列出来让你确认 |
+| `permissions` | string[] | 否 | 可填 `storage`、`net`、`ui.clock`、`ui.settings`、`ui.lightsOffBg`、`mic`，未知项丢弃；首次启用时宿主会把这些逐条列出来让你确认 |
 | `main` | string | 否 | 插件目录内的相对路径，缺省 `index.js`；文件必须存在 |
 | `style` | string | 否 | 相对路径的 CSS 文件；只会注入到「声明了该插件钩子」的窗口 |
 | `settingsView` | string | 否 | 相对路径的 HTML 片段，插入前会被清洗（见第七节） |
@@ -307,8 +327,9 @@ dc.mount(function (slot, dc) {
 
 | 成员 | 说明 |
 |---|---|
-| `dc.clock.setInfoText(text)` | 设置插槽文字。元素由宿主托管，所以宽度自适应、颜色继承（自动昼夜、闹钟闪烁）都会正常工作 |
+| `dc.clock.setInfoText(text)` | 设置插槽文字（v3 起写在插槽内的专用文本节点上，不会干扰沙箱 iframe）。元素由宿主托管，所以宽度自适应、颜色继承（自动昼夜、闹钟闪烁）都会正常工作 |
 | `dc.clock.clearInfoText()` | 清空文字（空插槽会收起，不再占位） |
+| `dc.clock.removeInfoSlot()` | 把自己的信息栏插槽整个摘掉（`infoStyle=none` 一类场景）。隔离后沙箱里删不到宿主元素，必须走这个 API；重新显示靠插件重载 |
 
 ### `dc.lightsOff` —— 仅 `lightsOff.background`
 
@@ -325,12 +346,13 @@ dc.mount(function (slot, dc) {
 
 ### `dc.ui` —— 界面编辑
 
-**换肤类（任意窗口可用，不需要界面权限）**
+**换肤类（写入你自己的沙箱文档不需要权限；要同时写到宿主窗口需要该窗口的界面编辑权）**
 
 | 成员 | 说明 |
 |---|---|
-| `dc.ui.addStyle(cssText)` | 把样式表追加进**你的沙箱文档**，同时请宿主把它也追加到目标宿主窗口（卸载时移除） |
-| `dc.ui.applyVars({ '--名字': 值 })` | 仅设置窗口：在**宿主** `:root` **以及**你沙箱的 `<html>` 上设置 CSS 自定义属性（卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
+| `dc.ui.addStyle(cssText)` | 把样式表追加进**你的沙箱文档**（免权限）；同时请宿主把它也追加到目标宿主窗口 —— 这一步**需要该窗口的界面编辑权**（时钟 `ui.clock`、设置 `ui.settings`，卸载时移除） |
+| `dc.ui.applyVars({ '--名字': 值 })` | 仅设置窗口：在**宿主** `:root` **以及**你沙箱的 `<html>` 上设置 CSS 自定义属性（宿主侧需要 `ui.settings`，卸载时还原）。设置界面本身就用 `--sfz`（基准字号）等一系列变量，覆盖它们即可整体换肤 |
+| `dc.ui.notifyHost()` | 请求宿主重算信息栏可见性与窗口尺寸（替代隔离前 `window.dispatchEvent('dc-plugins-updated')` 的写法 —— 那在沙箱里发不到宿主） |
 
 **编辑类（需要该窗口的界面编辑权：时钟 `ui.clock`、设置 `ui.settings`）**
 

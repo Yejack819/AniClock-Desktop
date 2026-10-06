@@ -40,6 +40,18 @@ const LOCALE = {
     alarmFlash: '闹钟响时闪烁',
     alarmAutoShow: '闹钟响时自动取消隐藏', alarmAutoPassthrough: '闹钟响时自动关闭鼠标穿透',
     alarmAutoTop: '闹钟响时自动置顶',
+    // [v1.0.5.7] 倒计时
+    navCountdown: '倒计时',
+    countdownAdd: '+ 添加倒计时', countdownEdit: '编辑', countdownDelete: '删除',
+    countdownEmpty: '暂无倒计时，点击下方按钮添加',
+    countdownAdvanced: '▶ 高级设置',
+    countdownSound: '到点提示音', countdownSoundHint: '新建倒计时默认用这个提示音；单个倒计时的声音可在编辑窗里单独改。',
+    countdownShowInInfoBar: '在时钟上显示倒计时',
+    soundBeep: 'Beep', soundChime: 'Chime', soundAlarm: 'Alarm', soundNone: '无声音',
+    cdPause: '暂停', cdResume: '继续', cdRestart: '再来一次',
+    cdRunning: '进行中', cdPaused: '已暂停', cdRinging: '⏳ 正在响',
+    cdRemaining: '剩余', cdTotal: '时长',
+    cdConfirmDelete: '确定要删除倒计时"{{name}}"吗？',
     secData: '--- 数据管理 ---',
     deleteDataDesc: '删除所有保存的数据（config.json 和 alarms.json），应用将恢复出厂状态。此操作不可撤销！',
     deleteDataBtn: '🗑️ 删除所有保存的数据',
@@ -106,6 +118,7 @@ const LOCALE = {
     pluginGrantUiWarn: '\n\n⚠️ 它会修改窗口里的文字与样式（不会删除宿主元素，卸载或改设置时自动还原）。万一界面被改坏，可在托盘菜单里开启安全模式一键停用全部插件。',
     pluginPermStorage: '读写自己的数据', pluginPermNet: '访问网络（https）',
     pluginPermUiClock: '编辑时钟窗口内容', pluginPermUiSettings: '编辑设置窗口内容', pluginPermUiLightsBg: '控制关灯背景板背景',
+    pluginPermMic: '使用麦克风',
     pluginHookLightsOff: '关灯背景板', pluginHookInfoBar: '时钟日期栏', pluginHookSettingsTheme: '设置界面美化',
     pluginSafeText: '安全模式：全部插件已暂停，时钟与设置界面回到原始状态。确认插件没问题后可退出。',
     pluginSafeExit: '退出安全模式并重启', pluginSafeBadge: '安全模式已暂停',
@@ -113,6 +126,7 @@ const LOCALE = {
     pluginRuntimeDenied: '缺少权限被拒绝：', pluginRuntimeProtected: '这个元素受保护，不能隐藏或删除',
     pluginRuntimeNoUi: '当前窗口不开放宿主元素编辑（关灯窗口只开放背景）',
     pluginImported: '已导入并启用：', pluginExists: '同名插件已存在，要用新版本覆盖吗？\n（现有设置会保留）',
+    pluginSaveFailed: '设置保存失败：',
     pluginRemoved: '已删除插件：', pluginImportFailed: '导入失败：',
     pluginRemoveConfirm: '确定删除这个插件吗？它的数据与设置也会一并删除。',
     pluginNoSettings: '这个插件没有设置项。',
@@ -177,7 +191,11 @@ const LOCALE = {
     lanCopyCode: '复制访问码',
     lanHintRandom: '地址里那 6 位短码就是访问码：同一网络下，不知道码就打不开。点「更换访问码」可让旧链接立刻失效。',
     lanHintFixed: '地址里就是你自己设的访问码。改一次，之前分享出去的链接立刻失效。',
-    lanHintNone: '当前不需要访问码：同一网络下任何设备都能打开这个页面。页面是只读的，不会泄露闹钟、窗口位置或文件路径。',
+    lanHintNone: '当前不需要访问码：同一网络下任何设备都能打开这个页面，也能添加/管理倒计时。其余仍是只读的 —— 不会泄露闹钟、窗口位置或文件路径。',
+    lanCountdownHint: '手机端可以添加、编辑、暂停、继续、重新计时和取消倒计时（点底部胶囊进全屏倒计时，长按胶囊开抽屉）；配置、闹钟和窗口位置始终只读。手机端到点时会自己响铃提醒，那个开关在手机抽屉里（喇叭按钮），与桌面端的声音设置互不影响。在时钟上长按约半秒，可调手机端自己的字号。',
+    countdownDefaultMinutes: '新建时的默认时长',
+    countdownDefaultHint: '桌面编辑窗与手机端新建倒计时都用这个时长（1–1440 分钟）。',
+    unitMinutes: '分钟',
     lanWarnNone: '无码模式建议只在可信的家庭 Wi-Fi 下使用。',
     lanWarnFixed: '自定义码越短越好记，但也越好猜 —— 家用 Wi-Fi 够用，公用网络建议用随机码。',
     lanFirewallHint: '连不上时先查两件事：① 手机和电脑是否在同一个 Wi-Fi；② Windows 防火墙是否拦住了这个端口（首次开启时若弹出提示，勾选「专用网络」允许即可；被判定为「公用网络」时会默认拦截）。',
@@ -222,6 +240,18 @@ const LOCALE = {
     alarmFlash: 'Flash on alarm',
     alarmAutoShow: 'Auto-show window on alarm', alarmAutoPassthrough: 'Auto-disable passthrough on alarm',
     alarmAutoTop: 'Auto-force always-on-top on alarm',
+    // [v1.0.5.7] Countdown
+    navCountdown: 'Countdown',
+    countdownAdd: '+ Add Countdown', countdownEdit: 'Edit', countdownDelete: 'Delete',
+    countdownEmpty: 'No countdowns yet. Click below to add one.',
+    countdownAdvanced: '▶ Advanced',
+    countdownSound: 'Alert sound', countdownSoundHint: 'Used as the default sound for new countdowns; each countdown can override it in its editor.',
+    countdownShowInInfoBar: 'Show countdown on the clock',
+    soundBeep: 'Beep', soundChime: 'Chime', soundAlarm: 'Alarm', soundNone: 'None',
+    cdPause: 'Pause', cdResume: 'Resume', cdRestart: 'Restart',
+    cdRunning: 'Running', cdPaused: 'Paused', cdRinging: '⏳ Ringing',
+    cdRemaining: 'Left', cdTotal: 'Duration',
+    cdConfirmDelete: 'Delete countdown "{{name}}"?',
     secData: '--- Data Management ---',
     deleteDataDesc: 'Delete all saved data (config.json and alarms.json). The app will reset to factory state. This action is IRREVERSIBLE!',
     deleteDataBtn: '🗑️ Delete All Saved Data',
@@ -289,6 +319,7 @@ const LOCALE = {
     pluginGrantUiWarn: '\n\n⚠️ It edits text and styles inside host windows (host elements are never deleted, and changes are restored on unload). If the UI ever breaks, use Safe Mode from the tray menu to disable all plugins at once.',
     pluginPermStorage: 'read/write its own data', pluginPermNet: 'network access (https)',
     pluginPermUiClock: 'edit clock window content', pluginPermUiSettings: 'edit settings window content', pluginPermUiLightsBg: 'control the Lights Off board background',
+    pluginPermMic: 'use the microphone',
     pluginHookLightsOff: 'Lights Off board', pluginHookInfoBar: 'Clock info bar', pluginHookSettingsTheme: 'Settings theme',
     pluginSafeText: 'Safe mode: all plugins are paused, clock and settings are back to their original state. Leave safe mode once you have checked the plugin.',
     pluginSafeExit: 'Leave safe mode & restart', pluginSafeBadge: 'paused by safe mode',
@@ -296,6 +327,7 @@ const LOCALE = {
     pluginRuntimeDenied: 'Denied, missing permission: ', pluginRuntimeProtected: 'This element is protected and cannot be hidden or removed',
     pluginRuntimeNoUi: 'This window does not allow host element editing (Lights Off only exposes the background)',
     pluginImported: 'Imported and enabled: ', pluginExists: 'A plugin with the same id already exists. Overwrite it with the new version?\n(Existing settings are kept)',
+    pluginSaveFailed: 'Failed to save setting: ',
     pluginRemoved: 'Plugin removed: ', pluginImportFailed: 'Import failed: ',
     pluginRemoveConfirm: 'Delete this plugin? Its data and settings will be removed too.',
     pluginNoSettings: 'This plugin has no settings.',
@@ -359,7 +391,11 @@ const LOCALE = {
     lanCopyCode: 'Copy code',
     lanHintRandom: 'The 6-character code in the address is the access code: on the same network, nobody can open the clock without it. "New access code" invalidates old links immediately.',
     lanHintFixed: 'The address contains the access code you chose. Changing it invalidates any link you shared before.',
-    lanHintNone: 'No access code is required: any device on the same network can open this page. It is read-only - alarms, window position and file paths are never exposed.',
+    lanHintNone: 'No access code is required: any device on the same network can open this page and manage countdowns. Everything else stays read-only - alarms, window position and file paths are never exposed.',
+    lanCountdownHint: 'From the phone you can add, edit, pause, resume, restart and cancel countdowns (tap the bottom pill for a full-screen countdown, long-press it for the sheet). Configuration, alarms and window position always stay read-only. The phone also rings by itself when a countdown hits zero - that switch lives in the phone\'s own sheet (the bell button) and is independent of the desktop sound setting. Long-press the clock to size it for that phone.',
+    countdownDefaultMinutes: 'Default duration for new countdowns',
+    countdownDefaultHint: 'Used by both the desktop editor and the phone page when creating a countdown (1–1440 minutes).',
+    unitMinutes: 'min',
     lanWarnNone: 'Use no-code mode only on a Wi-Fi network you trust.',
     lanWarnFixed: 'A short custom code is easy to remember but also easy to guess - fine at home, use a random code on public networks.',
     lanFirewallHint: 'If the phone cannot connect, check two things: (1) the phone and this computer are on the same Wi-Fi; (2) whether Windows Firewall blocks the port (allow it for "Private networks" when prompted; networks classified as "Public" are blocked by default).',
@@ -434,6 +470,14 @@ const els = {
   alarm_auto_show: document.getElementById('alarm-auto-show'),
   alarm_auto_passthrough: document.getElementById('alarm-auto-passthrough'),
   alarm_auto_top: document.getElementById('alarm-auto-top'),
+  // [v1.0.5.7] 倒计时
+  countdown_list: document.getElementById('countdown-list'),
+  countdown_add_btn: document.getElementById('countdown-add-btn'),
+  countdown_advanced_toggle: document.getElementById('countdown-advanced-toggle'),
+  countdown_advanced_content: document.getElementById('countdown-advanced-content'),
+  countdown_sound: document.getElementById('countdown-sound'),
+  countdown_show_info: document.getElementById('countdown-show-info'),
+  countdown_default_minutes: document.getElementById('countdown-default-minutes'),
   delete_data_btn: document.getElementById('delete-data-btn'),
   export_data_btn: document.getElementById('export-data-btn'),
   import_data_btn: document.getElementById('import-data-btn'),
@@ -545,6 +589,7 @@ function applyLanguage(lang) {
   syncAutoAdjustUI(); // [v1.0.5.4] 自动校准摘要同理
   renderLanPanel(); // [v1.0.5.6] 局域网状态文案与地址列表也带语言
   renderAlarmList(); // re-render with new locale
+  renderCountdownList(); // [v1.0.5.7] 倒计时列表文案（状态徽章/按钮）也带语言
 }
 
 function renderTZList() {
@@ -554,8 +599,9 @@ function renderTZList() {
   tzs.forEach((tz, idx) => {
     const div = document.createElement('div');
     div.className = 'tz-item';
-    const sign = tz.offset >= 0 ? '+' : '';
-    div.innerHTML = '<span class="tz-label">'+tz.label+'</span><span class="tz-offset">UTC'+sign+tz.offset+'</span><button class="tz-del-btn" data-idx="'+idx+'">'+dict.tzRemove+'</button>';
+    const sign = (Number(tz.offset) || 0) >= 0 ? '+' : '';
+    // [v1.0.5.7] tz.label 是自由文本（可从偏好备份导入），必须转义后再进 innerHTML
+    div.innerHTML = '<span class="tz-label">'+escapeHtml(tz.label)+'</span><span class="tz-offset">UTC'+sign+(Number(tz.offset) || 0)+'</span><button class="tz-del-btn" data-idx="'+idx+'">'+dict.tzRemove+'</button>';
     els.tz_list.appendChild(div);
   });
   els.tz_list.querySelectorAll('.tz-del-btn').forEach(btn => {
@@ -593,7 +639,8 @@ function renderAlarmList() {
     let meta = '';
     if (alarm.enabled === false) {
       meta = dict.alarmDisabled;
-    } else if (alarm.repeat && alarm.weekdays && alarm.weekdays.length > 0) {
+    } else if (alarm.repeat && Array.isArray(alarm.weekdays) && alarm.weekdays.length > 0) {
+      // [v1.0.5.7] weekdays 必须是数组：手改/旧备份里的字符串会让 .map 抛错瘫掉整个闹钟列表
       const days = alarm.weekdays.map(d => dict.dayNames[d] || '').join(' ');
       const soundName = dict.alarmSounds[alarm.sound] || alarm.sound;
       const snoozeStr = buildSnoozeStr(alarm, dict);
@@ -611,10 +658,13 @@ function renderAlarmList() {
     const isActive = alarm.id === activeAlarmIds.ringingId || activeAlarmIds.retryIds.includes(alarm.id);
     const isEnabled = alarm.enabled !== false;
 
+    // [v1.0.5.7] alarm.id 会拼进多个属性选择器（可随偏好备份导入任意文本），必须转义
+    const idAttr = escapeHtml(String(alarm.id || ''));
+
     item.innerHTML =
       '<div class="alarm-toggle-col">' +
         '<label class="toggle-switch">' +
-          '<input type="checkbox" class="alarm-toggle-input" data-id="' + alarm.id + '"' + (isEnabled ? ' checked' : '') + '>' +
+          '<input type="checkbox" class="alarm-toggle-input" data-id="' + idAttr + '"' + (isEnabled ? ' checked' : '') + '>' +
           '<span class="toggle-slider"></span>' +
         '</label>' +
       '</div>' +
@@ -624,8 +674,8 @@ function renderAlarmList() {
         '<div class="alarm-meta">' + escapeHtml(meta) + '</div>' +
       '</div>' +
       '<div class="alarm-actions">' +
-        '<button class="alarm-edit-btn" data-id="' + alarm.id + '"' + (isActive ? ' disabled' : '') + '>' + dict.alarmEdit + '</button>' +
-        '<button class="alarm-del-btn" data-id="' + alarm.id + '">' + dict.alarmDelete + '</button>' +
+        '<button class="alarm-edit-btn" data-id="' + idAttr + '"' + (isActive ? ' disabled' : '') + '>' + dict.alarmEdit + '</button>' +
+        '<button class="alarm-del-btn" data-id="' + idAttr + '">' + dict.alarmDelete + '</button>' +
       '</div>';
 
     els.alarm_list.appendChild(item);
@@ -657,6 +707,159 @@ function renderAlarmList() {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ====== [v1.0.5.7] 倒计时面板 ======
+// 列表只存「公开字段」（id/name/durationMs/remainingMs/state/endAt），剩余时间在这里
+// 每秒本地倒扣 —— 主进程只在列表变更时推一次，不陪你每秒走 IPC。
+let cdItems = [];
+let cdRingingId = null;
+let cdTickTimer = null;
+const cdNodes = new Map(); // id -> { remain, bar, badge }
+
+// 与 countdown.js 同口径：向上取整到秒 + 小时补零（宽度恒定，不会抖）
+function cdFmt(ms) {
+  const s = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  const p = n => (n < 10 ? '0' : '') + n;
+  return h > 0 ? p(h) + ':' + p(m) + ':' + p(ss) : p(m) + ':' + p(ss);
+}
+// 用 Date.now()：endAt 是真实系统时刻，手动校准偏移只影响时钟显示
+function cdRemain(item, nowMs) {
+  if (!item) return 0;
+  if (item.state === 'paused') return Math.max(0, Number(item.remainingMs) || 0);
+  const t = item.endAt ? new Date(item.endAt).getTime() : NaN;
+  if (!Number.isFinite(t)) return Math.max(0, Number(item.remainingMs) || 0);
+  return Math.max(0, t - nowMs);
+}
+function cdStateLabel(item, dict) {
+  if (item && item.id === cdRingingId) return { text: dict.cdRinging, cls: 'ringing' };
+  if (item && item.state === 'paused') return { text: dict.cdPaused, cls: 'paused' };
+  return { text: dict.cdRunning, cls: '' };
+}
+
+function tickCountdownList() {
+  if (!cdNodes.size) return;
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  const nowMs = Date.now();
+  cdItems.forEach(item => {
+    if (!item) return;
+    const n = cdNodes.get(item.id);
+    if (!n) return;
+    const left = cdRemain(item, nowMs);
+    const txt = cdFmt(left);
+    if (n.remain && n.remain.textContent !== txt) n.remain.textContent = txt;
+    if (n.bar) {
+      const pct = item.durationMs > 0 ? Math.max(0, Math.min(100, (left / item.durationMs) * 100)) : 0;
+      const w = pct.toFixed(2) + '%';
+      if (n.bar.style.width !== w) n.bar.style.width = w;
+    }
+    if (n.badge) {
+      const st = cdStateLabel(item, dict);
+      if (n.badge.textContent !== st.text) n.badge.textContent = st.text;
+      const cls = 'cd-badge' + (st.cls ? ' ' + st.cls : '');
+      if (n.badge.className !== cls) n.badge.className = cls;
+    }
+  });
+}
+
+function bindCountdownEvents(dict) {
+  const q = sel => els.countdown_list.querySelectorAll(sel);
+  q('.cd-pause-btn').forEach(b => b.addEventListener('click', () => window.electronAPI.countdownPause(b.dataset.id)));
+  q('.cd-resume-btn').forEach(b => b.addEventListener('click', () => window.electronAPI.countdownResume(b.dataset.id)));
+  q('.cd-restart-btn').forEach(b => b.addEventListener('click', () => window.electronAPI.countdownRestart(b.dataset.id)));
+  q('.alarm-edit-btn').forEach(b => b.addEventListener('click', () => window.electronAPI.openCountdownEditor(b.dataset.id)));
+  q('.alarm-del-btn').forEach(b => b.addEventListener('click', async () => {
+    const item = cdItems.find(a => a && a.id === b.dataset.id);
+    if (!item) return;
+    const msg = (dict.cdConfirmDelete || 'Delete?').replace('{{name}}', item.name || '');
+    if (!confirm(msg)) return;
+    await window.electronAPI.countdownDelete(b.dataset.id);
+    // 列表随后由 countdown-state 广播刷新
+  }));
+}
+
+function renderCountdownList() {
+  if (!els.countdown_list) return;
+  const dict = LOCALE[currentLang] || LOCALE.zh;
+  cdNodes.clear();
+  els.countdown_list.innerHTML = '';
+
+  if (!cdItems.length) {
+    const empty = document.createElement('div');
+    empty.id = 'countdown-empty';
+    empty.textContent = dict.countdownEmpty;
+    els.countdown_list.appendChild(empty);
+    return;
+  }
+
+  const nowMs = Date.now();
+  cdItems.forEach(item => {
+    if (!item) return;
+    const idAttr = escapeHtml(String(item.id || ''));
+    const paused = item.state === 'paused';
+    const left = cdRemain(item, nowMs);
+    const pct = item.durationMs > 0 ? Math.max(0, Math.min(100, (left / item.durationMs) * 100)) : 0;
+    const st = cdStateLabel(item, dict);
+
+    const row = document.createElement('div');
+    row.className = 'alarm-item' + (paused ? ' is-paused' : '');
+    row.innerHTML =
+      '<div class="alarm-time' + (paused ? ' disabled' : '') + '" data-role="remain">' + cdFmt(left) + '</div>' +
+      '<div class="alarm-info">' +
+        '<div class="alarm-name">' + escapeHtml(item.name || '') +
+          '<span class="cd-badge' + (st.cls ? ' ' + st.cls : '') + '" data-role="badge">' + st.text + '</span>' +
+        '</div>' +
+        '<div class="alarm-meta">' + dict.cdTotal + ': ' + cdFmt(item.durationMs) + '</div>' +
+        '<div class="cd-progress"><i data-role="bar" style="width:' + pct.toFixed(2) + '%"></i></div>' +
+      '</div>' +
+      '<div class="alarm-actions">' +
+        (paused
+          ? '<button class="cd-resume-btn" data-id="' + idAttr + '">' + dict.cdResume + '</button>'
+          : '<button class="cd-pause-btn" data-id="' + idAttr + '">' + dict.cdPause + '</button>') +
+        '<button class="cd-restart-btn" data-id="' + idAttr + '">' + dict.cdRestart + '</button>' +
+        '<button class="alarm-edit-btn" data-id="' + idAttr + '">' + dict.countdownEdit + '</button>' +
+        '<button class="alarm-del-btn" data-id="' + idAttr + '">' + dict.countdownDelete + '</button>' +
+      '</div>';
+    els.countdown_list.appendChild(row);
+    cdNodes.set(item.id, {
+      remain: row.querySelector('[data-role="remain"]'),
+      bar: row.querySelector('[data-role="bar"]'),
+      badge: row.querySelector('[data-role="badge"]'),
+    });
+  });
+
+  bindCountdownEvents(dict);
+  tickCountdownList();
+}
+
+function applyCountdownState(state) {
+  cdItems = (state && Array.isArray(state.items)) ? state.items : [];
+  cdRingingId = (state && state.ringingId) || null;
+  renderCountdownList();
+}
+
+async function refreshCountdownPanel() {
+  try {
+    applyCountdownState(await window.electronAPI.countdownList());
+  } catch (e) {
+    applyCountdownState({ items: [] });
+  }
+}
+
+// 高级设置里的两档偏好
+function syncCountdownUI() {
+  if (els.countdown_sound) els.countdown_sound.value = config.countdownSound || 'beep';
+  if (els.countdown_show_info) els.countdown_show_info.checked = config.countdownShowInInfoBar !== false;
+  if (els.countdown_default_minutes) {
+    els.countdown_default_minutes.value = String(clampDefaultMinutes(config.countdownDefaultMinutes));
+  }
+}
+// 1–1440 分钟：0 / 空 / 非法都回落到 5
+function clampDefaultMinutes(v) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < 1) return 5;
+  return Math.min(1440, n);
 }
 
 function buildSnoozeStr(alarm, dict) {
@@ -725,7 +928,10 @@ function syncUIFromConfig() {
   if (opts.includes(config.fontFamily)) { els.font_select.value = config.fontFamily; els.font_custom.classList.add('hidden'); }
   else { els.font_select.value = 'custom'; els.font_custom.classList.remove('hidden'); els.font_custom.value = config.fontFamily; }
   els.font_size.value = config.fontSize; els.font_size_label.textContent = config.fontSize;
-  els.info_scale.value = config.infoScale || 0.3; els.info_scale_label.textContent = (config.infoScale || 0.3).toFixed(2);
+  // [v1.0.5.7] infoScale 必须是数字：手改/导入的非数字会让 toFixed 抛错，
+  // async init 中断 → 窗口能显示但所有控件全部失灵
+  const infoScaleVal = Number.isFinite(Number(config.infoScale)) ? Number(config.infoScale) : 0.3;
+  els.info_scale.value = infoScaleVal; els.info_scale_label.textContent = infoScaleVal.toFixed(2);
   els.anim_speed.value = config.animDuration || 350; els.anim_speed_label.textContent = config.animDuration || 350;
   normalizeAnimConfig(config);
   els.anim_type.value = config.animType;
@@ -806,6 +1012,9 @@ function syncUIFromConfig() {
   els.alarm_auto_show.checked = config.alarmAutoShow !== false;
   els.alarm_auto_passthrough.checked = config.alarmAutoPassthrough !== false;
   els.alarm_auto_top.checked = config.alarmAutoTop !== false;
+
+  // [v1.0.5.7] Countdown 高级设置
+  syncCountdownUI();
 
   // [v1.0.5.1] 恢复上次停留的面板（需在 applyMode 之后，以避开教育模式隐藏项）
   activatePanel(config.settingsTab || 'mode', false);
@@ -1010,6 +1219,8 @@ function activatePanel(id, persist) {
   if (btn.dataset.panel === 'plugins' && window.DCPlugins && typeof window.DCPlugins.render === 'function') window.DCPlugins.render();
   // [v1.0.5.6] 进入局域网分区时拉一次最新状态（端口/地址/二维码都是主进程现算的）
   if (btn.dataset.panel === 'lan') refreshLanPanel();
+  // [v1.0.5.7] 进入倒计时分区时拉一次最新列表（别拿几分钟前的旧快照展示）
+  if (btn.dataset.panel === 'countdown') refreshCountdownPanel();
   if (persist) saveAndApply({ settingsTab: btn.dataset.panel });
 }
 
@@ -1252,21 +1463,27 @@ function adoptLanToken() {
 async function refreshLanPanel() {
   const api = window.electronAPI;
   if (!api || typeof api.lanMirrorStatus !== 'function') return;
-  try { lanState = await api.lanMirrorStatus(); } catch (e) { lanState = null; }
+  // [v1.0.5.7] 拉状态失败时保留旧 lanState（置 null 会错显示「未开启共享」）
+  try { const st = await api.lanMirrorStatus(); if (st) lanState = st; } catch (e) {}
   adoptLanToken();
   renderLanPanel();
 }
 
 // 统一入口：把开关/端口交给主进程，回来后用真实状态刷新界面
+// [v1.0.5.7] lanBusy 期间的变更不再静默丢弃：合并进 pending，本轮结束后立刻补发
+let pendingLanPatch = null;
 async function applyLanMirror(patch) {
   const api = window.electronAPI;
-  if (lanBusy) return;
+  if (lanBusy) {
+    pendingLanPatch = Object.assign({}, pendingLanPatch || {}, patch || {});
+    return;
+  }
   lanBusy = true;
   renderLanPanel();
   try {
     lanState = await api.setLanMirror(patch);
   } catch (e) {
-    lanState = null;
+    // [v1.0.5.7] 失败保留旧状态（原来置 null，面板会错显示成「未开启共享」）
     lanBusy = false;
     renderLanPanel();
     flashLanStatus(String((e && e.message) || e), true);
@@ -1275,6 +1492,11 @@ async function applyLanMirror(patch) {
   lanBusy = false;
   adoptLanToken();
   renderLanPanel();
+  if (pendingLanPatch) {
+    const p = pendingLanPatch;
+    pendingLanPatch = null;
+    applyLanMirror(p);
+  }
 }
 
 function initLanPanel() {
@@ -1302,8 +1524,10 @@ function initLanPanel() {
     port = Math.max(1024, Math.min(65535, Math.round(port)));
     els.lan_port.value = port;
     config = { ...config, lanMirrorPort: port };
-    if (els.lan_enabled.checked) applyLanMirror({ port: port });
-    else renderLanPanel();
+    // [v1.0.5.7] 关着也照发：save-config 会用磁盘值覆盖 LAN_OWNED_KEYS，
+    // 只写本地快照的话端口改动会在下次整份回写时被静默还原（authMode/fixedCode
+    // 早就这么做了，唯独端口漏了）
+    applyLanMirror({ port: port });
   });
 
   // 访问方式：随机 / 自定义 / 不需要访问码。
@@ -1369,7 +1593,9 @@ function initLanPanel() {
     const api = window.electronAPI;
     lanBusy = true;
     renderLanPanel();
-    try { lanState = await api.newLanMirrorToken(); } catch (e) { lanState = null; }
+    // [v1.0.5.7] 失败保留旧状态（原来置 null，面板会错显示成「未开启共享」）
+    try { const ns = await api.newLanMirrorToken(); if (ns) lanState = ns; }
+    catch (e) { flashLanStatus(String((e && e.message) || e), true); }
     lanBusy = false;
     adoptLanToken();
     renderLanPanel();
@@ -1456,6 +1682,14 @@ function initLanPanel() {
     renderAlarmList();
   });
 
+  // [v1.0.5.7] 倒计时：初始拉一次 + 订阅变更广播；列表剩余时间每秒本地倒扣
+  await refreshCountdownPanel();
+  window.electronAPI.onCountdownState && window.electronAPI.onCountdownState((state) => {
+    applyCountdownState(state);
+  });
+  if (cdTickTimer) clearInterval(cdTickTimer);
+  cdTickTimer = setInterval(tickCountdownList, 1000);
+
   // 外观
   function syncColorUI(){els.text_color.disabled=els.auto_color.checked;els.bg_color.disabled=els.auto_color.checked;}
   els.auto_color.addEventListener('change', function(){syncColorUI();saveAndApply({autoColor:els.auto_color.checked});});
@@ -1468,7 +1702,12 @@ function initLanPanel() {
   });
   els.font_custom.addEventListener('change', () => { const v = els.font_custom.value.trim(); if (v) saveAndApply({ fontFamily: v }); });
   els.font_size.addEventListener('input', () => { const v = parseInt(els.font_size.value,10); els.font_size_label.textContent = v; saveAndApply({ fontSize: v }); });
-  els.info_scale.addEventListener('input', () => { const v = parseFloat(els.info_scale.value); els.info_scale_label.textContent = v.toFixed(2); saveAndApply({ infoScale: v }); });
+  els.info_scale.addEventListener('input', () => {
+    const v = parseFloat(els.info_scale.value);
+    // [v1.0.5.7] 空值/非数字不落盘（避免 NaN 写进 config 后下次启动瘫掉 init）
+    if (!Number.isFinite(v)) return;
+    els.info_scale_label.textContent = v.toFixed(2); saveAndApply({ infoScale: v });
+  });
   els.anim_speed.addEventListener('input', function() { var v = parseInt(els.anim_speed.value,10); els.anim_speed_label.textContent = v; saveAndApply({ animDuration: v }); syncAnimUI(); });
   els.anim_type.addEventListener('change', function() { saveAndApply({ animType: els.anim_type.value }); syncAnimUI(); });
   // [v1.0.5.4] 翻转 / 缩放 的方向
@@ -1533,7 +1772,11 @@ function initLanPanel() {
     if (cur.length >= 2) return;
     const label = els.tz_label.value.trim();
     if (!label) return;
-    const offset = parseInt(els.tz_offset.value, 10);
+    // [v1.0.5.7] 偏移必须是 [-12, 14] 内的数字（原来 NaN/任意值都能写进配置）
+    let offset = parseInt(els.tz_offset.value, 10);
+    if (!Number.isFinite(offset)) offset = 0;
+    offset = Math.max(-12, Math.min(14, offset));
+    els.tz_offset.value = String(offset);
     saveAndApply({ extraTimezones: [...cur, { label, offset }] });
     renderTZList();
     els.tz_label.value = '';
@@ -1614,7 +1857,14 @@ function initLanPanel() {
     const en = els.auto_start.checked;
     const silent = els.silent_start.checked;
     const r = await window.electronAPI.setAutoStart(en, silent);
-    if (!r.success) { els.auto_start.checked = !en; const d=LOCALE[currentLang]||LOCALE.zh; alert(d.autoStartFail+(r.error||d.permissionDenied)); }
+    if (!r.success) {
+      // [v1.0.5.7] 失败必须收口：原来只回退了开关、saveAndApply 照常执行 ——
+      // UI 显示未启用、config 里是 true、注册表没写成功，三者不一致
+      els.auto_start.checked = !en;
+      const d = LOCALE[currentLang] || LOCALE.zh;
+      alert(d.autoStartFail + (r.error || d.permissionDenied));
+      return;
+    }
     saveAndApply({ autoStart: en });
     syncSilentStartUI();
   });
@@ -1674,6 +1924,33 @@ function initLanPanel() {
   els.alarm_auto_top.addEventListener('change', () => {
     saveAndApply({ alarmAutoTop: els.alarm_auto_top.checked });
   });
+
+  // ====== [v1.0.5.7] 倒计时 ======
+  els.countdown_add_btn.addEventListener('click', () => {
+    window.electronAPI.openCountdownEditor(null);
+  });
+
+  els.countdown_advanced_toggle.addEventListener('click', () => {
+    const isOpen = !els.countdown_advanced_content.classList.contains('hidden');
+    els.countdown_advanced_content.classList.toggle('hidden');
+    const label = (LOCALE[currentLang] || LOCALE.zh).countdownAdvanced || '▶ Advanced';
+    const text = label.replace(/^[▶▼]\s*/, '');
+    els.countdown_advanced_toggle.textContent = (isOpen ? '▶' : '▼') + ' ' + text;
+  });
+
+  els.countdown_sound.addEventListener('change', () => {
+    saveAndApply({ countdownSound: els.countdown_sound.value });
+  });
+  els.countdown_show_info.addEventListener('change', () => {
+    saveAndApply({ countdownShowInInfoBar: els.countdown_show_info.checked });
+  });
+  if (els.countdown_default_minutes) {
+    els.countdown_default_minutes.addEventListener('change', () => {
+      const min = clampDefaultMinutes(els.countdown_default_minutes.value);
+      els.countdown_default_minutes.value = String(min);
+      saveAndApply({ countdownDefaultMinutes: min });
+    });
+  }
 
   // ====== [v1.0.5.3] 偏好设置导出 / 导入 ======
   function showDataStatus(text, isError) {
@@ -1808,6 +2085,7 @@ function initLanPanel() {
     if (p === 'ui.clock') return dict().pluginPermUiClock;
     if (p === 'ui.settings') return dict().pluginPermUiSettings;
     if (p === 'ui.lightsOffBg') return dict().pluginPermUiLightsBg;
+    if (p === 'mic') return dict().pluginPermMic;
     return p;
   }
   // 运行时报错（沙箱里抛出来的）翻成人话；认不出来的原样显示
@@ -1913,8 +2191,14 @@ function initLanPanel() {
     const values = plugin.values || {};
     schema.forEach(field => {
       holder.appendChild(buildPluginSettingRow(field, values[field.key], async (f, v) => {
-        const r = await window.electronAPI.setPluginSetting(plugin.id, f.key, v);
+        // [v1.0.5.7] 走设置界面专用通道：已禁用的插件不在 bundle 里，原来的
+        // setPluginSetting 会被归属校验拒绝（not-owner），改动被静默吞掉
+        const setter = typeof window.electronAPI.setPluginSettingUi === 'function'
+          ? window.electronAPI.setPluginSettingUi
+          : window.electronAPI.setPluginSetting;
+        const r = await setter(plugin.id, f.key, v);
         if (r && r.success) plugin.values[f.key] = r.value;
+        else showPluginStatus(plugin.name + '：' + dict().pluginSaveFailed + pluginRuntimeText((r && r.error) || 'save-failed'), true);
       }));
     });
     if (plugin.hasSettingsView) {

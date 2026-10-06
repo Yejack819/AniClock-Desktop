@@ -12,6 +12,9 @@ const {
   resolveToken: resolveLanToken,
   clampPort: clampLanPort,
 } = require('./lan-mirror');
+// [v1.0.5.7] 倒计时纯逻辑（时长解析/格式化、记录归一、状态迁移、每拍判定）。
+// 单独成文件是为了能直接用 node 跑单测（docs/tests/countdown.test.js）。
+const COUNTDOWN = require('./countdown');
 
 // ========== 配置路径 ==========
 function getConfigPath() {
@@ -20,6 +23,12 @@ function getConfigPath() {
 
 function getAlarmsPath() {
   return path.join(app.getPath('userData'), 'alarms.json');
+}
+
+// [v1.0.5.7] 倒计时与闹钟**分文件**：两者引擎、生命周期、语义都不同
+// （闹钟按时刻重复、倒计时按剩余量一次性），放一起会让两边最难的部分互相污染。
+function getCountdownsPath() {
+  return path.join(app.getPath('userData'), 'countdowns.json');
 }
 
 const DEFAULT_CONFIG = {
@@ -33,6 +42,11 @@ const DEFAULT_CONFIG = {
   infoScale: 0.3, blurEnabled: false, blurDuration: 300, blurStrength: 15,
   scaleInEnabled: false, scaleInFactor: 0.3,
   alarmSoundDuration: 120, alarmFlash: true, alarmAutoShow: true, alarmAutoPassthrough: true, alarmAutoTop: true,
+  // [v1.0.5.7] 倒计时：与闹钟分开的一套引擎（数据在 countdowns.json）。
+  // 响铃复用闹钟那套「自动显示 / 关闭穿透 / 强制置顶 / 闪烁」，这里只加它自己的三档偏好。
+  countdownSound: 'beep',         // 到点提示音（复用闹钟音源 beep/chime/alarm/none）
+  countdownShowInInfoBar: true,   // 在时钟信息栏显示最近到期的那个倒计时
+  countdownDefaultMinutes: 5,     // 新建倒计时时的默认时长（桌面编辑器与手机端共用）
   welcomeShown: false,
   settingsFontSize: 'md',
   settingsTab: 'mode',
@@ -92,10 +106,15 @@ function loadConfig() {
     }
     const raw = fs.readFileSync(getConfigPath(), 'utf-8');
     const parsed = JSON.parse(raw);
+    // [v1.0.5.7] 根必须是普通对象（数组/字符串/数字展开会把索引键混进配置）
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad-config-root');
     return normalizeAnimConfig({ ...DEFAULT_CONFIG, ...parsed });
   } catch (err) {
     console.error('配置文件损坏，回退默认配置:', err.message);
-    fs.writeFileSync(getConfigPath(), JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
+    // [v1.0.5.7] 回退时的重写也可能失败（磁盘只读/占用）——不能让异常沿调用链
+    // 传到每秒一次的闹钟检查里把主进程带走
+    try { fs.writeFileSync(getConfigPath(), JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8'); }
+    catch (err2) { console.error('重写默认配置失败:', err2.message); }
     return normalizeAnimConfig({ ...DEFAULT_CONFIG });
   }
 }
@@ -127,6 +146,36 @@ function loadAlarms() {
 function saveAlarmsData(data) {
   try { fs.writeFileSync(getAlarmsPath(), JSON.stringify(data, null, 2), 'utf-8'); }
   catch (err) { console.error('保存闹钟失败:', err.message); }
+}
+
+// ========== [v1.0.5.7] Countdown Data Management ==========
+const COUNTDOWNS_DEFAULTS = { countdowns: [] };
+// 到点后多晚还算「补响」而不是「已错过」。与闹钟同一口径（5 分钟）：
+// 应用被关掉/电脑睡了太久，倒计时不该在几小时后突然炸响，也不该像闹钟那样"补到明天"——
+// 超时一律丢弃（一次性语义）。
+const COUNTDOWN_GRACE_MS = 5 * 60 * 1000;
+
+function loadCountdowns() {
+  try {
+    if (!fs.existsSync(getCountdownsPath())) {
+      fs.writeFileSync(getCountdownsPath(), JSON.stringify(COUNTDOWNS_DEFAULTS, null, 2), 'utf-8');
+      return { countdowns: [] };
+    }
+    const raw = fs.readFileSync(getCountdownsPath(), 'utf-8');
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed && parsed.countdowns) ? parsed.countdowns : [];
+    return { countdowns: list };
+  } catch (err) {
+    console.error('倒计时文件损坏，重置:', err.message);
+    try { fs.writeFileSync(getCountdownsPath(), JSON.stringify(COUNTDOWNS_DEFAULTS, null, 2), 'utf-8'); }
+    catch (err2) { console.error('重写倒计时文件失败:', err2.message); }
+    return { countdowns: [] };
+  }
+}
+
+function saveCountdownsData(data) {
+  try { fs.writeFileSync(getCountdownsPath(), JSON.stringify(data, null, 2), 'utf-8'); }
+  catch (err) { console.error('保存倒计时失败:', err.message); }
 }
 
 // [v1.0.5.3] ====== 时间制式（闹钟文案用）======
@@ -162,8 +211,12 @@ let alarms = []; // in-memory alarm array
 let alarmCheckInterval = null;
 let alarmEditorWindow = null;
 
-// Ringing state
-let ringingAlarm = null; // { id, triggeredAt: Date }
+// [v1.0.5.7] 单一响铃槽：同一时刻只允许「一个东西」在响 —— 闹钟或倒计时。
+// 倒计时到点时若槽被占用就排队等下一拍（而不是像闹钟那样被 7 分钟窗口跳过，
+// 那样计时器会被静默吞掉）。kind 决定收尾走哪一套：
+//   alarm     → 重算下一次 / 单次则停用（原逻辑）
+//   countdown → 关闭即删除（一次性）；没关闭则按贪睡排下一轮
+let ringing = null; // { id, kind: 'alarm'|'countdown', triggeredAt: Date }
 let ringingTimer = null; // ringing duration timeout
 let retryTimers = new Map(); // alarmId -> setTimeout for retry
 let retryRemaining = new Map(); // alarmId -> remaining retry count (undefined = unlimited)
@@ -180,7 +233,7 @@ function cleanupTriggerWindows() {
   const now = Date.now();
   triggerWindows.forEach((win, id) => {
     const age = now - win.triggerTime.getTime();
-    if (age > 8 * 60 * 1000 && !retryTimers.has(id) && !(ringingAlarm && ringingAlarm.id === id)) {
+    if (age > 8 * 60 * 1000 && !retryTimers.has(id) && !(ringing && ringing.id === id)) {
       triggerWindows.delete(id);
     }
   });
@@ -252,13 +305,17 @@ function broadcastAlarmState() {
   let inlineText2 = '';
   let inlineTime = ''; // [v1.0.5.7] 显式声明：此前靠 sloppy 模式隐式全局，加 use strict / 重构即会抛 ReferenceError
 
-  // 1. Check ringing alarm → "单击关闭闹钟" ↔ alarm name
-  if (ringingAlarm) {
+  // 1. 有东西在响（闹钟或倒计时）→ 名称 ↔ "单击关闭…"
+  if (ringing) {
     inlineType = 'ringing';
-    const alarm = alarms.find(a => a.id === ringingAlarm.id);
-    inlineText = alarm ? alarm.name : '';
-    const dict = cfgNow.language === 'zh' ? '单击关闭闹钟' : 'Click to dismiss';
-    inlineText2 = dict;
+    const item = ringing.kind === 'countdown'
+      ? countdowns.find(c => c.id === ringing.id)
+      : alarms.find(a => a.id === ringing.id);
+    inlineText = item ? item.name : '';
+    const zh = cfgNow.language === 'zh';
+    inlineText2 = zh
+      ? (ringing.kind === 'countdown' ? '单击关闭倒计时' : '单击关闭闹钟')
+      : 'Click to dismiss';
   }
   // 2. Check retry-waiting alarms → "? hh:mm ?" ↔ alarm name
   else if (retryTimers.size > 0) {
@@ -307,15 +364,16 @@ function broadcastAlarmState() {
     type: inlineType,
     text: inlineText,
     text2: inlineText2,
-    ringing: ringingAlarm ? ringingAlarm.id : null,
+    ringing: ringing ? ringing.id : null,
   });
 }
 
-// Start alarm ringing
-function startRinging(alarm) {
-  const now = new Date();
-  ringingAlarm = { id: alarm.id, triggeredAt: now };
-  triggerWindows.set(alarm.id, { triggerTime: now, dismissed: false });
+// [v1.0.5.7] 占领响铃槽 + 窗口处理 + 播铃声。闹钟与倒计时共用这一段 ——
+// 抽出来是为了让倒计时不必复制「自动显示 / 关闭鼠标穿透 / 强制置顶 / 闪烁」这堆易错状态，
+// 也保证两者的响铃行为永远一致。
+// slot: { id, kind }；payload: { name, sound }
+function beginRinging(slot, payload) {
+  ringing = { id: slot.id, kind: slot.kind, triggeredAt: new Date() };
 
   const config = loadConfig();
   const alarmAutoShow = config.alarmAutoShow !== false;
@@ -353,9 +411,10 @@ function startRinging(alarm) {
   // so the background stays as autoColor's day/night bg)
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('alarm-ringing', {
-      id: alarm.id,
-      name: alarm.name,
-      sound: alarm.sound || 'beep',
+      id: slot.id,
+      kind: slot.kind,
+      name: payload.name,
+      sound: payload.sound,
       autoColorWasOn,
       alarmFlash: config.alarmFlash !== false,
     });
@@ -366,29 +425,94 @@ function startRinging(alarm) {
   const ringDurMs = Math.max(1000, (config.alarmSoundDuration !== undefined ? config.alarmSoundDuration : 120) * 1000);
   ringingTimer = setTimeout(() => {
     ringingTimer = null;
-    const alarmId = ringingAlarm ? ringingAlarm.id : null;
-    if (alarmId) {
+    if (ringing) {
       stopRinging(false); // move to retry
     }
   }, ringDurMs);
+}
 
+// Start alarm ringing
+function startRinging(alarm) {
+  triggerWindows.set(alarm.id, { triggerTime: new Date(), dismissed: false });
+  beginRinging({ id: alarm.id, kind: 'alarm' }, { name: alarm.name, sound: alarm.sound || 'beep' });
   broadcastAlarmState();
   broadcastActiveAlarmIds();
 }
 
-// Stop ringing
+// 排定一次贪睡重试。[v1.0.5.7] 修复两件事：
+//   ① 同一闹钟只允许一个待触发的重试定时器（原来 retryTimers.set 直接覆盖，旧定时器泄漏 →
+//      连环响铃时重试次数被多扣、铃声叠加）；
+//   ② 到点时若别的闹钟正在响，推迟 1s 再试（原来直接 startRinging 覆盖对方的响铃状态）。
+function scheduleAlarmRetry(alarmId, delay, snoozeCount) {
+  if (retryTimers.has(alarmId)) {
+    clearTimeout(retryTimers.get(alarmId));
+    retryTimers.delete(alarmId);
+  }
+  const retryTimer = setTimeout(() => {
+    retryTimers.delete(alarmId);
+    if (ringing) {
+      // 别的闹钟正在响：本轮让位，稍后重试（不消耗重试次数）
+      scheduleAlarmRetry(alarmId, 1000, snoozeCount);
+      return;
+    }
+    if (snoozeCount > 0) {
+      const rem = retryRemaining.get(alarmId) || 0;
+      if (rem <= 0) {
+        // No more retries, disable alarm
+        const a = alarms.find(x => x.id === alarmId);
+        if (a) { a.enabled = false; a.nextTrigger = null; saveAlarmsData({ alarms }); }
+        retryRemaining.delete(alarmId);
+        // Notify settings window
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send('alarms-updated', alarms);
+        }
+        broadcastAlarmState();
+        broadcastActiveAlarmIds();
+        return;
+      }
+      retryRemaining.set(alarmId, rem - 1);
+    }
+    const a = alarms.find(x => x.id === alarmId);
+    if (a && a.enabled) {
+      startRinging(a);
+    }
+  }, delay);
+  retryTimers.set(alarmId, retryTimer);
+}
+
+// Stop ringing（按 kind 分派收尾：闹钟重算下一次 / 倒计时删除或贪睡）
 function stopRinging(dismissed) {
   if (ringingTimer) { clearTimeout(ringingTimer); ringingTimer = null; }
 
-  const alarmId = ringingAlarm ? ringingAlarm.id : null;
-  ringingAlarm = null;
+  const slot = ringing;
+  const alarmId = slot ? slot.id : null;
+  const kind = slot ? slot.kind : 'alarm';
+  ringing = null;
 
   // Notify renderer to stop
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('alarm-stop', { id: alarmId });
+    mainWindow.webContents.send('alarm-stop', { id: alarmId, kind });
   }
 
-  if (dismissed && alarmId) {
+  // [v1.0.5.7] 倒计时是一次性的：关闭即删除；没关闭则按自己的贪睡排下一轮。
+  // 贪睡走独立定时器（cdRetryTimers），绝不进 retryTimers —— 那是闹钟引擎刚加固过的路径。
+  if (kind === 'countdown') {
+    if (dismissed) {
+      if (alarmId) removeCountdown(alarmId);
+    } else if (alarmId) {
+      const cd = countdowns.find(c => c.id === alarmId);
+      if (cd && cd.snoozeEnabled !== false) {
+        const sc = cd.snoozeCount || 0;
+        if (sc > 0 && cdRetryRemaining.get(alarmId) === undefined) cdRetryRemaining.set(alarmId, sc);
+        scheduleCountdownRetry(alarmId, COUNTDOWN.snoozeMs(cd), sc);
+      } else if (cd) {
+        removeCountdown(alarmId); // 无贪睡：响完即收场，不留"过期"记录
+      }
+    }
+    restoreAlarmState();
+  }
+
+  if (kind !== 'countdown' && dismissed && alarmId) {
     // Mark trigger window as dismissed
     if (triggerWindows.has(alarmId)) {
       triggerWindows.set(alarmId, { ...triggerWindows.get(alarmId), dismissed: true });
@@ -418,7 +542,7 @@ function stopRinging(dismissed) {
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send('alarms-updated', alarms);
     }
-  } else if (!dismissed && alarmId) {
+  } else if (kind !== 'countdown' && !dismissed && alarmId) {
     // 120s expired, move to retry using alarm's snooze time
     const alarm = alarms.find(a => a.id === alarmId);
     if (alarm && alarm.enabled && alarm.snoozeEnabled !== false) {
@@ -431,50 +555,40 @@ function stopRinging(dismissed) {
         }
       }
       const snoozeMs = Math.max(1000, ((alarm.snoozeHours || 0) * 3600000) + ((alarm.snoozeMinutes !== undefined ? alarm.snoozeMinutes : 5) * 60000) + ((alarm.snoozeSeconds || 0) * 1000));
-      const retryTimer = setTimeout(() => {
-        retryTimers.delete(alarmId);
-        // Check remaining retries
-        if (sc > 0) {
-          const rem = retryRemaining.get(alarmId) || 0;
-          if (rem <= 0) {
-            // No more retries, disable alarm
-            const a = alarms.find(x => x.id === alarmId);
-            if (a) { a.enabled = false; a.nextTrigger = null; saveAlarmsData({ alarms }); }
-            retryRemaining.delete(alarmId);
-            // Notify settings window
-            if (settingsWindow && !settingsWindow.isDestroyed()) {
-              settingsWindow.webContents.send('alarms-updated', alarms);
-            }
-            broadcastAlarmState();
-            broadcastActiveAlarmIds();
-            return;
-          }
-          retryRemaining.set(alarmId, rem - 1);
-        }
-        const a = alarms.find(x => x.id === alarmId);
-        if (a && a.enabled) {
-          startRinging(a);
-        }
-      }, snoozeMs);
-      retryTimers.set(alarmId, retryTimer);
+      scheduleAlarmRetry(alarmId, snoozeMs, sc);
+    } else if (alarm && alarm.enabled) {
+      // [v1.0.5.7] 无贪睡（或已关闭贪睡）：响完即收场。旧代码把 nextTrigger 留在过去，
+      // 会被 checkAlarms 的「迟到补响」分支每秒重新拉响（响 120s → 停 1s → 再响…）。
+      // 这里按「这一轮已经完整响过」收敛：重复闹钟跳到下一周期，单次闹钟直接停用。
+      if (alarm.repeat && alarm.weekdays && alarm.weekdays.length > 0) {
+        recalcAlarmNextTrigger(alarm);
+      } else {
+        alarm.enabled = false;
+        alarm.nextTrigger = null;
+      }
+      saveAlarmsData({ alarms });
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('alarms-updated', alarms);
+      }
     }
     // Restore autoColor and passthrough during retry wait
     restoreAlarmState();
   }
 
   // Restore window hidden state (if it was hidden before alarm rang)
-  if (windowWasHidden && mainWindow && !mainWindow.isDestroyed() && !ringingAlarm) {
+  if (windowWasHidden && mainWindow && !mainWindow.isDestroyed() && !ringing) {
     mainWindow.hide();
   }
   windowWasHidden = false;
 
   broadcastAlarmState();
+  broadcastCountdownState();
   broadcastActiveAlarmIds();
 }
 
 function restoreAlarmState() {
   // Only restore if no other alarm is ringing
-  if (!ringingAlarm) {
+  if (!ringing) {
     // Restore passthrough at runtime level (don't touch config)
     if (passthroughWasOn && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -497,6 +611,10 @@ function checkAlarms() {
 
   alarms.forEach(a => {
     if (!a.enabled || !a.nextTrigger) return;
+    // [v1.0.5.7] 贪睡等待期的闹钟由 retry 定时器驱动，nextTrigger 刻意停在过去 ——
+    // 绝不能让下面的「迟到补响」分支碰它（否则响铃时长一结束就会被立刻重新拉响，
+    // 表现为「响 120s → 停 1s → 再响 120s」循环到手动关闭）。
+    if (retryTimers.has(a.id)) return;
     const t = new Date(a.nextTrigger);
     if (!(t <= now)) return;
 
@@ -544,8 +662,10 @@ function isAlarmTriggerSkipped(a, t) {
     }
   });
   // Also check ringing alarm (if not in triggerWindows for some reason)
-  if (!skip && ringingAlarm && ringingAlarm.id !== a.id) {
-    const ringTime = ringingAlarm.triggeredAt;
+  // [v1.0.5.7] 只认「正在响的闹钟」：倒计时在响不该让刚到的闹钟被自动吞掉
+  // （响铃槽被占时 handleAlarmTrigger 会让它等下一拍，而不是跳过）
+  if (!skip && ringing && ringing.kind === 'alarm' && ringing.id !== a.id) {
+    const ringTime = ringing.triggeredAt;
     const windowEnd = ringTime.getTime() + 7 * 60 * 1000;
     if (t.getTime() >= ringTime.getTime() && t.getTime() <= windowEnd) {
       skip = true;
@@ -565,12 +685,246 @@ function handleAlarmTrigger(a, t) {
       a.nextTrigger = null;
     }
     saveAlarmsData({ alarms });
-  } else if (!ringingAlarm) {
+  } else if (!ringing) {
     // No active ringing alarm → start ringing
     startRinging(a);
   }
   // If already ringing, this alarm will be picked up in next check
 }
+
+// ========== [v1.0.5.7] Countdown Engine ==========
+// 与闹钟引擎**刻意分开**（数据在 countdowns.json、贪睡定时器独立、到点判定独立）：
+//   · 闹钟是「按时刻重复」，倒计时是「按剩余量一次性」——语义不同，混在一起会互相污染；
+//   · 闹钟那条路径刚在 v1.0.5.7 加固过（贪睡门控 / 重试唯一入口 / 响铃收敛），
+//     往里塞倒计时分支等于把已验收的逻辑重新打开；
+//   · 两者唯一共享的是「响铃呈现层」（ringing 单一响铃槽 + beginRinging + stopRinging 分派）。
+let countdowns = [];              // in-memory countdown array
+let cdRetryTimers = new Map();    // countdownId -> setTimeout（贪睡重试）
+let cdRetryRemaining = new Map(); // countdownId -> 剩余重试次数（undefined = 无限）
+
+function publicCountdownList(nowMs) {
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  return countdowns.map(cd => COUNTDOWN.toPublic(cd, now)).filter(Boolean);
+}
+
+// 倒计时状态广播：只推「列表变更」，剩余时间由两端各自本地倒扣（不每秒 IPC / HTTP）
+function countdownStatePayload() {
+  const now = Date.now();
+  return {
+    items: publicCountdownList(now),
+    summary: COUNTDOWN.summarize(countdowns, now),
+    showInInfoBar: loadConfig().countdownShowInInfoBar !== false,
+    ringingId: (ringing && ringing.kind === 'countdown') ? ringing.id : null,
+    retryIds: Array.from(cdRetryTimers.keys()),
+  };
+}
+
+function broadcastCountdownState() {
+  const payload = countdownStatePayload();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('countdown-state', payload);
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('countdown-state', payload);
+}
+
+function persistCountdowns() {
+  saveCountdownsData({ countdowns });
+  broadcastCountdownState();
+  broadcastAlarmState();
+  broadcastActiveAlarmIds();
+}
+
+function cancelCountdownRetry(id) {
+  if (cdRetryTimers.has(id)) { clearTimeout(cdRetryTimers.get(id)); cdRetryTimers.delete(id); }
+  cdRetryRemaining.delete(id);
+}
+
+// 只清响铃槽、不做任何收尾动作（不发"关闭即删除 / 排贪睡"）：
+// 给「响铃中暂停 / 删除」这类由调用方自己决定后续的场景用
+function silenceRinging() {
+  if (ringingTimer) { clearTimeout(ringingTimer); ringingTimer = null; }
+  const slot = ringing;
+  ringing = null;
+  if (slot && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('alarm-stop', { id: slot.id, kind: slot.kind });
+  }
+  restoreAlarmState();
+  if (windowWasHidden && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+  windowWasHidden = false;
+  return slot;
+}
+
+function removeCountdown(id) {
+  const i = countdowns.findIndex(c => c.id === id);
+  if (i < 0) return false;
+  // 正在响的就是它 → 先静音（不能走 stopRinging：那会再回到这里形成回环）
+  if (ringing && ringing.kind === 'countdown' && ringing.id === id) silenceRinging();
+  countdowns.splice(i, 1);
+  cancelCountdownRetry(id);
+  persistCountdowns();
+  return true;
+}
+
+// 排定一次倒计时贪睡。与闹钟的重试是两套独立 Map：
+// 到点时若响铃槽被占（可能被闹钟占着）就延 1s 再试，不消耗重试次数。
+function scheduleCountdownRetry(id, delay, snoozeCount) {
+  if (cdRetryTimers.has(id)) {
+    clearTimeout(cdRetryTimers.get(id));
+    cdRetryTimers.delete(id);
+  }
+  cdRetryTimers.set(id, setTimeout(() => {
+    cdRetryTimers.delete(id);
+    if (ringing) {
+      scheduleCountdownRetry(id, 1000, snoozeCount);
+      return;
+    }
+    if (snoozeCount > 0) {
+      const rem = cdRetryRemaining.get(id) || 0;
+      if (rem <= 0) {
+        cdRetryRemaining.delete(id);
+        removeCountdown(id);
+        return;
+      }
+      cdRetryRemaining.set(id, rem - 1);
+    }
+    const cd = countdowns.find(c => c.id === id);
+    if (cd && cd.state === 'running') startRingingCountdown(cd);
+  }, Math.max(1000, Number(delay) || 1000)));
+}
+
+function startRingingCountdown(cd) {
+  // 声音：倒计时自带的 sound 优先，创建时其默认值就取自偏好 countdownSound
+  beginRinging({ id: cd.id, kind: 'countdown' }, { name: cd.name, sound: cd.sound || 'beep' });
+  broadcastAlarmState();
+  broadcastCountdownState();
+  broadcastActiveAlarmIds();
+}
+
+// 主检查（与 checkAlarms 挂在同一个 1s 定时器里）
+function checkCountdowns() {
+  if (!countdowns.length) return;
+  const nowMs = Date.now();
+  let changed = false;
+  countdowns.slice().forEach(cd => {
+    // 贪睡等待期：由 cdRetryTimers 驱动，nextTrigger 刻意停在过去，这里必须放过它
+    if (cdRetryTimers.has(cd.id)) return;
+    const decision = COUNTDOWN.tickDecision(cd, nowMs, COUNTDOWN_GRACE_MS);
+    if (decision === 'wait') return;
+    if (decision === 'expire') {
+      // 错过太久（应用关着 / 电脑睡了很久）：一次性语义 → 直接丢弃，绝不"补到明天"
+      cancelCountdownRetry(cd.id);
+      const i = countdowns.indexOf(cd);
+      if (i >= 0) { countdowns.splice(i, 1); changed = true; }
+      return;
+    }
+    // 到点：响铃槽被占就等下一拍（天然排队）。
+    // ⚠️ 绝不套用闹钟的「7 分钟窗口自动跳过」—— 那会把计时器静默吞掉，
+    // 用户永远等不到提醒，比多响一次严重得多。
+    if (ringing) return;
+    startRingingCountdown(cd);
+  });
+  if (changed) {
+    saveCountdownsData({ countdowns });
+    broadcastCountdownState();
+  }
+}
+
+// 启动时归一：毁损记录丢弃；错过太久的丢弃；其余保留（到点的由 checkCountdowns 立刻补响）
+function initCountdowns() {
+  const nowMs = Date.now();
+  const kept = [];
+  loadCountdowns().countdowns.forEach(item => {
+    const rec = COUNTDOWN.normalizeRecord(item);
+    if (!rec) return;
+    if (COUNTDOWN.tickDecision(rec, nowMs, COUNTDOWN_GRACE_MS) === 'expire') return;
+    kept.push(rec);
+  });
+  countdowns = kept.slice(0, COUNTDOWN.MAX_ITEMS);
+  saveCountdownsData({ countdowns });
+}
+
+// ---------- 单一写入口：本地 IPC 与手机端（局域网）都走这六个函数 ----------
+
+function applyCountdownCreate(payload) {
+  if (countdowns.length >= COUNTDOWN.MAX_ITEMS) return { ok: false, error: 'too-many' };
+  const cfg = loadConfig();
+  const v = COUNTDOWN.validateCreate(payload, Date.now(), {
+    defaultName: cfg.language === 'zh' ? '倒计时' : 'Countdown',
+  });
+  if (!v.ok) return v;
+  // 没显式指定声音时用偏好里的默认音（手机端就是这么用的）
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (p.sound === undefined) {
+    v.value.sound = COUNTDOWN.SOUNDS.indexOf(cfg.countdownSound) >= 0 ? cfg.countdownSound : 'beep';
+  }
+  countdowns.push(v.value);
+  persistCountdowns();
+  return { ok: true, value: COUNTDOWN.toPublic(v.value, Date.now()) };
+}
+
+function applyCountdownUpdate(id, payload) {
+  const i = countdowns.findIndex(c => c.id === id);
+  if (i < 0) return { ok: false, error: 'not-found' };
+  const v = COUNTDOWN.validateUpdate(payload);
+  if (!v.ok) return v;
+  const cur = countdowns[i];
+  let next = { ...cur, ...v.value };
+  if (v.value.durationMs !== undefined) {
+    // 改时长 = 用新时长重新计时（输入框里的时长就是用户现在要跑的时长）
+    // 但原本是「暂停」的保持暂停，只把剩余量换成新时长
+    next = cur.state === 'paused'
+      ? { ...next, remainingMs: v.value.durationMs, nextTrigger: null }
+      : COUNTDOWN.retimeCountdown(next, v.value.durationMs, Date.now());
+  }
+  countdowns[i] = next;
+  cancelCountdownRetry(id); // 编辑后旧的贪睡定时器属于上一次触发
+  persistCountdowns();
+  return { ok: true, value: COUNTDOWN.toPublic(next, Date.now()) };
+}
+
+function applyCountdownDelete(id) {
+  if (!countdowns.some(c => c.id === id)) return { ok: false, error: 'not-found' };
+  removeCountdown(id);
+  return { ok: true };
+}
+
+function applyCountdownPause(id) {
+  const i = countdowns.findIndex(c => c.id === id);
+  if (i < 0) return { ok: false, error: 'not-found' };
+  if (countdowns[i].state === 'paused') return { ok: true, value: COUNTDOWN.toPublic(countdowns[i], Date.now()) };
+  countdowns[i] = COUNTDOWN.pauseCountdown(countdowns[i], Date.now());
+  cancelCountdownRetry(id);
+  if (ringing && ringing.kind === 'countdown' && ringing.id === id) silenceRinging();
+  persistCountdowns();
+  return { ok: true, value: COUNTDOWN.toPublic(countdowns[i], Date.now()) };
+}
+
+function applyCountdownResume(id) {
+  const i = countdowns.findIndex(c => c.id === id);
+  if (i < 0) return { ok: false, error: 'not-found' };
+  if (countdowns[i].state === 'running') return { ok: true, value: COUNTDOWN.toPublic(countdowns[i], Date.now()) };
+  countdowns[i] = COUNTDOWN.resumeCountdown(countdowns[i], Date.now());
+  persistCountdowns();
+  return { ok: true, value: COUNTDOWN.toPublic(countdowns[i], Date.now()) };
+}
+
+function applyCountdownRestart(id) {
+  const i = countdowns.findIndex(c => c.id === id);
+  if (i < 0) return { ok: false, error: 'not-found' };
+  if (ringing && ringing.kind === 'countdown' && ringing.id === id) silenceRinging();
+  countdowns[i] = COUNTDOWN.restartCountdown(countdowns[i], Date.now());
+  cancelCountdownRetry(id);
+  persistCountdowns();
+  return { ok: true, value: COUNTDOWN.toPublic(countdowns[i], Date.now()) };
+}
+
+// 手机端只有这一组动作（不给它 config / 闹钟的任何写能力）
+const COUNTDOWN_ACTIONS = {
+  create: (payload) => applyCountdownCreate(payload),
+  update: (payload) => applyCountdownUpdate(String(payload && payload.id || ''), payload),
+  delete: (payload) => applyCountdownDelete(String(payload && payload.id || '')),
+  pause: (payload) => applyCountdownPause(String(payload && payload.id || '')),
+  resume: (payload) => applyCountdownResume(String(payload && payload.id || '')),
+  restart: (payload) => applyCountdownRestart(String(payload && payload.id || '')),
+};
 
 // ========== [v1.0.5.5] 插件系统 ==========
 // 设计要点：
@@ -586,7 +940,9 @@ const PLUGIN_HOOKS = ['lightsOff.background', 'clock.infoBar', 'settings.theme']
 // [v1.0.5.5] 除 storage / net 外新增三个「界面编辑权」。
 // 分工：hooks 决定插件在哪个窗口运行，permissions 决定它在该窗口能碰到什么 ——
 // 两者分开，用户只看权限徽章就知道某个插件要动哪个窗口，插件作者也不用理解额外概念。
-const PLUGIN_PERMISSIONS = ['storage', 'net', 'ui.clock', 'ui.settings', 'ui.lightsOffBg'];
+const PLUGIN_PERMISSIONS = ['storage', 'net', 'ui.clock', 'ui.settings', 'ui.lightsOffBg', 'mic'];
+// 'mic'：申请系统麦克风（分贝仪一类）。宿主据此给沙箱 iframe 加 allow="microphone" ——
+// 没有它，跨源 sandbox iframe 的 getUserMedia 会被 Permissions Policy 直接拒绝。
 // 每个界面编辑权只在对应的那个窗口里生效（用于清单校验时的提示，不做强制拒绝）
 const PLUGIN_UI_PERMISSION_HOOK = {
   'ui.clock': 'clock.infoBar',
@@ -896,6 +1252,20 @@ function broadcastPlugins() {
 // 连续 SAFE_MODE_STRIKES 次即自动进入安全模式：宁可多停一次插件，也不能让界面彻底进不去。
 app.on('web-contents-created', (_event, wc) => {
   const createdAt = Date.now();
+  // [v1.0.5.7] 导航兜底：任何窗口都不允许被页面内导航带走（插件设置页里的外链、
+  // legacy 插件插入的 <a> 等），http(s) 一律转交系统浏览器打开，其余直接拦下。
+  try {
+    wc.setWindowOpenHandler(({ url }) => {
+      const u = String(url || '');
+      if (/^https:\/\//i.test(u)) { try { shell.openExternal(u); } catch (e) {} }
+      return { action: 'deny' };
+    });
+    wc.on('will-navigate', (ev, url) => {
+      ev.preventDefault();
+      const u = String(url || '');
+      if (/^https:\/\//i.test(u)) { try { shell.openExternal(u); } catch (e) {} }
+    });
+  } catch (e) { /* 旧版本 Electron 没有这些 API 也不影响启动 */ }
   wc.on('render-process-gone', (_ev, details) => {
     try {
       const state = loadPluginsState();
@@ -978,7 +1348,13 @@ function commitPlugin(stageRoot, manifest, force) {
     if (!force) return { success: false, error: 'exists' };
     if (!removeDirSafe(dest, getPluginsDir())) return { success: false, error: 'remove-failed' };
   }
-  copyTreeSafe(stageRoot, dest, { bytes: 0 });
+  try {
+    copyTreeSafe(stageRoot, dest, { bytes: 0 });
+  } catch (e) {
+    // [v1.0.5.7] 复制中途失败：清掉半安装目录，别留一个残缺插件在盘上
+    removeDirSafe(dest, getPluginsDir());
+    throw e;
+  }
   const state = loadPluginsState();
   if (force) { state.settings[manifest.id] = state.settings[manifest.id] || {}; }
   state.enabled[manifest.id] = true; // 导入即启用，用户可随手关掉
@@ -1128,8 +1504,16 @@ ipcMain.handle('plugin-import', async (_event, kind) => {
       manifest: { id: staged.manifest.id, name: staged.manifest.name, version: staged.manifest.version },
     };
   }
-  const result = commitPlugin(staged.root, staged.manifest, false);
-  cleanupStaging(staged.stageId);
+  // [v1.0.5.7] commitPlugin 失败（复制出错等）不能让 IPC 直接 reject：
+  // 渲染端拿不到结构化错误、staging 目录也会泄漏
+  let result;
+  try {
+    result = commitPlugin(staged.root, staged.manifest, false);
+  } catch (e) {
+    result = { success: false, error: e.message || 'commit-failed' };
+  } finally {
+    cleanupStaging(staged.stageId);
+  }
   return result;
 });
 
@@ -1190,6 +1574,14 @@ ipcMain.handle('plugin-set-setting', (event, id, key, value) => {
   // [v1.0.5.7] 纵深防御：即便宿主层已把 id 钉死成调用者自己，这里再校验一次发送方归属，
   // 避免任何直连 IPC 的路径能改到别人的设置。
   if (!senderOwnsPlugin(event, key2)) return { success: false, error: 'not-owner' };
+  return writePluginSetting(key2, key, value);
+});
+
+// [v1.0.5.7] 设置界面的专用写入通道。设置窗口是宿主 UI，要能编辑**已禁用**插件的设置项 ——
+// 而禁用插件的 bundle 不会下发，senderOwnsPlugin 会把它误判成 not-owner（改了等于白改，
+// UI 显示已改、实际没落盘）。插件（v3 沙箱）碰不到 electronAPI，只能走上面的
+// plugin-set-setting（宿主把 id 钉死成调用者自己）；这条通道只认设置窗口的 webContents。
+function writePluginSetting(key2, key, value) {
   const record = scanPlugins().find(r => r.manifest && r.manifest.id === key2);
   if (!record) return { success: false, error: 'not-found' };
   const field = (record.manifest.settings || []).find(f => f.key === key);
@@ -1200,6 +1592,15 @@ ipcMain.handle('plugin-set-setting', (event, id, key, value) => {
   savePluginsState(state);
   broadcastPlugins();
   return { success: true, value: state.settings[key2][key] };
+}
+
+ipcMain.handle('plugin-set-setting-ui', (event, id, key, value) => {
+  const key2 = String(id || '').toLowerCase();
+  if (!PLUGIN_ID_RE.test(key2)) return { success: false, error: 'bad-id' };
+  if (!settingsWindow || settingsWindow.isDestroyed() || event.sender !== settingsWindow.webContents) {
+    return { success: false, error: 'not-owner' };
+  }
+  return writePluginSetting(key2, key, value);
 });
 
 ipcMain.handle('plugin-error', (_event, id, message) => {
@@ -1490,14 +1891,26 @@ function showTrayMenu() {
       const wb = trayMenuWindow.getBounds();
       let x = Math.round(tb.x + tb.width / 2 - wb.width / 2 + 8);
       let y = Math.round(tb.y - wb.height - 4);
-      const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-      x = Math.max(4, Math.min(x, sw - wb.width - 4));
-      if (y < 4) y = Math.round(tb.y + tb.height + 4);
+      // [v1.0.5.7] 夹取范围按「托盘所在的那块屏」算（原来固定用主屏，副屏任务栏的
+      // 托盘菜单会跳到错误的显示器位置）
+      const wa = screen.getDisplayNearestPoint({
+        x: Math.round(tb.x + tb.width / 2),
+        y: Math.round(tb.y + tb.height / 2),
+      }).workArea;
+      x = Math.max(wa.x + 4, Math.min(x, wa.x + wa.width - wb.width - 4));
+      if (y < wa.y + 4) y = Math.round(tb.y + tb.height + 4);
       trayMenuWindow.setPosition(x, y);
     }
     trayMenuWindow.show();
   });
-  trayMenuWindow.on('blur', () => { if (trayMenuWindow) { trayMenuWindow.close(); trayMenuWindow = null; } });
+  // [v1.0.5.7] blur 关窗按「当前实例」判定：连续两次右键时，旧窗口的 blur 回调可能在
+  // 新窗口已创建之后才到，原来会误把新菜单关掉（模块变量被新实例覆盖后又置 null）
+  trayMenuWindow.on('blur', function handler() {
+    if (trayMenuWindow === this && trayMenuWindow && !trayMenuWindow.isDestroyed()) {
+      trayMenuWindow.close();
+      trayMenuWindow = null;
+    }
+  });
 }
 
 function createTray() {
@@ -1589,6 +2002,13 @@ function openAlarmEditorWindow(alarmId) {
     alarmEditorWindow.setAlwaysOnTop(true);
     alarmEditorWindow.show();
     alarmEditorWindow.focus();
+    // [v1.0.5.7] 编辑器已打开时点的是另一个闹钟 → 重新加载编辑器加载新对象。
+    // 原来直接忽略新 id，用户在 B 的编辑窗里保存，落盘的却是 A。
+    if ((alarmId || null) !== (alarmEditorWindow.__alarmId || null)) {
+      alarmEditorWindow.__alarmId = alarmId || null;
+      const opts = alarmId ? { search: '?id=' + encodeURIComponent(alarmId) } : undefined;
+      alarmEditorWindow.loadFile('alarm-editor.html', opts);
+    }
     return;
   }
   alarmEditorWindow = new BrowserWindow({
@@ -1605,9 +2025,46 @@ function openAlarmEditorWindow(alarmId) {
     },
   });
   const options = alarmId ? { search: '?id=' + encodeURIComponent(alarmId) } : undefined;
+  alarmEditorWindow.__alarmId = alarmId || null;
   alarmEditorWindow.loadFile('alarm-editor.html', options);
   alarmEditorWindow.on('show', () => alarmEditorWindow.setAlwaysOnTop(true));
   alarmEditorWindow.on('closed', () => { alarmEditorWindow = null; });
+}
+
+// [v1.0.5.7] 倒计时编辑窗：与闹钟编辑窗同一套路（单实例 + 换 id 重新加载）
+let countdownEditorWindow = null;
+function openCountdownEditorWindow(countdownId) {
+  if (countdownEditorWindow && !countdownEditorWindow.isDestroyed()) {
+    if (countdownEditorWindow.isMinimized()) countdownEditorWindow.restore();
+    if (countdownEditorWindow.isMaximized()) countdownEditorWindow.unmaximize();
+    countdownEditorWindow.setAlwaysOnTop(true);
+    countdownEditorWindow.show();
+    countdownEditorWindow.focus();
+    if ((countdownId || null) !== (countdownEditorWindow.__countdownId || null)) {
+      countdownEditorWindow.__countdownId = countdownId || null;
+      const opts = countdownId ? { search: '?id=' + encodeURIComponent(countdownId) } : undefined;
+      countdownEditorWindow.loadFile('countdown-editor.html', opts);
+    }
+    return;
+  }
+  countdownEditorWindow = new BrowserWindow({
+    width: 440, height: 560,
+    resizable: false,
+    frame: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    alwaysOnTop: true,
+    autoHideMenuBar: true,
+    title: '倒计时',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  const options = countdownId ? { search: '?id=' + encodeURIComponent(countdownId) } : undefined;
+  countdownEditorWindow.__countdownId = countdownId || null;
+  countdownEditorWindow.loadFile('countdown-editor.html', options);
+  countdownEditorWindow.on('show', () => countdownEditorWindow.setAlwaysOnTop(true));
+  countdownEditorWindow.on('closed', () => { countdownEditorWindow = null; });
 }
 
 // ========== 欢迎窗口 ==========
@@ -1832,7 +2289,10 @@ function openLightsOffWindows() {
       // 若窗口被意外关闭，同步配置
       const cfg = loadConfig();
       if (cfg.lightsOff) {
+        // [v1.0.5.7] 重置锁定必须广播：时钟窗口还留着过期的 locked=true，
+        // 下一轮关灯的 ESC 退出会被它拦住
         lightsOffLocked = false; // 关灯窗口意外全部关闭时重置锁定
+        broadcastLightsOffLock(false);
         cfg.lightsOff = false;
         saveConfig(cfg);
         restoreClockAfterLightsOff();
@@ -1873,7 +2333,9 @@ function openLightsOffWindows() {
 
 function closeLightsOffWindows() {
   lightsOffRestarting = false;
+  // [v1.0.5.7] 先在窗口还活着时广播解锁（时钟窗口要同步），再关窗
   lightsOffLocked = false; // 关闭关灯时重置锁定状态，下次进入默认未锁定
+  broadcastLightsOffLock(false);
   lastLightsOffBg = null;  // [v1.0.5.2] 复位背景去重缓存，下次开灯重新下发
   const closing = lightsOffWindows.filter(win => win && !win.isDestroyed());
   lightsOffWindows = [];
@@ -1940,7 +2402,20 @@ const LAN_OWNED_KEYS = ['lanMirrorEnabled', 'lanMirrorPort', 'lanMirrorAuthMode'
 
 function getLanMirrorService() {
   if (!lanMirrorService) {
-    lanMirrorService = createLanMirror({ getConfig: () => loadConfig() });
+    lanMirrorService = createLanMirror({
+      getConfig: () => loadConfig(),
+      // [v1.0.5.7] 手机端可以添加/编辑倒计时。服务模块本身**不落盘、不生成数据**：
+      // 它只把写请求转给下面这两个回调，校验与写入全在主进程（与本地 IPC 同一套
+      // applyCountdown* 单一写入口）—— 保持它「只读配置」的既有约束不变。
+      getCountdowns: () => ({ items: publicCountdownList(Date.now()), now: Date.now() }),
+      writeCountdown: (action, payload) => {
+        const fn = COUNTDOWN_ACTIONS[String(action || '')];
+        if (!fn) return { ok: false, error: 'unknown-action' };
+        return fn(payload);
+      },
+      // id 形状判定用 countdown.js 的唯一实现，两边正则不会漂移
+      isCountdownId: (v) => COUNTDOWN.isValidId(v),
+    });
   }
   return lanMirrorService;
 }
@@ -2034,6 +2509,10 @@ ipcMain.handle('resize-window', (_event, { width, height }) => {
   const padding = 60;
   const nw = Math.max(200, Math.ceil(width + padding));
   const nh = Math.max(100, Math.ceil(height + padding));
+  // [v1.0.5.7] 尺寸没变就不动：渲染端在闹钟状态每秒广播时可能反复请求同样的尺寸，
+  // 无脑 setSize 会反复触发 move/save 防抖链路
+  const cur = mainWindow.getSize();
+  if (cur.width === nw && cur.height === nh) return { success: true };
   suppressMoveSave = true;
   mainWindow.setSize(nw, nh);
   setTimeout(() => { suppressMoveSave = false; }, 300);
@@ -2228,6 +2707,13 @@ ipcMain.handle('save-alarm', (_event, data) => {
     alarm.snoozeCount = data.snoozeCount !== undefined ? data.snoozeCount : 0;
     // Recalculate nextTrigger
     recalcAlarmNextTrigger(alarm);
+    // [v1.0.5.7] 编辑正在贪睡等待的闹钟：旧的重试定时器属于「上一次触发」，
+    // 编辑后 nextTrigger 已重算到未来，必须清掉，否则到点还会按旧内容响一次
+    if (retryTimers.has(alarm.id)) {
+      clearTimeout(retryTimers.get(alarm.id));
+      retryTimers.delete(alarm.id);
+    }
+    retryRemaining.delete(alarm.id);
     alarms[existing] = alarm;
   } else {
     // Create new
@@ -2266,6 +2752,10 @@ ipcMain.handle('save-alarm', (_event, data) => {
 ipcMain.handle('delete-alarm', (_event, id) => {
   const idx = alarms.findIndex(a => a.id === id);
   if (idx >= 0) {
+    // [v1.0.5.7] 删除的正是正在响的闹钟 → 先停铃（原来铃声会一直响到时长自然到期）
+    if (ringing && ringing.id === id) {
+      stopRinging(true);
+    }
     // Cancel any retry timer
     if (retryTimers.has(id)) {
       clearTimeout(retryTimers.get(id));
@@ -2275,6 +2765,7 @@ ipcMain.handle('delete-alarm', (_event, id) => {
     alarms.splice(idx, 1);
     saveAlarmsData({ alarms });
     broadcastAlarmState();
+    broadcastActiveAlarmIds();
     // Notify settings window
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send('alarms-updated', alarms);
@@ -2307,7 +2798,7 @@ ipcMain.handle('toggle-alarm', (_event, id) => {
     }
     retryRemaining.delete(id);
     // If currently ringing this alarm, dismiss it
-    if (ringingAlarm && ringingAlarm.id === id) {
+    if (ringing && ringing.id === id) {
       stopRinging(true); // dismiss
     }
   }
@@ -2329,8 +2820,32 @@ ipcMain.handle('open-alarm-editor', (_event, id) => {
   return { success: true };
 });
 
+// ====== [v1.0.5.7] Countdown IPC ======
+// 全部走上面的 applyCountdown* 单一写入口（与手机端写入同一套校验），
+// 桌面端与局域网两侧不可能出现行为差异。
+function cdResult(r) {
+  if (r && r.ok) return { success: true, value: r.value };
+  return { success: false, error: (r && r.error) || 'failed' };
+}
+
+ipcMain.handle('countdown-list', () => countdownStatePayload());
+
+ipcMain.handle('countdown-get', (_event, id) => countdowns.find(c => c.id === id) || null);
+
+ipcMain.handle('countdown-create', (_event, payload) => cdResult(applyCountdownCreate(payload)));
+ipcMain.handle('countdown-update', (_event, payload) => cdResult(applyCountdownUpdate(String((payload && payload.id) || ''), payload)));
+ipcMain.handle('countdown-delete', (_event, id) => cdResult(applyCountdownDelete(String(id || ''))));
+ipcMain.handle('countdown-pause', (_event, id) => cdResult(applyCountdownPause(String(id || ''))));
+ipcMain.handle('countdown-resume', (_event, id) => cdResult(applyCountdownResume(String(id || ''))));
+ipcMain.handle('countdown-restart', (_event, id) => cdResult(applyCountdownRestart(String(id || ''))));
+
+ipcMain.handle('countdown-open-editor', (_event, id) => {
+  openCountdownEditorWindow(id || null);
+  return { success: true };
+});
+
 ipcMain.handle('dismiss-alarm', (_event, id) => {
-  if (ringingAlarm && ringingAlarm.id === id) {
+  if (ringing && ringing.id === id) {
     stopRinging(true);
   }
   return { success: true };
@@ -2341,12 +2856,17 @@ ipcMain.handle('dismiss-alarm', (_event, id) => {
 const DATA_BUNDLE_TYPE = 'digital-clock-backup';
 
 function buildDataBundle() {
+  const cfg = loadConfig();
+  // [v1.0.5.7] 局域网镜像的几个键不进备份：访问码（lanMirrorToken / lanMirrorFixedCode）
+  // 是凭据，明文躺在备份文件里等于把门钥匙一起拷走；开关/端口导入时也不还原（见下），
+  // 导出里一并去掉，保持「备份 ↔ 导入」口径一致。
+  LAN_OWNED_KEYS.forEach(k => { delete cfg[k]; });
   return {
     app: 'Digital Clock',
     type: DATA_BUNDLE_TYPE,
     appVersion: app.getVersion(),
     exportedAt: new Date().toISOString(),
-    config: loadConfig(),
+    config: cfg,
     alarms: loadAlarms().alarms,
   };
 }
@@ -2356,6 +2876,9 @@ function buildDataBundle() {
 function sanitizeImportedConfig(input) {
   const out = {};
   Object.keys(DEFAULT_CONFIG).forEach(key => {
+    // [v1.0.5.7] 局域网镜像的键由主进程独占（见 LAN_OWNED_KEYS）：
+    // 导入一份 enabled:true, authMode:'none' 的备份会静默向整个局域网开无码 HTTP 服务。
+    if (LAN_OWNED_KEYS.indexOf(key) >= 0) return;
     if (Object.prototype.hasOwnProperty.call(input, key)) out[key] = input[key];
   });
   return out;
@@ -2376,7 +2899,15 @@ function sanitizeImportedAlarms(list) {
     alarm.minute = minute;
     alarm.sound = alarm.sound || 'beep';
     if (!alarm.id) alarm.id = 'alarm-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    if (!Array.isArray(alarm.weekdays)) alarm.weekdays = [];
+    // [v1.0.5.7] weekdays 归一：备份里可能是 ["1","2"]（字符串），includes(数字) 永不命中
+    // → 重复闹钟固定每 7 天才响。这里统一转成去重排序的数字数组。
+    alarm.weekdays = (Array.isArray(alarm.weekdays) ? alarm.weekdays : [])
+      .map(Number)
+      .filter(d => Number.isInteger(d) && d >= 0 && d <= 6);
+    alarm.weekdays = Array.from(new Set(alarm.weekdays)).sort((a, b) => a - b);
+    alarm.repeat = !!alarm.repeat;
+    // 缺 enabled 的旧备份按「启用」导入（原来会被静默当成禁用）
+    if (alarm.enabled === undefined) alarm.enabled = true;
     cleaned.push(alarm);
   });
   return cleaned;
@@ -2397,6 +2928,12 @@ function buildImportedConfig(cfgIn) {
   merged.lightsOff = false;   // 导入后不要一启动就全屏关灯
   // 导入的阶梯锚点可能来自很久以前，直接用会让累积量暴涨：重新锚定到当前时刻
   merged.autoAdjustAnchor = Date.now();
+  // [v1.0.5.7] LAN_OWNED_KEYS 由主进程独占：导入绝不改写它们（DEFAULT_CONFIG 展开会把
+  // 默认值带进来，必须从磁盘上的现值回填），否则一次导入就能静默改端口/开无码共享。
+  try {
+    const disk = loadConfig();
+    LAN_OWNED_KEYS.forEach(k => { merged[k] = disk[k]; });
+  } catch (e) { /* 读不到就保持合并值 */ }
   return merged;
 }
 
@@ -2484,15 +3021,24 @@ ipcMain.handle('delete-all-data', async () => {
       fs.unlinkSync(getAlarmsPath());
     }
   } catch (e) { console.error('删除 alarms.json 失败:', e.message); }
+  try {
+    if (fs.existsSync(getCountdownsPath())) {
+      fs.unlinkSync(getCountdownsPath());
+    }
+  } catch (e) { console.error('删除 countdowns.json 失败:', e.message); }
   // 重置内存状态
   alarms = [];
-  if (ringingAlarm) {
+  countdowns = [];
+  if (ringing) {
     if (ringingTimer) { clearTimeout(ringingTimer); ringingTimer = null; }
-    ringingAlarm = null;
+    ringing = null;
   }
   retryTimers.forEach(t => clearTimeout(t));
   retryTimers.clear();
   retryRemaining.clear();
+  cdRetryTimers.forEach(t => clearTimeout(t));
+  cdRetryTimers.clear();
+  cdRetryRemaining.clear();
   triggerWindows.clear();
   // 用默认配置覆盖，防止 beforeunload 回写旧数据
   saveConfig({ ...DEFAULT_CONFIG, welcomeShown: false });
@@ -2546,19 +3092,18 @@ ipcMain.handle('restart-lights-off', () => {
   return { success: true };
 });
 
-ipcMain.handle('get-active-alarm-ids', () => {
-  const ringingId = ringingAlarm ? ringingAlarm.id : null;
-  const retryIds = [];
-  retryTimers.forEach((_timer, id) => retryIds.push(id));
-  return { ringingId, retryIds };
-});
+// [v1.0.5.7] 只报闹钟：倒计时的响铃/贪睡状态走 countdown-state 自己的通道
+function activeAlarmIds() {
+  return {
+    ringingId: (ringing && ringing.kind === 'alarm') ? ringing.id : null,
+    retryIds: Array.from(retryTimers.keys()),
+  };
+}
+
+ipcMain.handle('get-active-alarm-ids', () => activeAlarmIds());
 
 function broadcastActiveAlarmIds() {
-  const ids = {
-    ringingId: ringingAlarm ? ringingAlarm.id : null,
-    retryIds: [],
-  };
-  retryTimers.forEach((_timer, id) => ids.retryIds.push(id));
+  const ids = activeAlarmIds();
   // Send to settings window if open
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.webContents.send('active-alarm-ids-changed', ids);
@@ -2594,6 +3139,9 @@ app.whenReady().then(() => {
   alarms = loadAlarms().alarms;
   initAlarms();
 
+  // [v1.0.5.7] Load countdowns（归一 + 丢弃已错过太久的）
+  initCountdowns();
+
   // [v1.0.5.7] 清扫上次异常退出/未确认覆盖时遗留的插件导入暂存目录（无副作用，失败只记录）
   try {
     const swept = sweepStalePluginStaging();
@@ -2619,17 +3167,21 @@ app.whenReady().then(() => {
   }
 
   // Start alarm checking interval (every 1 second)
-  alarmCheckInterval = setInterval(checkAlarms, 1000);
+  // [v1.0.5.7] 倒计时挂在同一拍上（两者互不调用，只是共享节奏）
+  alarmCheckInterval = setInterval(() => {
+    checkAlarms();
+    checkCountdowns();
+  }, 1000);
 
   // [v1.0.5.6] 睡眠唤醒后立即补一次检查：睡眠期间 setInterval 不执行，
   // 唤醒后第一次 tick 可能已错过触发点（现在由 checkAlarms 的迟到分支兜底，
   // 这里再主动推一把，保证唤醒瞬间就开始处理而不是等下一个 1s tick）。
   try {
     powerMonitor.on('resume', () => {
-      try { checkAlarms(); } catch (e) { console.error('唤醒后闹钟检查失败:', e && e.message); }
+      try { checkAlarms(); checkCountdowns(); } catch (e) { console.error('唤醒后闹钟检查失败:', e && e.message); }
     });
     powerMonitor.on('unlock-screen', () => {
-      try { checkAlarms(); } catch (e) { /* ignore */ }
+      try { checkAlarms(); checkCountdowns(); } catch (e) { /* ignore */ }
     });
   } catch (e) { console.error('powerMonitor 注册失败:', e && e.message); }
 
@@ -2672,6 +3224,11 @@ app.on('before-quit', () => {
   });
   // Save alarms
   saveAlarmsData({ alarms });
+  // [v1.0.5.7] 倒计时清理：清贪睡定时器；跑着的按当前时刻回写（下次启动按剩余量续上）
+  cdRetryTimers.forEach(t => clearTimeout(t));
+  cdRetryTimers.clear();
+  cdRetryRemaining.clear();
+  saveCountdownsData({ countdowns });
   if (tray) { tray.destroy(); tray = null; }
   // [v1.0.5.6] 释放局域网镜像占用的端口（不等待：进程马上退出，socket 会随之关闭）
   try { if (lanMirrorService) lanMirrorService.shutdown().catch(() => {}); } catch (e) { /* ignore */ }

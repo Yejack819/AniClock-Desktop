@@ -1,0 +1,56 @@
+{
+  "id": "com.digitalclock.liquidglass",
+  "name": "液态玻璃设置主题",
+  "version": "1.0.0",
+  "author": "Yejack819",
+  "description": "把设置窗口换成苹果 Liquid Glass 风格：极光流光背景、三层玻璃面板、药丸导航 + 弹簧滑块指示器、iOS 风格控件，支持单列卡片 / 双列网格两种布局、深浅两套玻璃配色，以及可选的 SVG 液态折射。",
+  "homepage": "https://gitee.com/Yejack819/AniClock-Desktop",
+  "apiVersion": 3,
+  "hooks": ["settings.theme"],
+  "permissions": ["ui.settings"],
+  "main": "index.js",
+  "style": "style.css",
+  "settings": [
+    {
+      "key": "layout",
+      "type": "select",
+      "label": "布局方式",
+      "hint": "卡片分组＝单列玻璃卡；双列网格＝窄窗口自动回落单列",
+      "default": "grouped",
+      "options": [
+        { "value": "grouped", "label": "卡片分组（单列）" },
+        { "value": "grid", "label": "双列网格" },
+        { "value": "plain", "label": "经典单列（最小改动）" }
+      ]
+    },
+    { "key": "radius", "type": "slider", "label": "圆角大小", "hint": "面板与卡片的圆角基准", "min": 8, "max": 30, "step": 1, "default": 18 },
+    { "key": "glider", "type": "toggle", "label": "药丸滑块指示器", "hint": "左侧导航的选中背景由一块会滑动的玻璃块承担", "default": true },
+
+    { "key": "blur", "type": "slider", "label": "玻璃模糊", "hint": "调大更雾更厚；低端机卡顿可调小", "min": 4, "max": 40, "step": 1, "default": 22 },
+    { "key": "glassTint", "type": "slider", "label": "玻璃通透度", "hint": "数值越大玻璃越白越不透明", "min": 2, "max": 20, "step": 1, "default": 7 },
+    { "key": "highlight", "type": "slider", "label": "高光强度", "hint": "边缘那圈内高光（specular）的亮度", "min": 0, "max": 100, "step": 5, "default": 55 },
+    { "key": "glow", "type": "slider", "label": "强调色辉光", "hint": "开关打开时向外扩散的彩色光晕", "min": 0, "max": 100, "step": 5, "default": 40 },
+
+    {
+      "key": "appearance",
+      "type": "select",
+      "label": "配色模式",
+      "hint": "跟随昼夜＝7:00–19:00 用浅色玻璃，其余时间用深色",
+      "default": "dark",
+      "options": [
+        { "value": "dark", "label": "深色玻璃" },
+        { "value": "light", "label": "浅色玻璃" },
+        { "value": "auto", "label": "跟随昼夜" }
+      ]
+    },
+    { "key": "accent", "type": "color", "label": "强调色", "hint": "开关、滑块、按钮与辉光都用它", "default": "#6C8CFF" },
+
+    { "key": "aurora", "type": "toggle", "label": "极光流光动效", "hint": "背景四团彩色光斑缓慢漂移；关闭后保持静态", "default": true },
+    { "key": "auroraSpeed", "type": "slider", "label": "流光周期", "hint": "一个来回的秒数，越大越慢", "min": 10, "max": 120, "step": 5, "default": 45 },
+    { "key": "grain", "type": "toggle", "label": "颗粒质感", "hint": "叠一层极淡的噪点，去塑料感", "default": true },
+
+    { "key": "refraction", "type": "toggle", "label": "液态折射", "hint": "用 SVG 位移图把背景扭出玻璃折射感；耗 GPU，默认关闭", "default": false },
+    { "key": "refractStrength", "type": "slider", "label": "折射强度", "hint": "太大会让卡片边缘明显变形，4–10 比较自然", "min": 2, "max": 24, "step": 1, "default": 8 },
+    { "key": "hideScrollbars", "type": "toggle", "label": "隐藏滚动条", "hint": "关闭后显示 7px 玻璃细条", "default": true }
+  ]
+}

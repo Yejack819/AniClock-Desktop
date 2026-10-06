@@ -145,8 +145,8 @@ function cdp(wsUrl) {
       pluginList: !!document.getElementById('plugin-list'),
     }))()`);
     log('[CDP] 设置界面探测：' + JSON.stringify(ui));
-    check('左侧导航项齐全（11 项：v1.0.5.6 起新增「局域网」）', ui.navItems, 11);
-    check('面板齐全（11 个）', ui.panels, 11);
+    check('左侧导航项齐全（12 项：v1.0.5.6 局域网 + v1.0.5.7 倒计时）', ui.navItems, 12);
+    check('面板齐全（12 个）', ui.panels, 12);
     check('当前面板在插件页（settingsTab=plugins）', ui.activePanel, 'plugins');
 
     // ---- 截图 ----

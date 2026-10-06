@@ -53,14 +53,19 @@ A beautiful, deeply customizable desktop flip clock built with **Electron**. Smo
 - **Frameless settings window** — custom glass titlebar (drag region + minimize/maximize/close) so plugins can theme it end to end
 
 ### LAN sharing (phone view)
-- **Read-only mirror on your local network** — turn it on and any phone on the same Wi-Fi can open the clock in its browser
+- **Mirror on your local network** — turn it on and any phone on the same Wi-Fi can open the clock in its browser, and manage your countdowns from it
 - **Access code, three modes** — pick **Random code** (a 6-character short code you can read out or type by hand), **Custom code** (your own, e.g. `my-clock`), or **No access code** (the page opens straight from the root URL). Without the right code every path returns 404
 - **New code any time** — in random mode, generating a new code invalidates previously shared links immediately
 - **QR code** — the settings panel draws a scannable QR code for the current address
 - **Looks like your clock** — the phone page follows your colours, font, 12/24-hour format, AM/PM corner, seconds/date/weekday, timezone list, day/night auto-colouring and animation family + direction (digit flips and all)
 - **Same time as the desktop** — the phone page syncs against the app's clock and applies your manual calibration and scheduled auto-calibration, so both show the same second
 - **Self-contained page** — inline CSS/JS, zero external resources; it opens even with no internet, and it never sees your alarms or settings
-- **Read-only by design** — the service answers `GET`/`HEAD` only (everything else is 405), has no write endpoints, and needs no external dependencies. In "No access code" mode anyone on the same network can open the page, so it is best used on a Wi-Fi you trust
+- **Countdowns are editable from the phone** — the pill only appears once you actually have countdowns: **tap it for a full-screen countdown** (the screen splits in two — the orange half's width *is* the remaining share — with the remaining time in huge digits, and a second pill at the bottom showing the current time; tap that to go back), **long-press it for the sheet** (add, edit, pause, resume, restart, cancel). It **fades out after 3 seconds of no interaction and comes right back on any tap or scroll**, so it never sits in the way; with nothing left it hides itself completely, and the "new countdown" entry lives in the long-press panel. Everything else stays read-only: configuration, alarms and window position cannot be changed from the page
+- **The phone sizes the clock itself** — long-press the clock for about half a second to pull up a "Phone display" panel: scale the whole clock between 60% and 150% (digits and info bar together), and start a new countdown from there. The scale lives in this phone's browser only and is **completely independent of the desktop display setting**
+- **The phone rings on its own** — when a countdown hits zero the page plays an alert (three short runs, then a banner and vibration until you tap "Got it"). A bell button in the sheet mutes it any time, and the sound can be switched between beep / chime / alarm. This lives in the phone's browser only and is **completely independent of the desktop's sound setting** — the desktop never sees it, and vice versa. Tones are synthesised in-page, so the page stays dependency-free. Browsers only allow audio after a tap, so tap once anywhere (or the bell) to arm it
+- **Nothing else is writable** — the page editor is a single dedicated route (`/api/countdowns`) with its own guard; configuration, alarms and window position stay read-only, and the snapshot still reports `readOnly: true`
+- **Write protection** — every write has to clear four gates: a `Host` check (defeats DNS rebinding), a **one-time token** (`X-DC-Nonce`, fetched fresh for each write, single-use), a content/CSRF check (`Content-Type: application/json`, plus `Sec-Fetch-Site`/`Origin` when the browser sends them), and rate limiting (5 writes/second per device). Body size is capped at 4 KB and every field is whitelisted
+- **The service never touches your files** — it does not persist anything or generate data; writes are handed to the main process, which is the single writer (the same entry point the desktop UI uses). In "No access code" mode anyone on the same network can open the page and add countdowns, so it is best used on a Wi-Fi you trust
 - **Port handling** — default 8788, configurable; if the port is taken the next free one is used and the panel shows the real one
 - **Firewall hint** — the panel tells you what to check when a phone cannot connect (same Wi-Fi, Windows Firewall private vs public network)
 
@@ -75,6 +80,16 @@ A beautiful, deeply customizable desktop flip clock built with **Electron**. Smo
 - **Smart skip** — an overlapping alarm within 7 minutes is auto-dismissed when the earlier one was missed
 - **Missed-alarm recovery** — rescheduled on restart, with a system notification
 - **Advanced alarm settings** (collapsible) — ringing duration (5–300 s), flash, auto-show, auto-passthrough, auto-top
+
+### Countdown
+- **Multiple countdowns at once** — a list with add / edit / pause / resume / restart / delete, stored separately from alarms (`countdowns.json`, its own engine)
+- **Any duration** — 1 second to 24 hours, typed or picked from quick chips (1/3/5/10/15/30 min, 1 h)
+- **Inline readout** — the info bar shows the nearest countdown as `⏳ 04:59 +2` (and `⏸` while paused), so it never fights the clock or the alarm chip
+- **Ring on time** — each countdown has its own sound (beep / chime / alarm / silent) and optional snooze with a retry limit
+- **One ringing slot, queued not skipped** — the clock rings one thing at a time; a countdown that comes due while something else is ringing waits its turn instead of being silently dropped
+- **Local countdown** — the remaining time is computed on each device from the shared deadline, so a phone or a second window never drifts
+- **Built on real system time** — countdowns use the actual clock, unaffected by the display's manual/scheduled calibration (`timeOffsetMs`, auto-calibrate)
+- **Phone control** — add, edit, pause, resume, restart and cancel countdowns from the LAN page (see below)
 
 ### Data & plugins
 - **Export / import preferences** — one JSON file containing every preference and all alarms, saved to any location you pick
@@ -119,14 +134,15 @@ NODE_OPTIONS= \
 ## Project structure
 
 ```
-├── main.js              # Electron main process (windows, tray, alarms, plugins manager, IPC)
+├── main.js              # Electron main process (windows, tray, alarms, countdowns, plugins manager, IPC)
 ├── preload.js           # Context bridge (the only IPC surface the renderer can reach)
 ├── index.html           # Clock window
 ├── renderer.js          # Clock rendering, animation, real-time updates
 ├── styles.css           # Clock styles (animation, blur/scale, plugin info-bar slot)
+├── countdown.js         # Countdown pure logic (parse/clamp/state machine; unit-tested)
 ├── plugin-host.js       # Plugin sandbox runtime shared by all three windows
 ├── window-layout.js     # Pure helpers: position presets, clamping, clock-over-board layering
-├── lan-mirror.js        # Read-only LAN mirror service (Node http, no dependencies; random/custom/no access code)
+├── lan-mirror.js        # LAN mirror service (Node http, no dependencies; clock + countdown API)
 ├── lan-mirror-page.html # The self-contained page phones open (inline CSS/JS)
 ├── qr-code.js           # Minimal QR encoder (byte mode, EC level M, versions 1–6) for the LAN panel
 ├── settings.html        # Settings window
@@ -134,6 +150,7 @@ NODE_OPTIONS= \
 ├── settings.css         # Settings styles
 ├── welcome.html/js/css  # First-run welcome window
 ├── alarm-editor.*       # Alarm editor window
+├── countdown-editor.*   # Countdown editor window
 ├── lights-off.*         # Lights Off fullscreen window
 ├── examples/
 │   └── sample-plugin/   # Bundled example plugin (all three hooks)
@@ -150,6 +167,7 @@ Everything is under `%APPDATA%/digital-clock/`:
 |---|---|
 | `config.json` | All preferences |
 | `alarms.json` | Alarm list |
+| `countdowns.json` | Countdown list (separate file and engine — never mixed with alarms) |
 | `plugins.json` | Plugin enable state + plugin setting values |
 | `plugins/<plugin-id>/` | Installed plugins |
 | `plugins-data/<plugin-id>/data.json` | Per-plugin storage (only reachable through the plugin API) |
@@ -165,6 +183,7 @@ All preferences can be changed from the settings window; the table below maps ea
 | **Animation** | `animType` (flip/scale/fade/flip-3d/none), `animFlipDir` (up/down), `animScaleDir` (shrink/grow), `animDuration`, `staggerDelay`, `staggerDirection`, `blurEnabled`, `blurDuration`, `blurStrength`, `scaleInEnabled`, `scaleInFactor` |
 | **Time** | `showSeconds`, `showDate`, `showWeekday`, `datePosition`, `extraTimezones`, `hourFormat` (auto/24/12), `ampmCorner`, `timeOffsetMs`, `autoAdjustEnabled`, `autoAdjustIntervalSec`, `autoAdjustAmountMs`, `autoAdjustBaseMs`, `autoAdjustAnchor` |
 | **Alarm** | `alarms.json`, plus `alarmSoundDuration`, `alarmFlash`, `alarmAutoShow`, `alarmAutoPassthrough`, `alarmAutoTop` |
+| **Countdown** | `countdowns.json`, plus `countdownSound` (beep/chime/alarm/none), `countdownShowInInfoBar`, `countdownDefaultMinutes` (1–1440, default duration for new countdowns) |
 | **Position** | `positionPreset`, `x`, `y`, `layerMode` (alwaysOnTop/normal) |
 | **System** | `autoStart`, `silentStart`, `language` (zh/en), `passthrough` |
 | **LAN** | `lanMirrorEnabled`, `lanMirrorPort` (default 8788), `lanMirrorAuthMode` (random/fixed/none), `lanMirrorFixedCode`, `lanMirrorToken` (effective path segment, written by the main process only) |
@@ -204,6 +223,7 @@ Its only channel is a `postMessage` RPC to the host. The host identifies the sen
 | `ui.clock` | `clock.infoBar` | Edit any element in the clock window, overlay your own layer on the whole window |
 | `ui.settings` | `settings.theme` | Edit any element in the settings window, overlay your own layer on the whole window |
 | `ui.lightsOffBg` | `lightsOff.background` | Control the Lights Off board background (colour / gradient / image / opacity / blur) |
+| `mic` | any hook | Use the system microphone (decibel meters etc.). The host adds `allow="microphone"` to the sandbox iframe — without it, `getUserMedia` inside the sandbox is denied outright |
 
 **Honest limits.** Isolation is real, but it is not a capability moat — the point is that a plugin can never *reach* the host or Node, and everything it can do goes through a validated, logged, auto-rolled-back API. The exact boundaries:
 
@@ -258,7 +278,7 @@ Assets (images, fonts, JSON) may live alongside them; reach them with `dc.assets
 | `homepage` | string | no | must start with `https://`, otherwise dropped |
 | `apiVersion` | number | no | defaults to `1`. The host currently supports **3** (true sandbox isolation starts at `3`; UI permissions start at `2`). A value higher than the host supports is rejected with `api-too-new`. **New plugins should use `3`.** |
 | `hooks` | string[] | **yes** | at least one of the three hooks; unknown entries are dropped. No usable hook ⇒ rejected (`no-hooks`) |
-| `permissions` | string[] | no | any of `storage`, `net`, `ui.clock`, `ui.settings`, `ui.lightsOffBg`; unknown entries are dropped. On first enable the host lists them all for confirmation |
+| `permissions` | string[] | no | any of `storage`, `net`, `ui.clock`, `ui.settings`, `ui.lightsOffBg`, `mic`; unknown entries are dropped. On first enable the host lists them all for confirmation |
 | `main` | string | no | relative path inside the plugin folder, defaults to `index.js`; must exist |
 | `style` | string | no | relative path to a CSS file; injected only into windows that host one of the plugin's hooks |
 | `settingsView` | string | no | relative path to an HTML fragment; sanitised before it is inserted (section 7) |
@@ -307,8 +327,9 @@ dc.mount(function (slot, dc) {
 
 | Member | Description |
 |---|---|
-| `dc.clock.setInfoText(text)` | Sets the slot text (the host owns the element, so sizing, colour inheritance and window auto-resize all keep working) |
+| `dc.clock.setInfoText(text)` | Sets the slot text (v3: written to a dedicated text node inside the slot, so the sandbox iframe is never disturbed). The host owns the element, so sizing, colour inheritance and window auto-resize all keep working |
 | `dc.clock.clearInfoText()` | Clears it (the empty slot collapses and stops taking space) |
+| `dc.clock.removeInfoSlot()` | Removes your own info-bar slot entirely (e.g. an `infoStyle=none` option). A sandboxed plugin cannot delete host elements itself — use this API; showing it again happens on plugin reload |
 
 ### `dc.lightsOff` — `lightsOff.background` only
 
@@ -325,12 +346,13 @@ The background layer sits **above** the host colour and **below** content and co
 
 ### `dc.ui` — editing the UI
 
-**Theming (any window, no UI permission needed)**
+**Theming (writing inside your own sandbox document needs no permission; writing to the host window needs that window's UI permission)**
 
 | Member | Description |
 |---|---|
-| `dc.ui.addStyle(cssText)` | Appends a stylesheet **inside your sandbox document**, and asks the host to append it to the target host window too (removed on unload) |
-| `dc.ui.applyVars({ '--name': value })` | Settings window only: sets CSS custom properties on the **host** `:root` **and** on your sandbox `<html>` (restored on unload). The settings UI already uses `--sfz` (base font size) and friends — overriding them re-themes the whole window |
+| `dc.ui.addStyle(cssText)` | Appends a stylesheet **inside your sandbox document** (permission-free); also asks the host to append it to the target host window — that step **requires the window's UI permission** (`ui.clock` / `ui.settings`, removed on unload) |
+| `dc.ui.applyVars({ '--name': value })` | Settings window only: sets CSS custom properties on the **host** `:root` **and** on your sandbox `<html>` (host side requires `ui.settings`; restored on unload). The settings UI already uses `--sfz` (base font size) and friends — overriding them re-themes the whole window |
+| `dc.ui.notifyHost()` | Asks the host to re-measure the info bar and window size (replaces the pre-isolation `window.dispatchEvent('dc-plugins-updated')` idiom — sandboxed frames cannot reach the host document) |
 
 **Editing (requires the UI permission of that window: `ui.clock` or `ui.settings`)**
 

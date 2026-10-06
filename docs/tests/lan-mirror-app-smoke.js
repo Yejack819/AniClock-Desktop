@@ -139,7 +139,7 @@ function cdp(wsUrl) {
     log('[CDP] 面板探测：' + JSON.stringify(panel));
     check('导航里有「局域网」', panel.navItem, true);
     check('面板存在', panel.panel, true);
-    check('导航项 11 个 / 面板 11 个', [panel.navCount, panel.panelCount], [11, 11]);
+    check('导航项 12 个 / 面板 12 个', [panel.navCount, panel.panelCount], [12, 12]);
     check('未开启时进入「局域网」面板', panel.activePanel, 'lan');
     check('未开启时状态条为关闭态', panel.statusClass.indexOf('off') >= 0, true);
     check('未开启时不显示二维码', panel.qrVisible, false);
@@ -215,6 +215,107 @@ function cdp(wsUrl) {
     check('POST 被拒（405）', postRes.status, 405);
     const badRes = await fetch('http://127.0.0.1:' + mirroredPort + '/deadbeef/');
     check('错误访问码 404', badRes.status, 404);
+
+    // ---- [v1.0.5.7] 倒计时：手机端加/改/控 —— 真实端口 + 真实主进程 ----
+    // 这一段就是「手机」视角：外部 fetch 打真实 http 端口，最终落到主进程的
+    // applyCountdown* 单一写入口（和桌面 IPC 同一条路），再回查桌面端是否看到。
+    const cdWrite = async (method, sub, body, nonceOverride) => {
+      const nonce = nonceOverride === undefined
+        ? (await (await fetch(phoneBase + '/api/write-nonce')).json()).nonce
+        : nonceOverride;
+      const headers = { 'Content-Type': 'application/json' };
+      if (nonce) headers['X-DC-Nonce'] = nonce;
+      return fetch(phoneBase + '/api' + sub, {
+        method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    };
+
+    const nonceRes = await fetch(phoneBase + '/api/write-nonce');
+    check('倒计时: 令牌接口 200', nonceRes.status, 200);
+    const nonceVal = (await nonceRes.json()).nonce;
+    check('倒计时: 令牌足够长（≥16）', typeof nonceVal === 'string' && nonceVal.length >= 16, true);
+
+    const cdList0 = await (await fetch(phoneBase + '/api/countdowns')).json();
+    check('倒计时: 初始列表为空', cdList0.items.length, 0);
+    check('倒计时: 列表标记可编辑', cdList0.canEdit, true);
+
+    check('倒计时: 不带令牌写 → 403', (await cdWrite('POST', '/countdowns', { durationMs: 120000 }, '')).status, 403);
+    check('倒计时: 伪造令牌写 → 403', (await cdWrite('POST', '/countdowns', { durationMs: 120000 }, 'nope')).status, 403);
+
+    const createdRes = await cdWrite('POST', '/countdowns', { name: '手机建的', durationMs: 120000 });
+    check('倒计时: 手机端新建 200', createdRes.status, 200);
+    const created = await createdRes.json();
+    check('倒计时: 新建 ok', created.ok, true);
+    check('倒计时: 回包带最新列表（省一次往返）', created.items.length, 1);
+    const cdId = created.items[0].id;
+    check('倒计时: id 形状合法', /^cd_\d{6,20}_[a-z0-9]{1,12}$/.test(cdId || ''), true);
+    check('倒计时: 服务端带 endAt（手机端靠它本地倒扣）', typeof created.items[0].endAt === 'string', true);
+
+    const ipcList = JSON.parse(await m.evaluate('window.electronAPI.countdownList().then(r => JSON.stringify(r))'));
+    check('倒计时: 桌面端（真实 IPC）立刻看得到', ipcList.items.some(x => x.id === cdId), true);
+    check('倒计时: 名称一致', (ipcList.items.find(x => x.id === cdId) || {}).name, '手机建的');
+    check('倒计时: 剩余量接近 120 秒', ipcList.items.find(x => x.id === cdId).remainingMs > 110000, true);
+
+    const snapCd = await (await fetch(phoneBase + '/api/state')).json();
+    check('倒计时: 快照里能读到', snapCd.countdowns.length, 1);
+    check('倒计时: 快照标记可编辑', snapCd.countdownCanEdit, true);
+    check('倒计时: 快照仍标注 readOnly（配置/闹钟/窗口位置依旧不可写）', snapCd.readOnly, true);
+
+    const patched = await (await cdWrite('PATCH', '/countdowns/' + cdId, { name: '改过的', durationMs: 300000 })).json();
+    check('倒计时: 手机端改名成功', patched.items[0].name, '改过的');
+    check('倒计时: 手机端改时长成功', patched.items[0].durationMs, 300000);
+
+    check('倒计时: 暂停 200', (await cdWrite('POST', '/countdowns/' + cdId + '/pause')).status, 200);
+    check('倒计时: 暂停后 state=paused',
+      (await (await fetch(phoneBase + '/api/countdowns')).json()).items[0].state, 'paused');
+    check('倒计时: 继续 200', (await cdWrite('POST', '/countdowns/' + cdId + '/resume')).status, 200);
+    check('倒计时: 继续后 state=running',
+      (await (await fetch(phoneBase + '/api/countdowns')).json()).items[0].state, 'running');
+    check('倒计时: 重启后回到整时长',
+      (await (await (await cdWrite('POST', '/countdowns/' + cdId + '/restart')).json()).items)[0].remainingMs > 290000, true);
+
+    // 设置界面「倒计时」面板与手机端是同一份数据
+    await s.evaluate('document.querySelector(\'#settings-nav .nav-item[data-panel="countdown"]\').click()');
+    await wait(1200);
+    const cdPanel = await s.evaluate(`(() => ({
+      active: (document.querySelector('.panel.active') || {}).dataset.panel,
+      rows: document.querySelectorAll('#countdown-list .cd-item, #countdown-list .alarm-item').length,
+      text: (document.getElementById('countdown-list') || {}).textContent || '',
+    }))()`);
+    log('[CDP] 倒计时面板：' + JSON.stringify(cdPanel));
+    check('倒计时: 设置面板可切到 countdown', cdPanel.active, 'countdown');
+    check('倒计时: 设置面板列出手机建的条目', cdPanel.text.indexOf('改过的') >= 0, true);
+
+    check('倒计时: 取消（cancel 别名）200', (await cdWrite('POST', '/countdowns/' + cdId + '/cancel')).status, 200);
+    check('倒计时: 取消后列表清空',
+      (await (await fetch(phoneBase + '/api/countdowns')).json()).items.length, 0);
+    check('倒计时: 已消失再取消 → 404', (await cdWrite('POST', '/countdowns/' + cdId + '/cancel')).status, 404);
+    const ipcAfter = JSON.parse(await m.evaluate('window.electronAPI.countdownList().then(r => JSON.stringify(r))'));
+    check('倒计时: 桌面端也同步清空', ipcAfter.items.length, 0);
+    check('倒计时: 桌面端快照不带贪睡/声音等内部字段',
+      JSON.stringify(ipcAfter.items).indexOf('snooze') < 0, true);
+
+    // ---- 到点契约：手机端完全是「本地倒扣 + 判到点」——它没有宿主的响铃事件可听 ----
+    // 所以宿主必须在到点后仍把 endAt 停在过去、remainingMs 归零、state 保持 running；
+    // 三者任一被改（比如把 nextTrigger 推到未来），手机端就永远不响
+    {
+      const soonCreated = await (await cdWrite('POST', '/countdowns', { name: '马上到点', durationMs: 1000 })).json();
+      const soonId = soonCreated.items[soonCreated.items.length - 1].id;
+      await new Promise(r => setTimeout(r, 1600));
+      const due = ((await (await fetch(phoneBase + '/api/countdowns')).json()).items || [])
+        .find(x => x.id === soonId) || {};
+      check('到点: endAt 停在过去（手机端据此判到点）',
+        typeof due.endAt === 'string' && Date.parse(due.endAt) <= Date.now(), true);
+      check('到点: 剩余量已归零', due.remainingMs, 0);
+      check('到点: 状态仍是 running（手机端只认 running + 归零）', due.state, 'running');
+      check('到点: 取消 200（宿主同时静音）',
+        (await cdWrite('POST', '/countdowns/' + soonId + '/cancel')).status, 200);
+      check('到点: 清理干净', (await (await fetch(phoneBase + '/api/countdowns')).json()).items.length, 0);
+    }
+
+    // 收尾：把设置界面切回「局域网」面板，后面的换码/模式用例还在这个面板上做
+    await s.evaluate('document.querySelector(\'#settings-nav .nav-item[data-panel="lan"]\').click()');
+    await wait(900);
 
     // ---- 截图 ----
     const shot = await s.send('Page.captureScreenshot', { format: 'png' });

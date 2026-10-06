@@ -1,0 +1,779 @@
+/* ==================================================================
+   liquid-glass —— 设置窗口液态玻璃主题 [v1.0.5.5]
+   钩子：settings.theme    权限：ui.settings
+   ------------------------------------------------------------------
+   约定：
+   · 所有规则都带 `html[data-lg]` 前缀（属性由 index.js 打上）——
+     插件被停用/卸载时属性一并还原，规则即刻失效，不会留下半套皮肤。
+   · 颜色、圆角、模糊全部走 --lg-* 变量，由 index.js 用 dc.ui.applyVars
+     按设置项算出来；深浅两套只是换一组变量值，正文规则不重复写。
+   · 类名前缀 lg-，与宿主类名、自己内部元素名都隔开（撞名会静默出错）。
+   ================================================================== */
+
+/* ---------- 默认变量（深色玻璃） ---------- */
+html[data-lg] {
+  --lg-accent: #6C8CFF;
+  --lg-accent-soft: rgba(108, 140, 255, 0.16);
+  --lg-accent-mid: rgba(108, 140, 255, 0.34);
+  --lg-accent-line: rgba(108, 140, 255, 0.55);
+  --lg-glow-a: rgba(108, 140, 255, 0.35);
+  --lg-blur: 22px;
+  --lg-tint: 0.07;
+  --lg-hi: 0.55;
+  --lg-radius: 18px;
+  --lg-speed: 45s;
+
+  --lg-fg: #f3f3f8;
+  --lg-fg-dim: rgba(238, 238, 246, 0.68);
+  --lg-fg-mute: rgba(238, 238, 246, 0.40);
+  --lg-hair: rgba(255, 255, 255, 0.09);
+  --lg-hair-strong: rgba(255, 255, 255, 0.17);
+  --lg-sheen: rgba(255, 255, 255, 0.5);
+  --lg-icon: #a9a9b8;
+  --lg-track: rgba(255, 255, 255, 0.15);
+  --lg-bar: rgba(12, 12, 20, 0.76);
+  --lg-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  --lg-inner: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --lg-body: #0a0a11;
+}
+
+/* ---------- 浅色玻璃 ---------- */
+html[data-lg][data-lg-theme="light"] {
+  --lg-fg: #16161e;
+  --lg-fg-dim: rgba(26, 26, 38, 0.72);
+  --lg-fg-mute: rgba(26, 26, 38, 0.46);
+  --lg-hair: rgba(18, 18, 30, 0.10);
+  --lg-hair-strong: rgba(18, 18, 30, 0.16);
+  --lg-sheen: rgba(255, 255, 255, 0.9);
+  --lg-icon: #5b5b6e;
+  --lg-track: rgba(22, 22, 34, 0.17);
+  --lg-bar: rgba(255, 255, 255, 0.82);
+  --lg-shadow: 0 12px 32px rgba(38, 48, 88, 0.16);
+  --lg-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --lg-body: #eef1f8;
+}
+
+/* ==================================================================
+   1. 背景：极光流光 + 颗粒
+   slot 是宿主的 .plugin-theme-slot（body 的子节点），z-index:-1 让它
+   落在 body 底色之上、界面内容之下 —— 玻璃卡片才能"透"到它。
+   ================================================================== */
+html[data-lg] .plugin-theme-slot {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+html[data-lg] body { background: var(--lg-body); }
+
+html[data-lg] .lg-aurora {
+  position: absolute;
+  inset: -25%;
+  filter: blur(58px) saturate(150%);
+  will-change: transform;
+}
+html[data-lg] .lg-blob {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  will-change: transform;
+}
+html[data-lg] .lg-blob-1 { width: 46%; height: 62%; left: 4%; top: -8%; background: #2b3a7a; animation: lg-float-1 var(--lg-speed) ease-in-out infinite alternate; }
+html[data-lg] .lg-blob-2 { width: 42%; height: 58%; right: 2%; top: 6%; background: #4a2a6e; animation: lg-float-2 calc(var(--lg-speed) * 1.28) ease-in-out infinite alternate; }
+html[data-lg] .lg-blob-3 { width: 40%; height: 50%; left: 26%; bottom: -14%; background: #1d5a66; animation: lg-float-3 calc(var(--lg-speed) * 1.1) ease-in-out infinite alternate; }
+html[data-lg] .lg-blob-4 { width: 26%; height: 40%; right: 16%; bottom: 4%; background: #7a2a5a; opacity: 0.55; animation: lg-float-1 calc(var(--lg-speed) * 1.42) ease-in-out infinite alternate-reverse; }
+
+@keyframes lg-float-1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6%, 8%, 0) scale(1.14); }
+}
+@keyframes lg-float-2 {
+  from { transform: translate3d(0, 0, 0) scale(1.08); }
+  to { transform: translate3d(-7%, 10%, 0) scale(0.96); }
+}
+@keyframes lg-float-3 {
+  from { transform: translate3d(0, 0, 0) scale(0.96); }
+  to { transform: translate3d(8%, -9%, 0) scale(1.12); }
+}
+html[data-lg][data-lg-aurora="off"] .lg-blob { animation: none; }
+html[data-lg][data-lg-theme="light"] .lg-blob { mix-blend-mode: multiply; opacity: 0.5; }
+html[data-lg][data-lg-theme="light"] .lg-blob-1 { background: #96b0ff; }
+html[data-lg][data-lg-theme="light"] .lg-blob-2 { background: #c9a6ff; }
+html[data-lg][data-lg-theme="light"] .lg-blob-3 { background: #8fdcf0; }
+html[data-lg][data-lg-theme="light"] .lg-blob-4 { background: #ffb0d8; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-lg] .lg-blob { animation: none !important; }
+}
+
+html[data-lg] .lg-grain {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  filter: url(#lg-grain);
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+html[data-lg][data-lg-grain="off"] .lg-grain { display: none; }
+html[data-lg][data-lg-theme="light"] .lg-grain { opacity: 0.06; mix-blend-mode: multiply; }
+
+/* 隐藏的滤镜定义容器（折射 + 颗粒），由 index.js 用 DOM API 建出来 */
+html[data-lg] .lg-svg { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ==================================================================
+   2. 外壳：标题栏 + 侧栏 + 内容区，三层玻璃
+   ================================================================== */
+html[data-lg] .win-bar {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 1.9)) 0%,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 1.0)) 100%);
+  backdrop-filter: blur(calc(var(--lg-blur) * 0.8)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) * 0.8)) saturate(180%);
+  border-bottom: 1px solid var(--lg-hair);
+  box-shadow: inset 0 1px 0 var(--lg-inner);
+}
+html[data-lg] .win-bar-name { color: var(--lg-fg); }
+html[data-lg] .win-bar-sub { color: var(--lg-fg-mute); }
+html[data-lg] .win-bar-sep { background: var(--lg-hair-strong); }
+html[data-lg] .win-bar-logo { border-radius: 5px; }
+html[data-lg] .win-btn:hover { background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.4)); }
+html[data-lg] .win-btn:active { background: rgba(255, 255, 255, calc(var(--lg-tint) * 3.4)); }
+html[data-lg] .win-btn-close:hover { background: #e5484d; }
+html[data-lg] .win-icon-min::before,
+html[data-lg] .win-icon-close::before,
+html[data-lg] .win-icon-close::after { background: var(--lg-icon); }
+html[data-lg] .win-icon-max { border-color: var(--lg-icon); }
+html[data-lg] body.is-maximized .win-icon-max::before { border-color: var(--lg-icon); }
+html[data-lg] body.is-maximized .win-icon-max::after { border-top-color: var(--lg-icon); border-left-color: var(--lg-icon); }
+html[data-lg] .win-btn:hover .win-icon-min::before,
+html[data-lg] .win-btn:hover .win-icon-close::before,
+html[data-lg] .win-btn:hover .win-icon-close::after { background: #fff; }
+
+html[data-lg] .settings-window { padding: 10px; gap: 10px; background: transparent; }
+
+html[data-lg] .sidebar {
+  width: 194px;
+  padding: 16px 12px 14px;
+  background: rgba(255, 255, 255, var(--lg-tint));
+  border: 1px solid var(--lg-hair);
+  border-right: 1px solid var(--lg-hair);
+  border-radius: var(--lg-radius);
+  backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+  box-shadow: var(--lg-shadow), var(--lg-inner);
+  overflow: hidden auto;
+}
+html[data-lg] .sidebar-header {
+  color: var(--lg-fg-mute);
+  letter-spacing: 1.2px;
+  padding: 2px 12px 12px;
+}
+
+html[data-lg] .content {
+  padding: 22px 26px 30px;
+  background: rgba(255, 255, 255, var(--lg-tint));
+  border: 1px solid var(--lg-hair);
+  border-radius: var(--lg-radius);
+  backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+  box-shadow: var(--lg-shadow), var(--lg-inner);
+}
+
+/* ==================================================================
+   3. 导航：药丸项 + 弹簧滑块指示器
+   ================================================================== */
+html[data-lg] #settings-nav {
+  position: relative;
+  gap: 3px;
+}
+html[data-lg] #settings-nav .nav-item {
+  position: relative;
+  z-index: 1;
+  border-radius: 11px;
+  padding: 9px 12px;
+  color: var(--lg-fg-dim);
+  background: transparent;
+  transition: color 0.2s ease, transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+html[data-lg] #settings-nav .nav-item:hover {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.5));
+  color: var(--lg-fg);
+}
+/* 活动背景交给滑块，宿主那条左侧色条也一并去掉（滑块本身就是位置指示） */
+html[data-lg] #settings-nav .nav-item.active { background: transparent; color: var(--lg-fg); }
+html[data-lg] #settings-nav .nav-item.active::before { display: none; }
+html[data-lg] #settings-nav .nav-icon { transition: transform 0.26s cubic-bezier(0.34, 1.5, 0.64, 1); }
+html[data-lg] #settings-nav .nav-item.active .nav-icon { transform: scale(1.1); }
+html[data-lg] .plugin-nav-item::before { background: var(--lg-accent-mid); }
+
+html[data-lg] .lg-glider {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 0;
+  border-radius: 11px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 2.5)) 0%,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 1.4)) 100%);
+  border: 1px solid var(--lg-hair-strong);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--lg-sheen);
+  transition:
+    transform 0.46s cubic-bezier(0.22, 1.24, 0.36, 1),
+    width 0.36s cubic-bezier(0.22, 1.24, 0.36, 1),
+    height 0.36s cubic-bezier(0.22, 1.24, 0.36, 1),
+    opacity 0.22s ease;
+}
+html[data-lg] .lg-glider.is-on { opacity: 1; }
+html[data-lg] .lg-glider.no-anim { transition: none; }
+html[data-lg] .lg-glider.has-accent { border-color: var(--lg-accent-line); }
+html[data-lg][data-lg-glider="off"] .lg-glider { display: none; }
+html[data-lg][data-lg-glider="off"] #settings-nav .nav-item.active {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.2));
+  box-shadow: inset 0 1px 0 var(--lg-sheen);
+}
+
+/* ==================================================================
+   4. 标题与面板
+   ================================================================== */
+html[data-lg] .panel.active { animation: lg-panel-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes lg-panel-in {
+  from { opacity: 0; transform: translateY(9px) scale(0.995); }
+  to { opacity: 1; transform: none; }
+}
+html[data-lg] .panel-title {
+  font-size: calc(var(--sfz) + 4px);
+  font-weight: 600;
+  color: var(--lg-fg);
+  letter-spacing: 0.2px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--lg-hair);
+}
+
+/* ==================================================================
+   5. 布局模式
+   grouped = 单列玻璃卡（默认）；grid = 双列网格；plain = 经典单列
+   ================================================================== */
+html[data-lg] .lg-rows,
+html[data-lg] .setting-row,
+html[data-lg] .tz-add-row,
+html[data-lg] #custom-pos-controls,
+html[data-lg] .alarm-advanced,
+html[data-lg] .data-transfer,
+html[data-lg] .plugin-toolbar,
+html[data-lg] #alarm-add-btn,
+html[data-lg] .plugin-empty,
+html[data-lg] #plugin-safe-banner,
+html[data-lg] .data-transfer-status,
+html[data-lg] #data-transfer-status,
+html[data-lg] .tz-hint {
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- 卡片分组 / 双列网格：都是玻璃小卡，只有排列方式不同 --- */
+html[data-lg][data-lg-layout="grouped"] :is(.setting-row, .tz-add-row, #custom-pos-controls, .alarm-advanced, .data-transfer, .plugin-toolbar, #alarm-add-btn, .plugin-empty, #plugin-safe-banner, .data-transfer-status),
+html[data-lg][data-lg-layout="grid"] :is(.setting-row, .tz-add-row, #custom-pos-controls, .alarm-advanced, .data-transfer, .plugin-toolbar, #alarm-add-btn, .plugin-empty, #plugin-safe-banner, .data-transfer-status) {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.15));
+  border: 1px solid var(--lg-hair);
+  border-radius: calc(var(--lg-radius) * 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(var(--lg-hi) * 0.16));
+  padding: 11px 14px;
+  margin-bottom: 8px;
+}
+html[data-lg][data-lg-layout="grouped"] :is(.setting-row, .tz-add-row, #custom-pos-controls, .alarm-advanced, .data-transfer, .plugin-toolbar, #alarm-add-btn, .plugin-empty, #plugin-safe-banner, .data-transfer-status):hover,
+html[data-lg][data-lg-layout="grid"] :is(.setting-row, .tz-add-row, #custom-pos-controls, .alarm-advanced, .data-transfer, .plugin-toolbar, #alarm-add-btn, .plugin-empty, #plugin-safe-banner, .data-transfer-status):hover {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.8));
+  border-color: var(--lg-hair-strong);
+}
+html[data-lg][data-lg-layout="grouped"] .tz-hint { margin: 2px 2px 8px; }
+
+/* --- 双列网格 --- */
+/* 内置页：行是 .panel 的直接子节点，网格挂在 .panel 上；
+   插件页：行在 .lg-fields 里（.lg-page 是 flex 列容器），所以要把网格下沉一层，
+   并让 .lg-page 自己横跨整行 —— 否则它只占一列，整页被挤成窄条。 */
+html[data-lg][data-lg-layout="grid"] .panel.active,
+html[data-lg][data-lg-layout="grid"] .lg-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-page,
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-note,
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-preview,
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-group-label,
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-savebar { grid-column: 1 / -1; }
+html[data-lg][data-lg-layout="grid"] .lg-group-label { margin: 6px 2px 0; }
+html[data-lg][data-lg-layout="grid"] .panel-title { grid-column: 1 / -1; }
+html[data-lg][data-lg-layout="grid"] .panel.active > .lg-span,
+html[data-lg][data-lg-layout="grid"] .panel.active > :is(.data-transfer, .plugin-toolbar, #tz-list, #alarm-list, .alarm-advanced, .plugin-empty, #plugin-safe-banner, .data-transfer-status, .tz-add-row, .danger-btn, .about-head) { grid-column: 1 / -1; }
+/* 带滑条/色块/多列控件/长说明的行在窄格里会挤，让它横跨整行 */
+html[data-lg][data-lg-layout="grid"] :is(.panel.active > .setting-row, .lg-fields > .setting-row):is(
+  :has(input[type="range"]),
+  :has(input[type="color"]),
+  :has(.bg-row),
+  :has(.calib-row),
+  :has(.position-buttons),
+  :has(.custom-input),
+  :has(.setting-note),
+  :has(textarea),
+  :has(button:not(.toggle-switch))
+) { grid-column: 1 / -1; }
+
+/* --- 经典单列：只把行还原成无卡片形态 --- */
+html[data-lg][data-lg-layout="plain"] .setting-row { margin-bottom: 14px; }
+/* 网格模式下间距交给 gap，行的外边距归零 */
+html[data-lg][data-lg-layout="grid"] :is(.panel.active > .setting-row, .lg-fields > .setting-row) { margin-bottom: 0; }
+
+/* ==================================================================
+   6. 控件：玻璃化
+   ================================================================== */
+html[data-lg] select,
+html[data-lg] .custom-input,
+html[data-lg] .calib-row input[type="number"],
+html[data-lg] .tz-add-row input,
+html[data-lg] .custom-pos input[type="number"],
+html[data-lg] textarea {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.9));
+  border: 1px solid var(--lg-hair-strong);
+  border-radius: 10px;
+  color: var(--lg-fg-dim);
+  font-family: inherit;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+html[data-lg] select:hover,
+html[data-lg] .custom-input:hover { background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.4)); }
+html[data-lg] select:focus,
+html[data-lg] .custom-input:focus,
+html[data-lg] .calib-row input[type="number"]:focus,
+html[data-lg] .tz-add-row input:focus,
+html[data-lg] .custom-pos input[type="number"]:focus,
+html[data-lg] textarea:focus {
+  outline: none;
+  border-color: var(--lg-accent-line);
+  box-shadow: 0 0 0 3px var(--lg-accent-soft);
+}
+html[data-lg] input[type="color"] {
+  border: 1px solid var(--lg-hair-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.4));
+  padding: 3px;
+}
+html[data-lg] input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+html[data-lg] input[type="color"]::-webkit-color-swatch { border: none; border-radius: 7px; }
+
+html[data-lg] input[type="range"] {
+  height: 6px;
+  background: var(--lg-track);
+  border-radius: 999px;
+}
+html[data-lg] input[type="range"]::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s cubic-bezier(0.34, 1.5, 0.64, 1), box-shadow 0.2s ease;
+}
+html[data-lg] input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+html[data-lg] input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 6px var(--lg-accent-soft);
+}
+
+/* --- 开关：iOS 风格，弹簧位移 --- */
+html[data-lg] .toggle-switch { width: 46px; height: 28px; }
+html[data-lg] .toggle-slider {
+  background: var(--lg-track);
+  border: 1px solid var(--lg-hair-strong);
+  border-radius: 999px;
+  transition: background 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+}
+html[data-lg] .toggle-slider::before {
+  width: 22px;
+  height: 22px;
+  left: 2px;
+  bottom: 2px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.36);
+  transition: transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html[data-lg] .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, var(--lg-accent) 0%, var(--lg-accent) 100%);
+  border-color: transparent;
+  box-shadow: 0 0 16px var(--lg-glow-a), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+html[data-lg] .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+html[data-lg] .toggle-switch input:checked + .toggle-slider::after { opacity: 1; }
+
+/* --- 按钮：玻璃胶囊 --- */
+html[data-lg] .mini-btn,
+html[data-lg] .position-buttons button,
+html[data-lg] .plugin-nav-body button,
+html[data-lg] .plugin-actions button,
+html[data-lg] .plugin-safe-banner button,
+html[data-lg] #alarm-advanced-toggle,
+html[data-lg] .about-link {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.8));
+  border: 1px solid var(--lg-hair-strong);
+  border-radius: 10px;
+  color: var(--lg-fg-dim);
+  font-family: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(var(--lg-hi) * 0.35));
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+html[data-lg] .about-link { background: none; border: none; box-shadow: none; padding: 0; color: var(--lg-accent); }
+html[data-lg] .mini-btn:hover,
+html[data-lg] .position-buttons button:hover,
+html[data-lg] .plugin-nav-body button:hover,
+html[data-lg] .plugin-actions button:hover,
+html[data-lg] .plugin-safe-banner button:hover,
+html[data-lg] #alarm-advanced-toggle:hover {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.9));
+  border-color: var(--lg-hair-strong);
+  color: var(--lg-fg);
+}
+html[data-lg] .mini-btn:active,
+html[data-lg] .position-buttons button:active,
+html[data-lg] .plugin-nav-body button:active,
+html[data-lg] .plugin-actions button:active { transform: scale(0.97); }
+
+/* 主操作按钮 / 强调色按钮 */
+html[data-lg] .plugin-toolbar button,
+html[data-lg] .data-transfer button,
+html[data-lg] #apply-pos,
+html[data-lg] #tz-add-btn,
+html[data-lg] .plugin-toolbar button.primary-btn,
+html[data-lg] .plugin-toolbar button.ghost-btn,
+html[data-lg] .position-buttons button.active {
+  background: var(--lg-accent-soft);
+  border: 1px solid var(--lg-accent-line);
+  border-radius: 10px;
+  color: var(--lg-fg);
+  font-family: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(var(--lg-hi) * 0.4));
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+html[data-lg] .plugin-toolbar button:hover,
+html[data-lg] .data-transfer button:hover,
+html[data-lg] #apply-pos:hover,
+html[data-lg] #tz-add-btn:hover,
+html[data-lg] .position-buttons button.active { background: var(--lg-accent-mid); }
+html[data-lg] #alarm-add-btn {
+  border: 1px dashed var(--lg-hair-strong);
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 0.8));
+  color: var(--lg-fg-mute);
+  border-radius: calc(var(--lg-radius) * 0.62);
+}
+html[data-lg] #alarm-add-btn:hover { border-color: var(--lg-accent-line); color: var(--lg-fg); background: var(--lg-accent-soft); }
+html[data-lg] .danger-btn,
+html[data-lg] .plugin-actions button.danger {
+  border: 1px solid rgba(255, 90, 90, 0.45);
+  background: rgba(255, 90, 90, 0.10);
+  color: #ff9a9a;
+  border-radius: 10px;
+}
+html[data-lg] .danger-btn:hover,
+html[data-lg] .plugin-actions button.danger:hover { background: rgba(255, 90, 90, 0.85); color: #fff; border-color: transparent; }
+
+/* ==================================================================
+   7. 文本与容器
+   ================================================================== */
+html[data-lg] .setting-row label,
+html[data-lg] .custom-pos label { color: var(--lg-fg-dim); }
+html[data-lg] .panel-title,
+html[data-lg] .about-name,
+html[data-lg] .alarm-item .alarm-time,
+html[data-lg] .plugin-name { color: var(--lg-fg); }
+html[data-lg] .sub-label,
+html[data-lg] .setting-note,
+html[data-lg] .auto-hint,
+html[data-lg] .tz-hint,
+html[data-lg] .about-key,
+html[data-lg] .about-foot,
+html[data-lg] .plugin-meta,
+html[data-lg] .plugin-section-label,
+html[data-lg] .plugin-nav-body .plugin-nav-note,
+html[data-lg] .tz-item .tz-offset { color: var(--lg-fg-mute); }
+html[data-lg] .plugin-desc,
+html[data-lg] .alarm-item .alarm-name,
+html[data-lg] .tz-item .tz-label,
+html[data-lg] .about-val,
+html[data-lg] .about-tagline { color: var(--lg-fg-dim); }
+html[data-lg] .alarm-item .alarm-time.disabled { color: var(--lg-fg-mute); }
+html[data-lg] .plugin-ver { color: var(--lg-accent); }
+html[data-lg] .setting-note.warn { color: #ff9a9a; }
+
+html[data-lg] .data-divider { background: var(--lg-hair); }
+html[data-lg] .alarm-advanced { border-top: 1px solid var(--lg-hair); }
+html[data-lg] .plugin-body { border-top: 1px solid var(--lg-hair); }
+html[data-lg] .about-block { background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.3)); border: 1px solid var(--lg-hair); border-radius: calc(var(--lg-radius) * 0.7); }
+html[data-lg] .about-row { border-bottom: 1px solid var(--lg-hair); }
+html[data-lg] .about-icon { background: rgba(255, 255, 255, calc(var(--lg-tint) * 2)); border-radius: 14px; }
+html[data-lg] .alarm-item,
+html[data-lg] .tz-item {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.5));
+  border: 1px solid var(--lg-hair);
+  border-radius: calc(var(--lg-radius) * 0.6);
+}
+html[data-lg] .calib-summary,
+html[data-lg] .data-transfer-status,
+html[data-lg] .plugin-status {
+  background: var(--lg-accent-soft);
+  border: 1px solid var(--lg-hair);
+  border-radius: 10px;
+  color: var(--lg-fg-dim);
+}
+html[data-lg] .calib-summary.active { background: rgba(45, 200, 150, 0.16); color: #86e3bd; }
+html[data-lg] .data-transfer-status.error,
+html[data-lg] .plugin-status.error { background: rgba(255, 90, 90, 0.14); color: #ff9a9a; }
+
+html[data-lg] .plugin-card {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.10));
+  border: 1px solid var(--lg-hair);
+  border-radius: calc(var(--lg-radius) * 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(var(--lg-hi) * 0.2));
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease, background 0.24s ease;
+}
+html[data-lg] .plugin-card:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.6));
+  box-shadow: var(--lg-shadow), inset 0 1px 0 var(--lg-sheen);
+}
+html[data-lg] .plugin-badge,
+html[data-lg] .plugin-badge.warn,
+html[data-lg] .plugin-badge.err {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 2));
+  border: 1px solid var(--lg-hair);
+  color: var(--lg-fg-dim);
+  backdrop-filter: blur(6px);
+}
+html[data-lg] .plugin-badge.warn { background: rgba(255, 170, 60, 0.16); color: #ffca7a; }
+html[data-lg] .plugin-badge.err { background: rgba(255, 90, 90, 0.16); color: #ff9a9a; }
+html[data-lg] .plugin-safe-banner { background: rgba(255, 170, 60, 0.12); border: 1px solid rgba(255, 170, 60, 0.32); color: #ffca7a; }
+
+/* --- 滚动条：玻璃细条；可整体隐藏 --- */
+html[data-lg] .content::-webkit-scrollbar { width: 7px; }
+html[data-lg] .content::-webkit-scrollbar-track { background: transparent; }
+html[data-lg] .content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 3.4));
+  border-radius: 999px;
+}
+html[data-lg] .content::-webkit-scrollbar-thumb:hover { background: var(--lg-hair-strong); }
+html[data-lg] .sidebar::-webkit-scrollbar { width: 5px; }
+html[data-lg] .sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.6)); border-radius: 999px; }
+html[data-lg][data-lg-scroll="hide"] .content::-webkit-scrollbar,
+html[data-lg][data-lg-scroll="hide"] .sidebar::-webkit-scrollbar { width: 0; height: 0; }
+html[data-lg][data-lg-scroll="hide"] .content,
+html[data-lg][data-lg-scroll="hide"] .sidebar { scrollbar-width: none; }
+
+/* ==================================================================
+   8. 可选：液态折射（SVG feDisplacementMap 位移）
+   默认关闭。开启后给侧栏与内容区各叠一层"只扭曲背景、不吃鼠标"的
+   伪元素；宿主自己的子节点全部抬到它上面。
+   ================================================================== */
+html[data-lg][data-lg-refract="on"] .sidebar::after,
+html[data-lg][data-lg-refract="on"] .content::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(0.5px);
+  -webkit-backdrop-filter: blur(0.5px);
+  filter: url(#lg-refract);
+  isolation: isolate;
+}
+html[data-lg][data-lg-refract="on"] .sidebar > *,
+html[data-lg][data-lg-refract="on"] .content > * { position: relative; z-index: 1; }
+html[data-lg][data-lg-refract="on"] .lg-glider { z-index: 1; }
+
+/* ==================================================================
+   9. 插件自己的导航页（配置面板）
+   ================================================================== */
+html[data-lg] .lg-page { font-size: inherit; line-height: 1.6; }
+html[data-lg] .lg-page .setting-row { margin-bottom: 8px; }
+html[data-lg] .lg-page .setting-row:has(> .custom-input) { flex-wrap: wrap; }
+html[data-lg] .lg-page .setting-row:has(> input[type="range"]) > label,
+html[data-lg] .lg-page .setting-row:has(> .bg-row) > label { display: flex; justify-content: space-between; }
+html[data-lg] .lg-fields { display: flex; flex-direction: column; gap: 0; }
+html[data-lg] .lg-val { color: var(--lg-fg-mute); font-variant-numeric: tabular-nums; }
+
+html[data-lg] .lg-note {
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: var(--lg-accent-soft);
+  border: 1px solid var(--lg-hair);
+  color: var(--lg-fg-dim);
+  font-size: calc(var(--sfz) - 2px);
+  line-height: 1.6;
+}
+html[data-lg] .lg-group-label {
+  margin: 6px 2px 2px;
+  font-size: calc(var(--sfz) - 2px);
+  letter-spacing: 0.6px;
+  color: var(--lg-fg-mute);
+}
+
+/* 预览区：吃草稿值，改设置即时可见 */
+html[data-lg] .lg-preview {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 14px;
+  border-radius: calc(var(--lg-radius) * 0.85);
+  border: 1px solid var(--lg-hair);
+  background:
+    radial-gradient(90% 120% at 8% 0%, rgba(120, 150, 255, 0.35) 0%, rgba(120, 150, 255, 0) 60%),
+    radial-gradient(80% 110% at 100% 100%, rgba(210, 120, 255, 0.30) 0%, rgba(210, 120, 255, 0) 60%),
+    rgba(255, 255, 255, calc(var(--lg-tint) * 1.2));
+  overflow: hidden;
+}
+html[data-lg] .lg-pv-nav {
+  position: relative;
+  width: 118px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border-radius: calc(var(--lg-radius) * 0.7);
+  border: 1px solid var(--lg-hair);
+  background: rgba(255, 255, 255, var(--lg-tint));
+  backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(180%);
+}
+html[data-lg] .lg-pv-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-radius: 11px;
+  font-size: calc(var(--sfz) - 3px);
+  color: var(--lg-fg-dim);
+  white-space: nowrap;
+}
+html[data-lg] .lg-pv-item.is-active { color: var(--lg-fg); }
+html[data-lg] .lg-pv-glider {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 0;
+  border-radius: 11px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 2.5)) 0%,
+    rgba(255, 255, 255, calc(var(--lg-tint) * 1.4)) 100%);
+  border: 1px solid var(--lg-hair-strong);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--lg-sheen);
+  transition: transform 0.46s cubic-bezier(0.22, 1.24, 0.36, 1), height 0.36s cubic-bezier(0.22, 1.24, 0.36, 1);
+}
+html[data-lg] .lg-pv-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+html[data-lg] .lg-pv-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: calc(var(--lg-radius) * 0.6);
+  border: 1px solid var(--lg-hair);
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.15));
+  font-size: calc(var(--sfz) - 2px);
+  color: var(--lg-fg-dim);
+}
+html[data-lg] .lg-pv-cap { font-size: calc(var(--sfz) - 4px); color: var(--lg-fg-mute); letter-spacing: 0.4px; }
+
+/* 吸底保存条：半透明的玻璃条会把身后那行文字透出来，看着像坏了 —— 它自己用一组
+   更实的底色变量，既有玻璃感又能压住内容。sticky 本身占位，不要再加 padding-bottom 留白。 */
+html[data-lg] .lg-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border-radius: calc(var(--lg-radius) * 0.7);
+  border: 1px solid var(--lg-hair);
+  background: var(--lg-bar);
+  backdrop-filter: blur(calc(var(--lg-blur) * 1.4)) saturate(180%);
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) * 1.4)) saturate(180%);
+  box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--lg-sheen);
+}
+html[data-lg] .lg-dirty { flex: 1; min-width: 0; font-size: calc(var(--sfz) - 2px); color: var(--lg-fg-mute); }
+html[data-lg] .lg-dirty.is-dirty { color: var(--lg-accent); }
+html[data-lg] .lg-btn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--lg-hair-strong);
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 1.8));
+  color: var(--lg-fg-dim);
+  font-family: inherit;
+  font-size: calc(var(--sfz) - 1px);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+html[data-lg] .lg-btn:hover { background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.9)); color: var(--lg-fg); }
+html[data-lg] .lg-btn:active { transform: scale(0.97); }
+html[data-lg] .lg-btn.is-primary {
+  background: var(--lg-accent-soft);
+  border-color: var(--lg-accent-line);
+  color: var(--lg-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, calc(var(--lg-hi) * 0.4)), 0 0 18px var(--lg-glow-a);
+}
+html[data-lg] .lg-btn.is-primary:hover { background: var(--lg-accent-mid); }
+html[data-lg] .lg-btn[disabled] { opacity: 0.45; pointer-events: none; }
+
+html[data-lg] .lg-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  z-index: 40;
+  transform: translate(-50%, 8px);
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--lg-hair-strong);
+  background: rgba(255, 255, 255, calc(var(--lg-tint) * 2.6));
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  box-shadow: var(--lg-shadow), inset 0 1px 0 var(--lg-sheen);
+  color: var(--lg-fg);
+  font-size: calc(var(--sfz) - 1px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease, transform 0.28s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+html[data-lg] .lg-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ==================================================================
+   10. 窄窗口回退
+   ================================================================== */
+@media (max-width: 680px) {
+  html[data-lg] .sidebar { width: 64px; padding: 14px 8px; }
+  html[data-lg] .sidebar-header { display: none; }
+  html[data-lg] #settings-nav .nav-item { justify-content: center; padding: 10px 0; }
+  html[data-lg] .nav-text { display: none; }
+  html[data-lg][data-lg-layout="grid"] .panel.active { grid-template-columns: 1fr; }
+  html[data-lg] .lg-preview { flex-direction: column; }
+  html[data-lg] .lg-pv-nav { width: auto; }
+}

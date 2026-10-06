@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- [v1.0.5.7] CSP：与闹钟编辑窗同规格 -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title data-lang="windowTitle">倒计时</title>
+  <link rel="stylesheet" href="alarm-editor.css">
+  <link rel="stylesheet" href="countdown-editor.css">
+</head>
+<body>
+  <div class="editor-container">
+    <h3 id="editor-title" data-lang="addCountdown">添加倒计时</h3>
+
+    <div class="field-row">
+      <label data-lang="cdName">名称</label>
+      <input type="text" id="cd-name" maxlength="40">
+    </div>
+
+    <div class="field-row">
+      <label data-lang="cdDuration">时长</label>
+      <!-- 快捷片：一次点击设定常见时长（比在三个数字框里敲快得多） -->
+      <div class="cd-chips" id="cd-chips">
+        <button type="button" data-min="1">1 分</button>
+        <button type="button" data-min="3">3 分</button>
+        <button type="button" data-min="5">5 分</button>
+        <button type="button" data-min="10">10 分</button>
+        <button type="button" data-min="25" data-lang="cdPomodoro">番茄 25 分</button>
+        <button type="button" data-min="45">45 分</button>
+      </div>
+      <div class="time-inputs cd-duration-inputs">
+        <input type="number" id="cd-hour" min="0" max="23" step="1" value="0">
+        <span data-lang="cdH">时</span>
+        <input type="number" id="cd-minute" min="0" max="59" step="1" value="5">
+        <span data-lang="cdM">分</span>
+        <input type="number" id="cd-second" min="0" max="59" step="1" value="0">
+        <span data-lang="cdS">秒</span>
+      </div>
+      <div class="cd-preview" id="cd-preview"></div>
+    </div>
+
+    <div class="field-row">
+      <label data-lang="cdSound">声音</label>
+      <select id="cd-sound">
+        <option value="beep" data-lang="soundBeep">Beep</option>
+        <option value="chime" data-lang="soundChime">Chime</option>
+        <option value="alarm" data-lang="soundAlarm">Alarm</option>
+        <option value="none" data-lang="soundNone">无声音</option>
+      </select>
+    </div>
+
+    <div class="field-row">
+      <label data-lang="cdSnooze">稍后提醒</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="cd-snooze-enabled" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div id="cd-snooze-detail">
+      <div class="field-row">
+        <label data-lang="cdSnoozeTime">提醒间隔</label>
+        <div class="snooze-inputs">
+          <input type="number" id="cd-snooze-h" min="0" max="23" step="1" value="0">
+          <span data-lang="cdH">时</span>
+          <input type="number" id="cd-snooze-m" min="0" max="59" step="1" value="5">
+          <span data-lang="cdM">分</span>
+          <input type="number" id="cd-snooze-s" min="0" max="59" step="1" value="0">
+          <span data-lang="cdS">秒</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <label data-lang="cdSnoozeCount">重复次数</label>
+        <div class="snooze-count-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="cd-snooze-unlimited" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <span data-lang="cdSnoozeUnlimited">无限</span>
+          <div id="cd-snooze-count-wrap" class="hidden">
+            <input type="number" id="cd-snooze-count" min="1" max="999" step="1" value="3">
+            <span data-lang="cdSnoozeTimes">次</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row cd-note" data-lang="cdNote">到点后会响铃，单击时钟窗口即可关闭；关闭后这条倒计时自动消失。</div>
+
+    <div class="btn-row">
+      <button id="btn-cancel" data-lang="cancelBtn">取消</button>
+      <button id="btn-confirm" data-lang="confirmBtn">确认</button>
+    </div>
+  </div>
+  <!-- 时长解析/格式化与主进程同源（countdown.js 在浏览器里降级成全局） -->
+  <script src="countdown.js"></script>
+  <script src="countdown-editor.js"></script>
+</body>
+</html>

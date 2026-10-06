@@ -1,0 +1,62 @@
+/* countdown-editor.css — [v1.0.5.7] 倒计时编辑窗的增量样式
+   基础骨架（field-row / time-inputs / snooze-inputs / toggle-switch / btn-row）全部复用
+   alarm-editor.css，这里只加倒计时特有的：快捷片、时长预览、底部说明。 */
+
+/* ====== 快捷时长片 ====== */
+.cd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.cd-chips button {
+  border: 1px solid #555;
+  background: #33333f;
+  color: #bbb;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.cd-chips button:hover {
+  border-color: #9C7BFF;
+  color: #cbbcff;
+  background: rgba(156, 123, 255, 0.12);
+}
+.cd-chips button.active {
+  border-color: #9C7BFF;
+  background: rgba(156, 123, 255, 0.22);
+  color: #fff;
+}
+
+/* ====== 时长预览 ====== */
+.cd-preview {
+  font-size: 12px;
+  color: #8f8fa8;
+  font-variant-numeric: tabular-nums;
+}
+.cd-preview.warn { color: #ffb14d; }
+
+/* ====== 底部说明 ====== */
+.cd-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7d7d95;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+/* ====== 重复次数输入（复用闹钟的样式规则，但 id 不同）====== */
+#cd-snooze-count-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#cd-snooze-count-wrap.hidden { display: none; }
+#cd-snooze-count-wrap span { font-size: 13px; color: #888; }
+#cd-snooze-count {
+  width: 64px;
+  text-align: center;
+}

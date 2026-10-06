@@ -45,6 +45,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onActiveAlarmIdsChanged: (callback) => {
     ipcRenderer.on('active-alarm-ids-changed', (_event, ids) => callback(ids));
   },
+
+  // ====== [v1.0.5.7] 倒计时 ======
+  // 与闹钟完全分开的一套 IPC（数据在 countdowns.json，引擎独立）。
+  // 列表只推「变更」；剩余时间由各窗口本地倒扣，不用每秒收广播。
+  countdownList: () => ipcRenderer.invoke('countdown-list'),
+  countdownGet: (id) => ipcRenderer.invoke('countdown-get', id),
+  countdownCreate: (payload) => ipcRenderer.invoke('countdown-create', payload),
+  countdownUpdate: (payload) => ipcRenderer.invoke('countdown-update', payload),
+  countdownDelete: (id) => ipcRenderer.invoke('countdown-delete', id),
+  countdownPause: (id) => ipcRenderer.invoke('countdown-pause', id),
+  countdownResume: (id) => ipcRenderer.invoke('countdown-resume', id),
+  countdownRestart: (id) => ipcRenderer.invoke('countdown-restart', id),
+  openCountdownEditor: (id) => ipcRenderer.invoke('countdown-open-editor', id),
+  onCountdownState: (callback) => {
+    ipcRenderer.on('countdown-state', (_event, state) => callback(state));
+  },
   // [v1.0.5] 删除所有保存的数据
   deleteAllData: () => ipcRenderer.invoke('delete-all-data'),
   // [v1.0.5.3] 偏好设置导入 / 导出
@@ -93,6 +109,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removePlugin: (id) => ipcRenderer.invoke('plugin-remove', id),
   reloadPlugin: (id) => ipcRenderer.invoke('plugin-reload', id),
   setPluginSetting: (id, key, value) => ipcRenderer.invoke('plugin-set-setting', id, key, value),
+  // [v1.0.5.7] 设置界面专用：可编辑「已禁用」插件的设置项（禁用插件不在 bundle 里，
+  // 走上面那条会撞归属校验；这条只认设置窗口自己的 webContents）
+  setPluginSettingUi: (id, key, value) => ipcRenderer.invoke('plugin-set-setting-ui', id, key, value),
   reportPluginError: (id, message) => ipcRenderer.invoke('plugin-error', id, message),
   pluginDataGet: (id, key) => ipcRenderer.invoke('plugin-data-get', id, key),
   pluginDataSet: (id, key, value) => ipcRenderer.invoke('plugin-data-set', id, key, value),

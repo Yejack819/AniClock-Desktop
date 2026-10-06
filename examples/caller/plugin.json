@@ -1,0 +1,35 @@
+{
+  "id": "com.yejack819.caller",
+  "name": "远程喊人提醒 · ClassCaller",
+  "version": "1.0.0",
+  "author": "Yejack819",
+  "description": "把班级「远程喊人」搬上 Digital Clock：老师手机发消息后，时钟日期栏亮起📢提示，关灯时全屏卡片+叮咚声提醒。支持 ClassCaller 云端 MQTT 与本机服务双通道，设置窗口另有状态与来电记录页。",
+  "homepage": "https://gitee.com/Yejack819/AniClock-Desktop",
+  "apiVersion": 3,
+  "hooks": ["clock.infoBar", "lightsOff.background", "settings.theme"],
+  "permissions": ["storage", "net", "ui.settings"],
+  "main": "index.js",
+  "style": "style.css",
+  "settings": [
+    { "key": "channel", "type": "select", "label": "消息通道 Channel", "hint": "云端 MQTT 走公共中转（教室外也能收）；本机服务走教室电脑的 ClassCaller 局域网接口", "default": "mqtt", "options": [
+      { "value": "mqtt", "label": "云端 MQTT（推荐）" },
+      { "value": "local", "label": "本机 ClassCaller 服务" },
+      { "value": "both", "label": "两者都连" },
+      { "value": "off", "label": "暂停接收" }
+    ] },
+    { "key": "cloudId", "type": "text", "label": "班级码 Cloud ID", "hint": "ClassCaller 设置页「云端中转」里的云端 ID，只有同一班级码的消息会被接收", "default": "" },
+    { "key": "brokers", "type": "textarea", "label": "MQTT 地址 Brokers", "hint": "每行一个 wss:// 地址；留空使用内置公共 Broker（与 ClassCaller 预设一致）", "default": "" },
+    { "key": "localUrl", "type": "text", "label": "本机服务地址 Local URL", "hint": "ClassCaller 的 WS 接口，默认 ws://127.0.0.1:9527/ws；跨电脑时改成教室电脑的 IP", "default": "ws://127.0.0.1:9527/ws" },
+    { "key": "infoMode", "type": "select", "label": "日期栏提示 Info Bar", "hint": "有老师找你时日期栏显示什么；无人时完全不占位", "default": "names", "options": [
+      { "value": "off", "label": "不显示" },
+      { "value": "dot", "label": "红点 ●" },
+      { "value": "count", "label": "📢 + 人数" },
+      { "value": "names", "label": "📢 + 老师名（推荐）" }
+    ] },
+    { "key": "showQueue", "type": "toggle", "label": "显示排队人数", "hint": "大屏满员时显示还有几位老师排队", "default": true },
+    { "key": "sound", "type": "toggle", "label": "提醒声音 Sound", "hint": "关灯全屏提醒出现时叮咚一声", "default": true },
+    { "key": "volume", "type": "slider", "label": "音量 Volume (%)", "min": 0, "max": 100, "step": 5, "default": 70 },
+    { "key": "clockBeep", "type": "toggle", "label": "时钟上也响", "hint": "关灯未开启时，有新来电时钟窗口也叮咚一声（默认关闭，保持安静）", "default": false },
+    { "key": "alertScale", "type": "slider", "label": "关灯卡片缩放 Scale (%)", "hint": "关灯全屏提醒卡片的整体大小", "min": 60, "max": 160, "step": 5, "default": 100 }
+  ]
+}

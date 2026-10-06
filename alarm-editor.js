@@ -95,16 +95,34 @@ function validate() {
 }
 
 function getSnoozeMs() {
-  const h = parseInt($('alarm-snooze-h').value, 10) || 0;
-  const m = parseInt($('alarm-snooze-m').value, 10) || 5;
-  const s = parseInt($('alarm-snooze-s').value, 10) || 0;
-  return { snoozeHours: Math.max(0, Math.min(23, h)), snoozeMinutes: Math.max(0, Math.min(59, m)), snoozeSeconds: Math.max(0, Math.min(59, s)) };
+  // [v1.0.5.7] 显式 isNaN 判断：原来 `|| 5` 会把用户明确填的 0 静默改成 5（界面显示 0、实际存 5）
+  const h = parseInt($('alarm-snooze-h').value, 10);
+  const m = parseInt($('alarm-snooze-m').value, 10);
+  const s = parseInt($('alarm-snooze-s').value, 10);
+  return {
+    snoozeHours: Math.max(0, Math.min(23, isNaN(h) ? 0 : h)),
+    snoozeMinutes: Math.max(0, Math.min(59, isNaN(m) ? 5 : m)),
+    snoozeSeconds: Math.max(0, Math.min(59, isNaN(s) ? 0 : s)),
+  };
 }
 
+// [v1.0.5.7] 保存防重入：焦点在确认按钮上按 Enter 会同时触发 keydown 与按钮默认
+// click，原来会连存两条新闹钟
+let saveLock = false;
+
 async function save() {
+  if (saveLock) return;
   if (!validate()) return;
-  const dict = LOCALE[currentLang] || LOCALE.zh;
-  const snoozeEnabled = $('alarm-snooze-enabled').checked;
+  saveLock = true;
+  try {
+    const dict = LOCALE[currentLang] || LOCALE.zh;
+    // [v1.0.5.7] 让「重名」校验真正生效（原来 nameConflict 文案是死代码，从未被检查）
+    try {
+      const all = await window.electronAPI.getAllAlarms();
+      const clash = (all || []).some(a => a && a.id !== editingId && (a.name || '').trim() === $('alarm-name').value.trim());
+      if (clash) { alert(dict.nameConflict); return; }
+    } catch (e) { /* 查不到列表就不拦 */ }
+    const snoozeEnabled = $('alarm-snooze-enabled').checked;
   const snoozeUnlimited = $('alarm-snooze-unlimited').checked;
   const snoozeCount = snoozeUnlimited ? 0 : Math.max(1, parseInt($('alarm-snooze-count').value, 10) || 3);
   const snooze = snoozeEnabled ? getSnoozeMs() : { snoozeHours: 0, snoozeMinutes: 0, snoozeSeconds: 0 };
@@ -131,6 +149,9 @@ async function save() {
     }
   } catch (e) {
     alert(dict.saveFailed + ': ' + e.message);
+  }
+  } finally {
+    saveLock = false;
   }
 }
 

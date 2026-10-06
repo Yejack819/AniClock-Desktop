@@ -63,7 +63,11 @@ async function exitLightsOff() {
   exiting = true;
   try {
     await window.electronAPI.setLightsOff(false);
-  } catch (e) {}
+  } catch (e) {
+    // [v1.0.5.7] 失败要复位：原来 exiting 永远停在 true，该窗口的
+    // 退出按钮 / ESC / 双击从此全部失灵
+    exiting = false;
+  }
 }
 
 // 设置按钮 → 打开设置窗口
